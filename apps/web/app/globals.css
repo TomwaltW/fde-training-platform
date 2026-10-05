@@ -1,2 +1,218 @@
-/* T2 owns this file. */
 @import "tailwindcss";
+
+/* 颜色都走变量:浅色一套、深色一套(跟随系统),组件里只用语义名。 */
+:root {
+  --canvas: #f7f6f3;
+  --surface: #ffffff;
+  --surface-2: #f0eee9;
+  --ink: #1c1b19;
+  --ink-2: #4f4b45;
+  --ink-3: #736e66;
+  --line: #e2dfd8;
+  --accent: #1f5f8b;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6eff6;
+  --warn: #9a5b06;
+  --warn-soft: #fdf3e1;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --ok: #1d7a46;
+  --ok-soft: #e7f4ec;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #141413;
+    --surface: #1c1c1a;
+    --surface-2: #262623;
+    --ink: #ecebe6;
+    --ink-2: #c2beb6;
+    --ink-3: #9a958c;
+    --line: #34332f;
+    --accent: #6aa9d8;
+    --accent-ink: #0b1a25;
+    --accent-soft: #1a2a37;
+    --warn: #e0a64a;
+    --warn-soft: #2d2414;
+    --danger: #f07067;
+    --danger-soft: #331b19;
+    --ok: #5cc28a;
+    --ok-soft: #16281e;
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --font-sans: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Source Han Sans SC", "WenQuanYi Zen Hei", sans-serif;
+}
+
+html {
+  color-scheme: light dark;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  text-rendering: optimizeLegibility;
+}
+
+/* 中文不用斜体 */
+em {
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* 正在说话的三个点 */
+@keyframes fde-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.typing-dot {
+  animation: fde-dot 1.2s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* 复盘正文、协议正文 */
+.prose-doc {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--ink);
+}
+.prose-doc > * + * {
+  margin-top: 0.9em;
+}
+.prose-doc h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-top: 0.4em;
+}
+.prose-doc h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.45;
+  margin-top: 1.8em;
+  padding-top: 0.6em;
+  border-top: 1px solid var(--line);
+}
+.prose-doc h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 1.4em;
+}
+.prose-doc ul,
+.prose-doc ol {
+  padding-left: 1.4em;
+}
+.prose-doc ul {
+  list-style: disc;
+}
+.prose-doc ol {
+  list-style: decimal;
+}
+.prose-doc li + li {
+  margin-top: 0.35em;
+}
+.prose-doc strong {
+  font-weight: 700;
+}
+.prose-doc a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose-doc blockquote {
+  border-left: 3px solid var(--line);
+  padding-left: 1em;
+  color: var(--ink-2);
+}
+.prose-doc code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.prose-doc pre {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  overflow-x: auto;
+}
+.prose-doc pre code {
+  background: none;
+  padding: 0;
+}
+.prose-doc hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.prose-doc .table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.prose-doc table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.prose-doc th,
+.prose-doc td {
+  padding: 0.5em 0.75em;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  min-width: 3.5em;
+}
+.prose-doc table.wide {
+  min-width: 40em;
+}
+.prose-doc th {
+  background: var(--surface-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.prose-doc tr:last-child td {
+  border-bottom: 0;
+}
