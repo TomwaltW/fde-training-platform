@@ -336,7 +336,9 @@ def main() -> int:
     a2 = render_a2(exc, handlers)
     a4 = render_a4(loss)
     a5 = render_a5(intake)
-    # 清单由 manifest.py 统一生成(含 render_docs.py 的合成单据;尚未渲染的记为 pending)
+    # 清单由 manifest.py 统一生成(含 render_docs.py 的合成单据;尚未渲染的记为 pending)。
+    # 这里没有渲染任何合成单据,所以不传 rendered:单据的 source_sha256 沿用旧清单,
+    # 真值改了却没跑 render_docs.py 的图片/PDF 会被 check_docs.py 报出来,而不是被这次刷新"洗白"。
     import manifest  # noqa: PLC0415  延迟导入:manifest 依赖 docs_spec / jinja2
     manifest.write_manifest()
     assert (a2["rows"], a4["total"], a5["total"]) == (len(exc), sum(int(x["金额"]) for x in loss), 1512)

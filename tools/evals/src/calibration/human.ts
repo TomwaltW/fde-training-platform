@@ -44,6 +44,9 @@ const DateStr = z.preprocess(
   z.string({ error: "日期必填,格式 YYYY-MM-DD" }).regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式应为 YYYY-MM-DD"),
 );
 
+/** 是不是 0.1 的整数倍(留一点余量:0.3 这类在二进制里不精确的一位小数也要算)。 */
+const isOneDecimal = (s: number) => Math.abs(s * 10 - Math.round(s * 10)) < 1e-6;
+
 function dimEntry(d: DimSpec) {
   return z
     .strictObject(
@@ -52,6 +55,12 @@ function dimEntry(d: DimSpec) {
           .number({ error: "分数必须是数字(还没打分就写 null)" })
           .min(0, "分数不能小于 0")
           .max(d.max, `${d.id} ${d.name}的满分是 ${d.max},分数不能超过它`)
+          // 报告按一位小数显示;多出来的位数会让显示的分和落档对不上(15.96 显示成 16 却按第 3 档算)
+          .refine((s) => isOneDecimal(s), {
+            error: (iss) =>
+              `${d.id} ${d.name}的分数最多一位小数(实际 ${String(iss.input)}:报告会显示成 ${fmt(iss.input as number)},` +
+              `落档却按 ${String(iss.input)} 算);请改成一位小数`,
+          })
           .nullable(),
         reason: z.string({ error: "理由必须是文字" }).default(""),
       },

@@ -165,6 +165,35 @@ describe("一致性不过", () => {
     expect(res.cases[0]!.error).toContain("满分是 20");
     expect(res.ok).toBe(false);
   });
+
+  it("human.yaml 的分数多于一位小数:这个用例出错,点名用例文件和维度,不参加一致性", async () => {
+    const dir = tmp();
+    copyGood(dir, "two-dp", undefined, (t) => t.replace("score: 18", "score: 15.96"));
+    copyGood(dir, "same");
+    const res = await runCalibration({ scn, dir, runs: 3, mode: { kind: "mock" } });
+    const bad = res.cases.find((c) => c.id === "two-dp")!;
+    expect(bad.error).toContain(join(dir, "two-dp/human.yaml"));
+    expect(bad.error).toContain("dims.D1.score");
+    expect(bad.error).toContain("最多一位小数(实际 15.96");
+    expect(res.agreement.cells.some((c) => c.caseId === "two-dp")).toBe(false);
+    expect(res.ok).toBe(false);
+    expect(renderReport(res, scn).join("\n")).toContain("✗ two-dp 出错");
+  });
+
+  it("一致性通过时,差异明细也把某个维度上的 ✗ 全部列出(不止 3 条)", async () => {
+    const dir = tmp();
+    // 5 份只把 D4 的人工分压到 0:每份 6/7 一致,总体 30/35 = 85.7% 达标,但 D4 上有 5 个 ✗
+    const ids = [1, 2, 3, 4, 5].map((i) => `d4-${i}`);
+    for (const id of ids) copyGood(dir, id, undefined, (t) => t.replace(/(D4:\n\s+score: )[\d.]+/, (_, head: string) => `${head}0`));
+    const res = await runCalibration({ scn, dir, runs: 3, mode: { kind: "mock" } });
+    expect(res.agreement).toMatchObject({ agreed: 30, total: 35, ok: true });
+    const d4 = res.agreement.byDim.find((d) => d.dim === "D4")!;
+    expect(d4.worst.filter((c) => !c.ok).map((c) => c.caseId)).toEqual(ids);
+
+    const text = renderReport(res, scn).join("\n");
+    expect(text).toContain("差异明细:");
+    for (const id of ids) expect(text).toContain(`✗ ${id}  人工 0(第 0 档)vs 裁判 20(第 4 档),差 4 档`);
+  });
 });
 
 describe("--live", () => {
@@ -231,5 +260,25 @@ describe("命令行", () => {
     expect(run(["--init", "x.json"]).out).toContain("--init 需要同时给 --id");
     expect(run(["--mock", "--live"]).out).toContain("只能选一个");
     expect(run(["--runs", "0"]).out).toContain("--runs 必须是正整数");
+  }, 30_000);
+
+  it("--scenario 写错或 scenario.yaml 读不进来:退出码 2,给出原因,不打堆栈", () => {
+    const missing = run(["--mock", "--scenario", "scenarios/nope"]);
+    expect(missing.code).toBe(2);
+    expect(missing.out).toContain("无法读取场景 --scenario scenarios/nope");
+    expect(missing.out).toContain("找不到");
+    expect(missing.out).not.toMatch(/\n\s+at /); // 没有堆栈
+
+    const dir = tmp();
+    writeFileSync(join(dir, "scenario.yaml"), "meta: 1\n");
+    const invalid = run(["--mock", "--scenario", dir]);
+    expect(invalid.code).toBe(2);
+    expect(invalid.out).toContain("结构校验失败");
+    expect(invalid.out).not.toMatch(/\n\s+at /);
+
+    writeFileSync(join(dir, "scenario.yaml"), "meta: [\n");
+    const broken = run(["--init-player", "EV_good", "--id", "x", "--scenario", dir]);
+    expect(broken.code).toBe(2);
+    expect(broken.out).toContain("YAML 解析失败");
   }, 30_000);
 });

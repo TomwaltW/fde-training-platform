@@ -453,7 +453,7 @@ artifacts:
     source_sha256: 6ca138fcec7cecf574ec77790c138cc465d47f23d44fca9af936deb9b5b641ee
     label: {visible: 右下角「合成样本·训练用」, implicit: PNG 文本块 AIGC=合成样本·训练用(tEXt + iTXt)}
   - path: artifacts/A7/fms_import-template.xlsx
-    sha256: b361c5accdb616b46f4147f4b5daa3499442b7864a8b89f71308f20b7248861c
+    sha256: 76413522216440ee595126ea3726afdc9afa2ce5a303b28719be9cceddc2c820
     key: A7-02
     title: 运链通 FMS Excel 导入模板
     doc: 导入模板

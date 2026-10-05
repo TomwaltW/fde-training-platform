@@ -216,7 +216,7 @@ IMPORT_RULES = [
     "带 * 的列必填;日期格式 yyyy-mm-dd;数字列只填数字,不要带单位。",
     "一票多个货号时每个货号一行,运单号重复填写。",
     "每次导入不超过 200 行;导入后需在「待确认订单」里逐票点「确认」才生效。",
-    "系统不提供外部数据接口(API);如需与其他系统对接,请联系运链通客户经理(增值服务,另行收费)。",
+    f"系统不提供外部数据接口(API);如需与其他系统对接,请联系{S.FMS}客户经理(增值服务,另行收费)。",
     "已导入的订单如需改单,只能在系统界面逐票修改;重复导入同一运单号会被拒绝,不会覆盖。",
     "HS编码列请按「品名 / HS」基础资料填写(本样本中 HS 编码均为占位符,非真实编码)。",
 ]
@@ -224,7 +224,7 @@ IMPORT_RULES = [
 
 def xlsx_import_template(doc: S.Doc, t: S.Truth) -> dict:
     """A7:运链通 FMS 的 Excel 导入模板(导入数据 / 示例 / 填写说明)。"""
-    wb = new_workbook("运链通FMS 订单导入模板 v3.2")
+    wb = new_workbook(f"{S.FMS} 订单导入模板 v3.2")
     ws = wb.active
     ws.title = "导入数据"
     for j, h in enumerate(IMPORT_COLUMNS, start=1):
@@ -234,7 +234,7 @@ def xlsx_import_template(doc: S.Doc, t: S.Truth) -> dict:
         if h.endswith("*"):
             ws.cell(row=1, column=j).font = F_RED
     _cell(ws, 1, len(IMPORT_COLUMNS) + 2, S.MARK, F_MARK, border=False)
-    widths = [14, 12, 12, 12, 10, 10, 9, 10, 14, 14, 13, 7, 9, 8, 11, 11, 9, 11, 14]
+    widths = [14, 16, 12, 12, 10, 10, 9, 10, 14, 14, 13, 7, 9, 8, 11, 11, 9, 11, 14]
     set_widths(ws, widths)
     ws.freeze_panes = "A2"
 
@@ -247,7 +247,8 @@ def xlsx_import_template(doc: S.Doc, t: S.Truth) -> dict:
         s = t.shipments[ln["waybill"]]
         r += 1
         pod = S.POD[s["fba_warehouse"]]
-        vals = [ln["waybill"], s["customer"], "海运出口", s["ship_date"], S.POL_CN, S.POD_CN[pod], s["fba_warehouse"],
+        # 客户名和 FMS 录单界面一样带「(虚构)」(check_docs 逐个单元格扫名称标记)
+        vals = [ln["waybill"], f"{s['customer']}(虚构)", "海运出口", s["ship_date"], S.POL_CN, S.POD_CN[pod], s["fba_warehouse"],
                 ln["sku"], ln["item_name"], ln["declared_name"], S.HS_PLACEHOLDER.format(S.HS_SLOT.get(ln["sku"], "00")),
                 int(ln["cartons"]), int(ln["pcs_per_ctn"]), int(ln["pieces"]), float(ln["gross_kg"]),
                 float(ln["cbm"]), ln["battery"], ln["version"], ""]
@@ -339,7 +340,8 @@ def main() -> int:
         extra = f"  {info['size'][0]}×{info['size'][1]}" if "size" in info else ""
         extra += f"  {info['pages']} 页" if "pages" in info else ""
         print(f"wrote {d.path.relative_to(S.ROOT)}  ({info['bytes']:,} bytes){extra}")
-    path = M.write_manifest(t, docs, env)
+    # 本次渲染了全部单据:它们的 source_sha256 都按刚用过的 HTML 重算
+    path = M.write_manifest(t, docs, env, rendered=results.keys())
     print(f"wrote {path.relative_to(S.ROOT)}")
     return 0
 
