@@ -1,9 +1,10 @@
 // POST /api/sessions —— 开局;GET /api/sessions —— 本人的对局(按开始时间倒序)。
+// 第三轮:付费场景没有权益 403 entitlement_required;每日限额按权益加上商品多给的局数。
 import { randomUUID } from "node:crypto";
 import type { CreateSessionResponse, SessionsResponse } from "@fde/contracts";
 import { publicView } from "@fde/engine";
 import { requireUser } from "../../../lib/server/auth.ts";
-import { dailySessionLimit } from "../../../lib/server/env.ts";
+import { canPlay, entitlementRequiredMessage, entitlementsFor } from "../../../lib/server/entitlements.ts";
 import { recordEvent, visitorIdFrom } from "../../../lib/server/events.ts";
 import { HttpError, MESSAGES, handle, json, nowIso, readJson } from "../../../lib/server/http.ts";
 import { getScenario } from "../../../lib/server/scenarios.ts";
@@ -21,7 +22,10 @@ export async function POST(req: Request) {
     const entry = getScenario(body.scenarioId);
     if (!entry) throw new HttpError("not_found", "没有这个场景");
     const store = await getStore();
-    const limit = dailySessionLimit();
+    // 第三轮:付费场景要有包含它的权益;每日限额 = 基础限额 + 兑换的商品多给的局数
+    const ent = await entitlementsFor(store, user.id);
+    if (!canPlay(ent, entry.scn.data.meta.id)) throw new HttpError("entitlement_required", entitlementRequiredMessage(entry.scn.data.meta.id));
+    const limit = ent.dailySessionLimit;
     // 同一用户的开局串行执行,避免并发请求同时通过限额检查
     const created = await store.withSessionLock(
       `create-session:${user.id}`,
