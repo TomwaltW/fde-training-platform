@@ -606,7 +606,8 @@ describe("GET /api/admin/gates", () => {
     const c = new Client(vc);
     const r1 = await c.post<RequestCodeResponse>(requestCode.POST, { body: { email, inviteCode: invite } });
     expect(r1.status).toBe(200);
-    expect((await c.post(verify.POST, { body: { email, code: r1.body.devCode } })).status).toBe(200);
+    // 新用户的邀请码在验证通过时才消耗,校验时也要带上
+    expect((await c.post(verify.POST, { body: { email, code: r1.body.devCode, inviteCode: invite } })).status).toBe(200);
     if (vc) c.cookie = `${c.cookie}; ${vc}`;
     return c;
   }

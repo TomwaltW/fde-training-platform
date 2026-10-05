@@ -75,7 +75,8 @@ async function login(email: string): Promise<Client> {
   const c = new Client();
   const r1 = await c.post<RequestCodeResponse>(requestCode.POST, { body: { email, inviteCode: invite } });
   expect(r1.status, JSON.stringify(r1.body)).toBe(200);
-  const r2 = await c.post(verify.POST, { body: { email, code: r1.body.devCode } });
+  // 新用户的邀请码在验证通过时才消耗,校验时也要带上
+  const r2 = await c.post(verify.POST, { body: { email, code: r1.body.devCode, inviteCode: invite } });
   expect(r2.status).toBe(200);
   return c;
 }
