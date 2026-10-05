@@ -5,6 +5,7 @@ import { extractNumbers } from "../numbers.ts";
 import { IMPLEMENTED_DIMENSIONS, d2Ids, parseD2Key, parseD3Key, parseD5Key } from "../rubric-keys.ts";
 import { knownIdentifiers } from "../state.ts";
 import { triggers } from "../triggers.ts";
+import { artifactFiles } from "../view.ts";
 import type { LoadedScenario } from "./load.ts";
 import { isViaUnlock, levelRank, type Level, type Requirement } from "./schema.ts";
 
@@ -74,6 +75,7 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
     }
   }
   for (const a of d.artifacts) {
+    if (!artifactFiles(scn, a.id).length) warnings.push(`资料 ${a.id} 还没有文件(${a.files})`);
     need(roleIds.has(a.holder), `资料 ${a.id} 的持有人 ${a.holder} 不存在`);
     for (const t of a.supports ?? []) need(diagIds.has(t), `资料 ${a.id} supports 了未知对照项 ${t}`);
     checkReq(a.unlock?.requires, `资料 ${a.id}`);
