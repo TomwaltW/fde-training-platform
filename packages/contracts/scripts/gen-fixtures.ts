@@ -219,7 +219,7 @@ write("admin-gates.json", {
     { id: "dispute", label: "对评分提出申诉的比例", value: 1 / 9, display: pct(1, 9), numerator: 1, denominator: 9, status: "pass", thresholds: "过 <20% · 修 20–40% · 不过 >40%", note: "有申诉的复盘 / 出了复盘的对局。" },
   ],
   gate3: [
-    { id: "waitlist_to_paid", label: "候补名单到预售付费的转化", value: 0, display: "0%", numerator: 0, denominator: 118, status: "insufficient", thresholds: "过 ≥5% · 修 2–5% · 不过 <2%", note: "兑换过付费商品的候补名单用户 / 候补名单人数。" },
+    { id: "waitlist_to_paid", label: "候补名单到预售付费的转化", value: 0, display: "0%", numerator: 0, denominator: 118, status: "fail", thresholds: "过 ≥5% · 修 2–5% · 不过 <2%", note: "兑换过付费商品的候补名单用户 / 候补名单人数。" },
   ],
   extra: { turnLatencyMsP50: 2350, turnLatencyMsP90: 4100, firstTurnSecondsP50: 48, firstTurnSample: 7 },
 } satisfies GatesResponse);

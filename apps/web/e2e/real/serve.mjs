@@ -1,7 +1,8 @@
 // 真后端 e2e 的服务端:按 infra/Dockerfile 的方式跑 Next.js standalone 产物(node apps/web/server.js),
-// 离线引擎 + MemoryStore(每次启动一个新的落盘文件),不连数据库、不调模型、不发信。
+// 离线引擎 + MemoryStore(每次启动一个新的落盘文件),不连数据库、不调模型、不发信、不发短信。
 //
-//   E2E_SKIP_BUILD=1  复用已有的 .next 产物(本地反复跑时省一分钟;CI 和验收不要设)
+//   E2E_SKIP_BUILD=1  复用已有的 .next 产物,不再 next build。本地反复跑时省一分钟;CI 里同一个 job
+//                     前一步刚 `pnpm build:web` 过(同一份代码),也设了。验收时不要设(要确认产物是新的)。
 import { spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -47,7 +48,8 @@ const env = {
   FDE_DEV_LOGIN_CODES_IN_PRODUCTION: "1",
   FDE_COOKIE_SECURE: "0",
   FDE_DAILY_SESSION_LIMIT: "20",
-  ADMIN_EMAILS: "admin-desktop@e2e.test,admin-mobile@e2e.test",
+  // full-flow.spec.ts 两个视口各一个管理员;resume.spec.ts 用自己的,免得撞上验证码 60 秒的限频
+  ADMIN_EMAILS: "admin-desktop@e2e.test,admin-mobile@e2e.test,admin-resume@e2e.test",
   SITE_MODEL_DISCLOSURE: "通义千问 qwen-plus(e2e)",
   SITE_ICP_NUMBER: "",
   // 这些一旦从外部环境漏进来,测试就不再是"离线 + 内存库"了
@@ -55,6 +57,10 @@ const env = {
   DASHSCOPE_API_KEY: "",
   DEEPSEEK_API_KEY: "",
   SMTP_URL: "",
+  // 短信:不真发;登录页只有邮箱入口(e2e 按"邮箱"输入框登录)
+  ALIYUN_SMS_ACCESS_KEY_ID: "",
+  ALIYUN_SMS_ACCESS_KEY_SECRET: "",
+  FDE_DEV_SMS_LOGIN: "",
 };
 
 const child = spawn(process.execPath, ["server.js"], { cwd: app, stdio: "inherit", env });

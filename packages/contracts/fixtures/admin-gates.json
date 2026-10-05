@@ -92,7 +92,7 @@
       "display": "0%",
       "numerator": 0,
       "denominator": 118,
-      "status": "insufficient",
+      "status": "fail",
       "thresholds": "过 ≥5% · 修 2–5% · 不过 <2%",
       "note": "兑换过付费商品的候补名单用户 / 候补名单人数。"
     }
