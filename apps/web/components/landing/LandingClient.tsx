@@ -1,5 +1,6 @@
 "use client";
 // 落地页的动态部分:场景卡片、开始按钮、没打完的对局。
+// 第三轮:付费场景的卡片标"需要兑换码";开局遇到 entitlement_required 时给出去预售页、去兑换的链接。
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -27,7 +28,8 @@ export function LandingClient() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [resume, setResume] = useState<SessionSummary | null>(null);
   const [starting, setStarting] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  /** 开局失败的提示,只显示在那个场景的卡片上;needsCode:付费场景还没兑换。 */
+  const [error, setError] = useState<{ scenarioId: string; message: string; needsCode: boolean } | null>(null);
 
   useEffect(() => {
     // 第三轮埋点:落地页打开(带上链接里的 ?from= 来源)
@@ -78,7 +80,7 @@ export function LandingClient() {
         router.push(loginHref(`/?start=${encodeURIComponent(scenarioId)}`));
         return;
       }
-      setError(failureMessage(e));
+      setError({ scenarioId, message: failureMessage(e), needsCode: isFailure(e, "entitlement_required") });
       setStarting(null);
     }
   }
@@ -104,6 +106,11 @@ export function LandingClient() {
               难度 <Difficulty level={s.difficulty} />
             </span>
             <span>约 {s.estMinutes} 分钟</span>
+            {s.access === "paid" && (
+              <span className="rounded-full border border-warn/40 bg-warn-soft px-2.5 py-0.5 text-[13px] font-medium leading-5 text-warn" data-testid="needs-code">
+                需要兑换码
+              </span>
+            )}
           </div>
           <h2 className="mt-2 text-xl font-bold leading-snug sm:text-2xl">{s.title}</h2>
           <ul className="mt-3 flex flex-wrap gap-2" aria-label="练什么">
@@ -126,10 +133,20 @@ export function LandingClient() {
             </button>
             {site.inviteOnly && <span className="text-sm text-ink-3">目前内测,第一次登录需要邀请码。</span>}
           </div>
-          {error && starting === null && (
-            <p role="alert" className={`${alert.error} mt-3`}>
-              {error}
-            </p>
+          {error?.scenarioId === s.id && starting === null && (
+            <div role="alert" className={`${alert.error} mt-3`}>
+              <p>{error.message}</p>
+              {error.needsCode && (
+                <p className="mt-1 flex flex-wrap items-center gap-x-3">
+                  <Link href="/presale" className="inline-flex min-h-11 items-center font-medium text-accent hover:underline">
+                    去预售页看看
+                  </Link>
+                  <Link href="/redeem" className="inline-flex min-h-11 items-center font-medium text-accent hover:underline">
+                    已经有兑换码?去兑换
+                  </Link>
+                </p>
+              )}
+            </div>
           )}
         </article>
       ))}
