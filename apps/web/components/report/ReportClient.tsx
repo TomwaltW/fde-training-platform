@@ -1,6 +1,7 @@
 "use client";
 // 复盘页(方案 3.4.3):总分与分数段、标记、七维雷达图、各维度得分与说明("我不同意"申诉)、
 // 复盘正文、分享卡(只用 shareCard,不含真相)、推荐意愿 0–10。
+// 第三轮:"如果有下一个场景,你想玩吗?"(方案 6.3 第二关),复盘打开后记一条 report_viewed。
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -8,7 +9,7 @@ import type { PublicReport } from "@fde/contracts";
 import { RadarChart } from "@/components/charts";
 import { AiBadge, Markdown } from "@/components/Markdown";
 import { ShareCard } from "@/components/ShareCard";
-import { api, failureMessage, isFailure, loginHref } from "@/lib/client/api";
+import { api, failureMessage, isFailure, loginHref, track } from "@/lib/client/api";
 import { cx, formatScore } from "@/lib/client/format";
 import { alert, btn, card, field } from "@/lib/client/ui";
 
@@ -26,6 +27,7 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ status: "loading" });
   const started = useRef(false);
+  const viewed = useRef(false);
 
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -54,6 +56,13 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
     started.current = true;
     void load();
   }, [load]);
+
+  // 复盘加载成功后记一次(重试、补收工后才出来的也只记一次)
+  useEffect(() => {
+    if (state.status !== "ok" || viewed.current) return;
+    viewed.current = true;
+    track("report_viewed", { sessionId });
+  }, [state.status, sessionId]);
 
   if (state.status === "loading") return <Center>正在打开复盘…</Center>;
   if (state.status === "generating")
@@ -170,11 +179,12 @@ export function ReportClient({ sessionId }: { sessionId: string }) {
         <h2 id="share-title" className="mb-4 text-lg font-semibold">
           分享卡
         </h2>
-        <ShareCard card={r.shareCard} />
+        <ShareCard card={r.shareCard} sessionId={sessionId} />
       </section>
 
-      {/* 推荐意愿 */}
+      {/* 推荐意愿、想不想玩下一个场景 */}
       <RatingForm sessionId={sessionId} />
+      <WantNextForm sessionId={sessionId} />
 
       <nav className="flex flex-wrap gap-2">
         <Link href="/me" className={btn.secondary}>
@@ -330,6 +340,47 @@ function RatingForm({ sessionId }: { sessionId: string }) {
           <button type="button" className={cx(btn.primary, "mt-3")} disabled={rating === null || status === "sending"} onClick={() => void submit()}>
             {status === "sending" ? "正在提交…" : "提交"}
           </button>
+          {error && <p className={cx(alert.error, "mt-2")}>{error}</p>}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** 方案 6.3 第二关"完成者中表示想玩下一个场景的比例"。点了就提交。 */
+function WantNextForm({ sessionId }: { sessionId: string }) {
+  const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function answer(wantNext: boolean) {
+    setStatus("sending");
+    setError(null);
+    try {
+      await api.feedback(sessionId, { wantNext });
+      setStatus("sent");
+    } catch (e) {
+      setStatus("idle");
+      setError(failureMessage(e));
+    }
+  }
+
+  return (
+    <section className={cx(card, "p-5 sm:p-7")} aria-labelledby="want-next-title" data-testid="want-next">
+      <h2 id="want-next-title" className="text-lg font-semibold">
+        如果有下一个场景,你想玩吗?
+      </h2>
+      {status === "sent" ? (
+        <p className={cx(alert.ok, "mt-4")}>已收到,谢谢。</p>
+      ) : (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:max-w-xs">
+            <button type="button" className={btn.secondary} disabled={status === "sending"} onClick={() => void answer(true)}>
+              想
+            </button>
+            <button type="button" className={btn.secondary} disabled={status === "sending"} onClick={() => void answer(false)}>
+              不想
+            </button>
+          </div>
           {error && <p className={cx(alert.error, "mt-2")}>{error}</p>}
         </>
       )}
