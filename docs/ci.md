@@ -36,10 +36,10 @@ tools/docgen/.venv/bin/python tools/docgen/check_docs.py
 
 需要 Python 3.11 及以上(numpy 2.4 的要求)。渲染好的单据、图片、PDF、manifest 都已经提交在仓库里,这两个脚本只读不写,不需要 Chromium。但是 `check_docs.py` 核对图片右下角的「合成样本·训练用」标识牌时,会用文泉驿正黑(`/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc`,见 `tools/docgen/degrade.py` 的 `FONT_PATH`)把标识牌重画一遍,再和图片逐像素比较(PNG 的平均差不能超过 0.5)。没有这个字体文件,脚本会报错。
 
-- Ubuntu / Debian:`sudo apt-get install fonts-wqy-zenhei`,CI 就是这样装的。
+- Ubuntu / Debian:`sudo apt-get install fonts-wqy-zenhei libfribidi0`,CI 就是这样装的。
 - 开发镜像里已经装好了。
 
-因为是逐像素比较,字体文件和 Pillow 版本都要和渲染时一样。Pillow 已经在 `requirements.txt` 里固定了版本,字体用的是 Ubuntu 24.04 的 `fonts-wqy-zenhei`。所以 CI 的 runner 固定为 `ubuntu-24.04`,不用 `ubuntu-latest`。以后要换系统版本,先在新系统上跑一遍 `check_docs.py`。
+因为是逐像素比较,字体文件、Pillow 版本和排版引擎都要和渲染时一样。Pillow 用 Raqm 排版,运行时需要系统里的 libfribidi(`python -c "from PIL import features; print(features.check('raqm'))"` 应该打印 True);缺了会退回基础排版,标识牌的像素对不上,check_docs 报"不是带标识的图片"。Pillow 已经在 `requirements.txt` 里固定了版本,字体用的是 Ubuntu 24.04 的 `fonts-wqy-zenhei`。所以 CI 的 runner 固定为 `ubuntu-24.04`,不用 `ubuntu-latest`。以后要换系统版本,先在新系统上跑一遍 `check_docs.py`。
 
 ### 网页
 

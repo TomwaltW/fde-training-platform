@@ -76,7 +76,8 @@ jobs:
       - name: 安装中文字体
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fonts-wqy-zenhei
+          # libfribidi0:Pillow 的 Raqm 排版要用它,缺了会退回基础排版,标识牌的像素就对不上
+          sudo apt-get install -y --no-install-recommends fonts-wqy-zenhei libfribidi0
           test -f /usr/share/fonts/truetype/wqy/wqy-zenhei.ttc
       - name: 安装依赖
         run: python -m pip install -r tools/docgen/requirements.txt
