@@ -53,7 +53,7 @@ test("/waitlist:打开记 waitlist_viewed,提交成功,?from= 带进请求", asy
   await page.goto("/waitlist?from=xhs");
   const main = page.getByRole("main");
   await expect(main.getByRole("heading", { level: 1 })).toHaveText("没有邀请码?先登记");
-  await expect(main.getByText("邮箱只用来给你发邀请码")).toBeVisible();
+  await expect(main.getByText(/邮箱只用来给你发邀请码/)).toBeVisible();
   await expect(main.getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/legal/privacy");
   await expect.poll(() => mock.events).toContainEqual({ type: "waitlist_viewed", props: { from: "xhs" } });
   await expectCompliance(page);

@@ -240,7 +240,9 @@ export function safeNext(next: string | null | undefined, fallback = "/"): strin
     const base = "http://same-origin.invalid";
     const u = new URL(next, base);
     if (u.origin !== new URL(base).origin) return fallback;
-    return `${u.pathname}${u.search}${u.hash}`;
+    const out = `${u.pathname}${u.search}${u.hash}`;
+    // 点号路径会被折叠:"/.//evil.com"、"/a/..//evil.com" 解析后是 "//evil.com",又成了协议相对地址
+    return out.startsWith("//") ? fallback : out;
   } catch {
     return fallback;
   }

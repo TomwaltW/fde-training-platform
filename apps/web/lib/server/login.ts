@@ -6,7 +6,7 @@ import { devLoginCodes, isAdminEmail, smsConfig, smsDailyPerPhone, smsHourlyLimi
 import { HttpError } from "./http.ts";
 import { sendLoginCodeMail } from "./mail.ts";
 import { maskPhone } from "./phone.ts";
-import { allow } from "./ratelimit.ts";
+import { LIMITS, allow, allowDistinct } from "./ratelimit.ts";
 import { runtime } from "./runtime.ts";
 import { sendLoginSms } from "./sms.ts";
 import { getStore } from "./store.ts";
@@ -98,6 +98,11 @@ async function assertMayRequest(a: LoginAddress, inviteCode: string | null | und
   if (exemptFromInvite(a)) return;
   const store = await getStore();
   if (!inviteCode || !(await store.inviteAvailable(inviteCode))) throw new HttpError("invite_invalid", INVITE_INVALID);
+  // 邀请码在验证通过时才消耗;这之前同一个码每小时最多给几个新地址发验证码,免得被拿来批量发信
+  const { limit, windowMs } = LIMITS.requestCodePerInvite;
+  if (!allowDistinct("request-code:invite", inviteCode, addressKey(a), limit, windowMs)) {
+    throw new HttpError("rate_limited", "这个邀请码请求验证码太频繁了,请过一会儿再试");
+  }
 }
 
 /**

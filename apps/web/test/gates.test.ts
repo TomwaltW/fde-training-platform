@@ -311,11 +311,14 @@ describe("第二关:体验", () => {
       denominator: 0,
       status: "insufficient",
     });
+    // 只有后半段事件(第三轮上线前开的局)不计入样本
+    const partial = metricOf(computeGates(input({ sessions: sessionsOf(1, 1), events: [ev("turn", atSec(0), { sessionId: "s0" }), ev("session_finished", atSec(900), { sessionId: "s0" })] }), anySample), "median_minutes");
+    expect(partial).toMatchObject({ value: null, denominator: 0 });
     // 小数保留一位
     const ss = sessionsOf(1, 1);
-    const odd = metricOf(computeGates(input({ sessions: ss, events: [ev("turn", atSec(0), { sessionId: "s0" }), ev("turn", atSec(1234), { sessionId: "s0" })] }), anySample), "median_minutes");
+    const odd = metricOf(computeGates(input({ sessions: ss, events: [ev("session_created", atSec(0), { sessionId: "s0" }), ev("session_finished", atSec(1234), { sessionId: "s0" })] }), anySample), "median_minutes");
     expect(odd).toMatchObject({ value: 10, status: "fix" }); // 20.6 分钟的间隔按 10 分钟计
-    const odd2 = metricOf(computeGates(input({ sessions: ss, events: [ev("turn", atSec(0), { sessionId: "s0" }), ev("turn", atSec(500), { sessionId: "s0" })] }), anySample), "median_minutes");
+    const odd2 = metricOf(computeGates(input({ sessions: ss, events: [ev("session_created", atSec(0), { sessionId: "s0" }), ev("session_finished", atSec(500), { sessionId: "s0" })] }), anySample), "median_minutes");
     expect(odd2).toMatchObject({ value: 8.3, display: "8.3 分钟", status: "fix" });
   });
 

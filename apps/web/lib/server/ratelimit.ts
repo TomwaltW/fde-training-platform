@@ -8,6 +8,11 @@ export const LIMITS = {
   requestCodePerIp: { limit: 20, windowMs: 10 * 60 * 1000 },
   /** 每个验证码本身最多试 5 次;再加一道同一 IP 每 10 分钟 30 次,挡住换着邮箱撞验证码。 */
   verifyPerIp: { limit: 30, windowMs: 10 * 60 * 1000 },
+  /**
+   * 邀请码在验证通过时才消耗,在那之前同一个码每小时最多给 5 个不同的新地址请求验证码(同一地址重发不算新):
+   * 正常人改一两次邮箱足够;防止拿一个码给任意地址批量发验证码邮件或短信。
+   */
+  requestCodePerInvite: { limit: 5, windowMs: 60 * 60 * 1000 },
   /** 候补名单登记:同一访客 10 分钟 5 次;同一 IP 10 分钟 30 次(换着 cookie 也绕不过去)。 */
   waitlistPerVisitor: { limit: 5, windowMs: 10 * 60 * 1000 },
   waitlistPerIp: { limit: 30, windowMs: 10 * 60 * 1000 },
@@ -44,6 +49,25 @@ export function allowVisitor(
   now = Date.now(),
 ): boolean {
   return allow(`${bucket}:ip`, clientIp(req), perIp.limit, perIp.windowMs, now) && allow(`${bucket}:visitor`, visitorKey(req), perVisitor.limit, perVisitor.windowMs, now);
+}
+
+/**
+ * 数"不同的成员":windowMs 内同一个 key 下最多出现 limit 个不同的 member。已经出现过的 member 再来照样放行
+ * (刷新它的时间);新的 member 超额返回 false。比如"一个邀请码一小时内最多给 5 个不同的地址发验证码"。
+ */
+export function allowDistinct(bucket: string, key: string, member: string, limit: number, windowMs: number, now = Date.now()): boolean {
+  const map = (runtime().rateLimits ??= new Map<string, number[]>());
+  const prefix = `${bucket}\u0000${key}\u0000`;
+  const live: string[] = [];
+  for (const [id, ts] of map) {
+    if (!id.startsWith(prefix)) continue;
+    if (ts.some((t) => now - t < windowMs)) live.push(id);
+    else map.delete(id);
+  }
+  const id = `${prefix}${member}`;
+  if (!live.includes(id) && live.length >= limit) return false;
+  map.set(id, [now]);
+  return true;
 }
 
 /** 测试用:清空全部计数(resetForTests 也会清)。 */

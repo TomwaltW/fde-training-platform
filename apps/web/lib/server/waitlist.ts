@@ -124,6 +124,11 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R
  * 每人一个只能用一次的邀请码(备注「候补:<邮箱>」)并记到名单上,然后有 SMTP 就发邀请邮件。
  */
 export async function inviteFromWaitlist(store: Store, body: { count?: number | undefined; emails?: string[] | undefined }): Promise<InviteWaitlistResponse> {
+  // 两个管理员(或连点两次)同时发邀请:串行执行,同一个人不会拿到两个码
+  return store.withSessionLock("waitlist-invite", () => inviteUnlocked(store, body), 60_000);
+}
+
+async function inviteUnlocked(store: Store, body: { count?: number | undefined; emails?: string[] | undefined }): Promise<InviteWaitlistResponse> {
   let targets = await store.listWaitlist(body.count !== undefined ? { invited: false, limit: body.count } : { invited: false });
   if (body.emails) {
     const wanted = new Set(body.emails.map((e) => e.trim().toLowerCase()));

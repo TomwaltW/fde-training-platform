@@ -12,6 +12,7 @@ import { HttpError, MAX_BODY_BYTES, cleanStrings, readJson } from "../lib/server
 import { LIMITS, allow, clientIp } from "../lib/server/ratelimit.ts";
 import { authSecret, devLoginCodes } from "../lib/server/env.ts";
 import { resetForTests } from "../lib/server/runtime.ts";
+import { inviteFromWaitlist } from "../lib/server/waitlist.ts";
 import { getStore } from "../lib/server/store.ts";
 import { safeNext } from "../lib/client/api.ts";
 
@@ -22,7 +23,26 @@ describe("safeNext:只放行站内路径", () => {
     ["/play/abc?x=1#t", "/play/abc?x=1#t"],
   ])("%s → %s", (input, out) => expect(safeNext(input)).toBe(out));
 
-  it.each([null, undefined, "", "me", "https://evil.com", "//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "/\r//evil.com", "\\/evil.com", "/%0A/x\u0000"])(
+  it.each([
+    null,
+    undefined,
+    "",
+    "me",
+    "https://evil.com",
+    "//evil.com",
+    "/\\evil.com",
+    "/\t/evil.com",
+    "/\n/evil.com",
+    "/\r//evil.com",
+    "\\/evil.com",
+    "/%0A/x\u0000",
+    // 点号路径折叠后变成 "//evil.com"
+    "/.//evil.com",
+    "/a/..//evil.com",
+    "/%2e//evil.com",
+    "/..//evil.com/x",
+    "/%2e%2e//evil.com",
+  ])(
     "拒绝 %j",
     (input) => expect(safeNext(input as string | null | undefined, "/fallback")).toBe("/fallback"),
   );
@@ -158,5 +178,26 @@ describe("换着访客 cookie 也绕不过限频(同一 IP 有总额度)", () =>
   it("候补名单:每次换一个 cookie,同一 IP 10 分钟最多 30 次", async () => {
     for (let i = 0; i < LIMITS.waitlistPerIp.limit; i++) expect((await send(waitlist.POST, { email: `w${i}@example.com` }, i)).status).toBe(201);
     expect((await send(waitlist.POST, { email: "late@example.com" }, 999)).status).toBe(429);
+  });
+});
+
+describe("评审第三轮:邀请码在验证前不消耗之后的防滥用", () => {
+  const ask = (email: string, inviteCode: string, ip: string) =>
+    requestCode.POST(new Request("http://x/api", { method: "POST", body: JSON.stringify({ email, inviteCode }), headers: { "content-type": "application/json", "x-forwarded-for": ip } }));
+
+  it("一个邀请码一小时内最多给 5 个不同的新地址发验证码(换 IP 也一样)", async () => {
+    const [code] = await (await getStore()).createInvites(1, 1);
+    for (let i = 0; i < LIMITS.requestCodePerInvite.limit; i++) expect((await ask(`n${i}@example.com`, code!, `203.0.113.${i}`)).status).toBe(200);
+    expect((await ask("n-extra@example.com", code!, "203.0.113.99")).status).toBe(429);
+  });
+
+  it("两个管理员同时发候补邀请:每人只拿到一个码", async () => {
+    const store = await getStore();
+    for (const e of ["c1@example.com", "c2@example.com"]) await store.addToWaitlist({ email: e, role: null, note: null, source: null, createdAt: new Date().toISOString() });
+    const [a, b] = await Promise.all([inviteFromWaitlist(store, { count: 2 }), inviteFromWaitlist(store, { count: 2 })]);
+    const all = [...a.invited, ...b.invited];
+    expect(all.map((x) => x.email).sort()).toEqual(["c1@example.com", "c2@example.com"]);
+    const rows = await store.listWaitlist();
+    for (const x of all) expect(rows.find((r) => r.email === x.email)?.inviteCode).toBe(x.inviteCode);
   });
 });

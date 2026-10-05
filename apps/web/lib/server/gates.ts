@@ -338,10 +338,11 @@ export function computeGates(input: GatesInput, cfg: GatesConfig): GatesResponse
     }
     if (shareTypes.has(e.type)) shared.add(e.sessionId);
   }
-  // 没有事件的老对局(第三轮之前开的)不计入样本
+  // 只算从开局到收工都有事件的对局:第三轮上线前开的老对局只有后半段的事件,算出来会偏短,不计入样本
   const durations = finished.flatMap((s) => {
     const evs = activity.get(s.id);
-    return evs?.length ? [activeMinutes(evs, cfg.idle_cap_minutes)] : [];
+    const complete = evs?.some((e) => e.type === "session_created") && evs.some((e) => e.type === "session_finished");
+    return complete ? [activeMinutes(evs!, cfg.idle_cap_minutes)] : [];
   });
   const medianRaw = median(durations);
   const medianMinutes = medianRaw === null ? null : round1(medianRaw);

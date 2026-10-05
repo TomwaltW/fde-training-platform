@@ -114,7 +114,7 @@ export function WaitlistSignup({ compact = false }: { compact?: boolean }) {
         {busy ? "正在提交…" : "加入候补名单"}
       </button>
       <p className="text-[13px] leading-relaxed text-ink-3">
-        邮箱只用来给你发邀请码,不做别的用途。详见
+        邮箱只用来给你发邀请码,以及统计候补名单里后来有多少人注册、购买(只看人数),不做营销推送。详见
         <Link href="/legal/privacy" className="whitespace-nowrap text-accent underline underline-offset-4">
           隐私政策
         </Link>
