@@ -154,11 +154,16 @@ export function PlayClient({ sessionId }: { sessionId: string }) {
    * 稍等一下重新拉一次视图:对话记录变长了说明已经生效,返回 true(调用方不要再把草稿放回去,免得重复发)。
    */
   async function resync(prevLen: number): Promise<boolean> {
-    await new Promise((r) => setTimeout(r, 1000));
-    const fresh = await api.session(sessionId).catch(() => null);
-    if (!fresh) return false;
-    setView(fresh.view);
-    return fresh.view.transcript.length > prevLen;
+    // 服务端可能还在处理(模型一轮要几秒到十几秒):隔一会儿看一次,最多等约 20 秒
+    setNotices([{ tone: "info", text: "网络不太稳,正在确认刚才那句有没有发出去…" }]);
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const fresh = await api.session(sessionId).catch(() => null);
+      if (!fresh) continue;
+      setView(fresh.view);
+      if (fresh.view.transcript.length > prevLen) return true;
+    }
+    return false;
   }
 
   /** 用响应更新视图;没写进对话记录的系统消息(比如动作失败的原因)放到提示条里。 */

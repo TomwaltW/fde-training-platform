@@ -27,6 +27,8 @@ export function LandingClient() {
   const [scenarios, setScenarios] = useState<ScenarioSummary[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [resume, setResume] = useState<SessionSummary | null>(null);
+  /** "有没有没打完的局"已经查过了(没登录也算查过)。自动开局要等它,免得跳过"接着玩"又开一局。 */
+  const [resumeChecked, setResumeChecked] = useState(false);
   const [starting, setStarting] = useState<string | null>(null);
   /** 开局失败的提示,只显示在那个场景的卡片上;needsCode:付费场景还没兑换。 */
   const [error, setError] = useState<{ scenarioId: string; message: string; needsCode: boolean } | null>(null);
@@ -47,7 +49,8 @@ export function LandingClient() {
     api
       .sessions()
       .then((r) => alive && setResume(r.sessions.find((s) => s.phase !== "debrief") ?? null))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => alive && setResumeChecked(true));
     return () => {
       alive = false;
     };
@@ -56,16 +59,18 @@ export function LandingClient() {
   // 没登录时点了"开始这一局":登录(和同意协议)之后带着 ?start=<场景> 回来,直接开局,不用再点一次
   const autoStarted = useRef(false);
   useEffect(() => {
-    if (!scenarios || autoStarted.current) return;
+    if (!scenarios || !resumeChecked || autoStarted.current) return;
     const id = new URLSearchParams(window.location.search).get("start");
     if (!id) return;
     autoStarted.current = true;
     // 先把 start 从地址里去掉,刷新页面不会再开一局
     window.history.replaceState(null, "", window.location.pathname);
+    // 老玩家换了台设备登录:这个场景有没打完的局,就留在落地页让他选"接着玩",不替他开新局
+    if (resume?.scenarioId === id) return;
     if (scenarios.some((s) => s.id === id)) void start(id);
-    // start 每次渲染都是新函数,这里只在场景列表加载好时跑一次
+    // start 每次渲染都是新函数,这里只在场景列表和对局列表都加载好时跑一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenarios]);
+  }, [scenarios, resumeChecked]);
 
   async function start(scenarioId: string) {
     if (starting) return;

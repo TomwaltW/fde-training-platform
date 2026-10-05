@@ -33,6 +33,7 @@ test("登录:邀请码无效、验证码错误有提示;老用户不填邀请码
 test("没同意协议就开局(403 consent_required)会去登录页的同意步骤", async ({ page }) => {
   const mock = new MockApi({ auth: "pending" });
   await mock.install(page);
+  await page.route("**/api/sessions", (r) => (r.request().method() === "GET" ? r.fulfill({ json: { sessions: [] } }) : r.fallback()));
   await page.goto("/");
   await page.getByRole("button", { name: "开始这一局" }).click();
   await expect(page.getByRole("heading", { name: "开始之前" })).toBeVisible();
@@ -125,4 +126,15 @@ test("管理页:统计卡片、分数直方图、流失轮次、对局详情、�
   await expectNoHorizontalScroll(page, info);
   expect(mock.unhandled).toEqual([]);
   expect(errors).toEqual([]);
+});
+
+test("老玩家换设备登录:这个场景有没打完的局,就不自动开新局,落地页给出「接着玩」", async ({ page }) => {
+  const mock = new MockApi({ auth: "user" });
+  await mock.install(page);
+  await page.goto("/?start=freight-docs");
+  await expect(page.getByRole("link", { name: "接着玩" })).toHaveAttribute("href", "/play/s-fixture-0002");
+  await expect(page).toHaveURL(/:\d+\/$/);
+  // 等对局列表和场景都加载完,确认没有偷偷开局
+  await expect(page.getByTestId("scenario-card")).toBeVisible();
+  expect(mock.callsTo("POST", /^\/api\/sessions$/)).toHaveLength(0);
 });

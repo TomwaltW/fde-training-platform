@@ -8,6 +8,8 @@ test("完整一局:从落地页走到复盘和申诉", async ({ page }, info) =>
   const errors = trackPageErrors(page);
   const mock = new MockApi({ auth: "anon", turnDelayMs: 1200, finishDelayMs: 800 });
   await mock.install(page);
+  // 新用户:还没有任何对局(fixtures 里的对局列表是老用户的)
+  await page.route("**/api/sessions", (r) => (r.request().method() === "GET" ? r.fulfill({ json: { sessions: [] } }) : r.fallback()));
 
   // ---- 落地页
   await page.goto("/");
