@@ -1,6 +1,7 @@
 // 真后端:运营流程(只在电脑视口跑,见 playwright.config.ts 的 testIgnore)。
 // 访客从带 ?from= 的链接进落地页登记候补名单 → 管理员在管理页勾选他发邀请码(没配 SMTP,页面上显示码)
-// → 访客凭邀请码注册 → 管理页里他变成"已注册" → 方案 6.3 的看板里第一关数到了这次登记。
+// → 访客凭邀请码注册 → 管理页里他变成"已注册" → 方案 6.3 的看板里第一关数到了这次登记
+// → 预售没上架时预售页引到候补名单 → 管理员给(未上架的)冲刺包生成兑换码 → 玩家兑换,权益和每日限额生效。
 //
 // 和其他 spec 共用一个服务和内存库,所有请求都来自 127.0.0.1(验证码接口按 IP 限频):
 // 这里只发 2 次验证码请求(管理员、访客各 1 次)。
@@ -94,6 +95,40 @@ test("候补名单 → 管理员发邀请码 → 凭邀请码注册 → 看板�
   await expect(gates.getByTestId("gate-waitlist_7d")).toContainText("1 人");
   await expect(gates.getByTestId("gates-gate2")).toBeVisible();
   await expect(gates.getByTestId("gates-gate3")).toBeVisible();
+
+  // ---- 预售:仓库里的商品都还没上架(价格待定),预售页说明还没开始并引到候补名单
+  await page.goto("/presale");
+  await expect(page.getByRole("main")).toContainText("预售还没开始");
+  await expect(page.getByRole("main").getByRole("link", { name: "加入候补名单" })).toHaveAttribute("href", /^\/waitlist/);
+
+  // ---- 管理员:给未上架的冲刺包生成一个兑换码(线下成交、企业试点时就是这样发码)
+  const redeemPanel = admin.getByTestId("redeem-panel");
+  await redeemPanel.getByRole("button", { name: /^兑换码/ }).click();
+  await expect(redeemPanel.getByLabel("商品")).toHaveValue("sprint");
+  await redeemPanel.getByLabel("数量").fill("1");
+  await redeemPanel.getByLabel("备注(选填)").fill("e2e");
+  await redeemPanel.getByRole("button", { name: "生成兑换码" }).click();
+  const newCodes = redeemPanel.getByTestId("redeem-new-codes").locator("li");
+  await expect(newCodes).toHaveCount(1);
+  const redeemCode = (await newCodes.first().textContent())!.trim();
+  expect(redeemCode).toMatch(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
+
+  // ---- 玩家:兑换(小写、去掉短横线也认),权益和每日限额立刻生效
+  await page.goto(`/redeem?code=${encodeURIComponent(redeemCode.toLowerCase().replace(/-/g, " "))}`);
+  await page.getByRole("button", { name: "兑换", exact: true }).click();
+  const done = page.getByTestId("redeem-success");
+  await expect(done).toContainText("兑换成功");
+  await expect(done).toContainText(redeemCode);
+  // serve.mjs 的基础限额 20 + 冲刺包的 5
+  await expect(done.getByTestId("redeem-daily-limit")).toHaveText("现在每天最多能开 25 局。");
+  await page.goto("/me");
+  await expect(page.getByTestId("entitlements").getByTestId("entitlement-list")).toContainText("求职冲刺包");
+  // 同一个码不能再兑一次
+  const again = await page.request.post("/api/redeem", { data: { code: redeemCode } });
+  expect(again.status()).toBe(400);
+  expect(((await again.json()) as { error: { message: string } }).error.message).toContain("已经被使用");
+  // 管理页里这个码显示已兑换
+  await expect(redeemPanel.getByTestId("redeem-codes").getByRole("row", { name: new RegExp(redeemCode) })).toBeVisible();
 
   expect(errors).toEqual([]);
   expect(adminErrors).toEqual([]);
