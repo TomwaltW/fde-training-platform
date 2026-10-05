@@ -41,6 +41,8 @@ export function PlayClient({ sessionId }: { sessionId: string }) {
   const finishStarted = useRef(false);
   const [mobileHint, setMobileHint] = useState(false);
   const composer = useRef<HTMLTextAreaElement>(null);
+  /** 每次打开资料加一;关掉时也加一,让还在路上的加载结果作废。 */
+  const viewerToken = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
 
   const toLogin = useCallback(() => router.push(loginHref(`/play/${encodeURIComponent(sessionId)}`)), [router, sessionId]);
@@ -147,6 +149,18 @@ export function PlayClient({ sessionId }: { sessionId: string }) {
     setNotices([{ tone: "error", text: failureMessage(e) }]);
   }
 
+  /**
+   * 请求没拿到响应(网络断了、服务器出错)时,服务端可能已经处理完了,只是响应没回来。
+   * 稍等一下重新拉一次视图:对话记录变长了说明已经生效,返回 true(调用方不要再把草稿放回去,免得重复发)。
+   */
+  async function resync(prevLen: number): Promise<boolean> {
+    await new Promise((r) => setTimeout(r, 1000));
+    const fresh = await api.session(sessionId).catch(() => null);
+    if (!fresh) return false;
+    setView(fresh.view);
+    return fresh.view.transcript.length > prevLen;
+  }
+
   /** 用响应更新视图;没写进对话记录的系统消息(比如动作失败的原因)放到提示条里。 */
   function apply(resp: TurnResponse, prevLen: number) {
     const added = new Set(resp.view.transcript.slice(prevLen).map((l) => l.text));
@@ -187,10 +201,16 @@ export function PlayClient({ sessionId }: { sessionId: string }) {
       // 没被接收的话(对话记录没变长)放回输入框,不让用户白打
       if (r.view.transcript.length === prevLen) setDraft(text);
     } catch (err) {
+      if (isFailure(err, "network", "internal", "unknown") && (await resync(prevLen))) {
+        setNotices([{ tone: "info", text: "网络不太稳,刚才那句已经发出去了。" }]);
+        return;
+      }
       setDraft(text);
       handleFailure(err);
     } finally {
       done();
+      // 发送期间输入框只读(不禁用),焦点和手机键盘都还在;这里只在焦点丢了时补回来
+      if (document.activeElement === document.body) composer.current?.focus();
     }
   }
 
@@ -207,6 +227,8 @@ export function PlayClient({ sessionId }: { sessionId: string }) {
       apply(r, prevLen);
       return r.result.ok !== false;
     } catch (err) {
+      // 动作可能已经生效(只是响应丢了):重新拉一次视图,让界面和服务端一致
+      if (isFailure(err, "network", "internal", "unknown")) await resync(prevLen);
       handleFailure(err);
       return false;
     } finally {
@@ -229,14 +251,21 @@ export function PlayClient({ sessionId }: { sessionId: string }) {
       const ok = await act({ type: "open_artifact", artifact: a.id }, `正在看「${a.title}」…`);
       if (!ok) return;
     }
+    const token = ++viewerToken.current;
     setViewer({ loading: a.title });
     try {
       const r = await api.artifact(sessionId, a.id);
-      setViewer({ artifact: r.artifact });
+      // 加载期间用户已经关掉(或打开了别的资料)就不要再弹出来
+      if (viewerToken.current === token) setViewer({ artifact: r.artifact });
     } catch (err) {
-      setViewer(null);
+      if (viewerToken.current === token) setViewer(null);
       handleFailure(err);
     }
+  }
+
+  function closeViewer() {
+    viewerToken.current += 1;
+    setViewer(null);
   }
 
   function askForMaterials() {
@@ -582,9 +611,12 @@ export function PlayClient({ sessionId }: { sessionId: string }) {
                 void sendTurn();
               }
             }}
-            disabled={inputLocked}
+            // 发送中只读而不是禁用:禁用会让输入框失去焦点,手机键盘每发一句就收起来
+            readOnly={busy !== null}
+            aria-busy={busy !== null || undefined}
+            disabled={view.ended || view.phase === "judgment" || finishing !== null}
             placeholder={view.phase === "judgment" ? "先提交判断" : `对${current?.name ?? "对方"}说…`}
-            className="min-h-11 flex-1 resize-none rounded-xl border border-line bg-canvas px-3 py-2 text-base leading-6 text-ink placeholder:text-ink-3 focus:border-accent focus:outline-2 focus:outline-accent/30 disabled:opacity-60"
+            className="min-h-11 flex-1 resize-none rounded-xl border border-line bg-canvas px-3 py-2 text-base leading-6 text-ink placeholder:text-ink-3 focus:border-accent focus:outline-2 focus:outline-accent/30 read-only:opacity-60 disabled:opacity-60"
           />
           <button type="submit" className={cx(btn.primary, "shrink-0 px-5")} disabled={inputLocked || !draft.trim()}>
             发送
@@ -678,7 +710,7 @@ export function PlayClient({ sessionId }: { sessionId: string }) {
           await act({ type: "end" }, "正在收工…");
         }}
       />
-      {viewer && <ArtifactViewer sessionId={sessionId} state={viewer} onClose={() => setViewer(null)} />}
+      {viewer && <ArtifactViewer sessionId={sessionId} state={viewer} onClose={closeViewer} />}
       {finishing && <FinishingOverlay error={finishing.error} onRetry={() => void startFinish()} />}
     </div>
   );

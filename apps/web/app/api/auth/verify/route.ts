@@ -3,12 +3,16 @@ import type { VerifyResponse } from "@fde/contracts";
 import { SESSION_TTL_SECONDS, newAuthToken, secretHash, sessionCookie, toMe } from "../../../../lib/server/auth.ts";
 import { recordEvent, visitorIdFrom } from "../../../../lib/server/events.ts";
 import { HttpError, handle, json, readJson } from "../../../../lib/server/http.ts";
+import { LIMITS, allow, clientIp } from "../../../../lib/server/ratelimit.ts";
 import { verifyLoginCode } from "../../../../lib/server/login.ts";
 import { VerifySchema } from "../../../../lib/server/schemas.ts";
 import { getStore } from "../../../../lib/server/store.ts";
 
 export async function POST(req: Request) {
   return handle(async () => {
+    if (!allow("verify:ip", clientIp(req), LIMITS.verifyPerIp.limit, LIMITS.verifyPerIp.windowMs)) {
+      throw new HttpError("rate_limited", "尝试太频繁,请过几分钟再试");
+    }
     const body = await readJson(req, VerifySchema);
     // T0 占位:手机号登录由 F4 实现
     if (body.email === undefined) throw new HttpError("bad_request", "暂不支持手机号登录");

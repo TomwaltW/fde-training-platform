@@ -2,7 +2,7 @@
 // 资料查看器:图片缩略图(点开全屏、左右翻、可放大到原图),pdf 新标签页打开,xlsx 下载。
 import { useEffect, useRef, useState } from "react";
 import type { PublicArtifact } from "@fde/contracts";
-import { Modal } from "@/components/Modal";
+import { Modal, trapTab } from "@/components/Modal";
 import { artifactFileUrl } from "@/lib/client/api";
 import { cx, formatBytes } from "@/lib/client/format";
 import { btn } from "@/lib/client/ui";
@@ -124,21 +124,38 @@ function Lightbox({
     closeRef.current = onClose;
   });
 
+  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    // 捕获阶段处理,Esc 只关看图层,不连带关掉下面的资料对话框
+    // 捕获阶段处理,Esc 只关看图层,不连带关掉下面的资料对话框;Tab 只在看图层里循环
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
         closeRef.current();
+      } else if (e.key === "Tab") {
+        e.stopPropagation();
+        trapTab(e, root.current);
       } else if (e.key === "ArrowLeft") goRef.current(-1);
       else if (e.key === "ArrowRight") goRef.current(1);
     };
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    root.current?.focus();
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      if (opener?.isConnected) opener.focus();
+    };
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black text-white" role="dialog" aria-modal="true" aria-label="查看图片" data-testid="lightbox">
+    <div
+      ref={root}
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex flex-col bg-black text-white outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-label="查看图片"
+      data-testid="lightbox"
+    >
       <div className="flex items-center gap-2 px-2 pt-[env(safe-area-inset-top)]">
         <span className="px-2 text-sm tabular-nums" data-testid="lightbox-counter">
           {index + 1} / {n}

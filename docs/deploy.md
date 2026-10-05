@@ -169,7 +169,8 @@ vim .env
 | `FDE_MODELS_CONFIG` | `<FDE_ROOT>/config/models.yaml` | 不填 | 换配置文件时写容器内路径 |
 | `FDE_BANNED_WORDS` | 无 | `/app/config/banned_words.txt` | 违禁词表,见 5.2 |
 | `FDE_AUTH_SECRET` | 开发默认值 | **必填**,`openssl rand -hex 32` | 验证码、登录 token 哈希的 pepper;上线后不要改 |
-| `FDE_DEV_LOGIN_CODES` | 无 | **不要设** | `1` 时接口直接返回验证码,只用于开发和测试 |
+| `FDE_DEV_LOGIN_CODES` | 无 | **不要设** | `1` 时接口直接返回验证码,只用于开发和测试;生产环境下单独设它不生效 |
+| `FDE_DEV_LOGIN_CODES_IN_PRODUCTION` | 无 | **不要设** | 只给跑生产构建的自动化测试用:和上一个一起设才会在生产环境回显验证码 |
 | `SMTP_URL` | 无 | **必填** | 见 5.3 |
 | `MAIL_FROM` | 无 | **必填** | 如 `"FDE 训练平台 <noreply@mail.example.com>"` |
 | `ADMIN_EMAILS` | 无 | **必填** | 管理员邮箱,逗号分隔 |
@@ -257,26 +258,11 @@ ssh -L 8443:127.0.0.1:443 <用户>@<ECS 公网 IP>
 
 ## 7. 首个管理员与邀请码
 
-新邮箱登录必须带有效邀请码,管理员也一样。第一个邀请码只能直接写进数据库。
+普通用户第一次登录必须带有效邀请码;`ADMIN_EMAILS` 里的邮箱例外,首次登录**不需要**邀请码(否则没人能生成第一批邀请码)。所以 `ADMIN_EMAILS` 只写你自己真正控制的邮箱,不要写同事的、占位的或公共邮箱——谁能收那个邮箱的信,谁就能直接成为管理员。
 
-**第一步**:确认 `.env` 里 `ADMIN_EMAILS` 写了你的邮箱(改过的话执行 `./infra/compose.sh up -d app` 生效)。
+**第一步**:确认 `.env` 里 `ADMIN_EMAILS` 写了你的邮箱(改过的话执行 `./infra/compose.sh up -d app` 生效)。app 启动时就会连库并执行 `infra/db/` 下的迁移;`./infra/compose.sh ps` 里 app 显示 `healthy`(健康检查 `/api/health` 会真的连一次库)说明库和 `FDE_AUTH_SECRET` 都没问题。一直 `unhealthy` 就看 `./infra/compose.sh logs app`。
 
-**第二步**:生成一个邀请码并写入数据库(8 位大写字母和数字,去掉易混的 0 O 1 I):
-
-```bash
-CODE=$(tr -dc 'A-HJ-NP-Z2-9' </dev/urandom | head -c 8); echo "邀请码:$CODE"
-./infra/compose.sh exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' <<SQL
-insert into invite_codes (code, max_uses, note) values ('$CODE', 1, '首个管理员');
-SQL
-```
-
-如果报 `relation "invite_codes" does not exist`,说明 app 还没建表(它在启动时执行 `infra/db/` 下的迁移)。先看 `./infra/compose.sh logs app` 有没有报错;也可以手动建表(脚本是幂等的,之后 app 再迁移也不会出错):
-
-```bash
-./infra/compose.sh exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' < infra/db/001_init.sql
-```
-
-**第三步**:打开 `https://<域名>/login`,填邮箱和邀请码 → 收邮件拿验证码 → 勾选同意协议 → 登录后进 `/admin`。
+**第二步**:打开 `https://<域名>/login`,填你的邮箱(邀请码留空)→ 收邮件拿验证码 → 勾选同意协议 → 登录后进 `/admin`。
 
 之后的邀请码在 `/admin` 页面生成(`POST /api/admin/invites`),可以指定每个码的使用次数和备注。
 
@@ -347,8 +333,10 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ### 8.3 从备份恢复
 
 ```bash
-# 从 OSS 取回(本地还有的话跳过)
-ossutil cp oss://<Bucket名>/db/fde-20261105-031701.sql.gz .data/backups/ -e <OSS_ENDPOINT> --region cn-hangzhou
+# 从 OSS 取回(本地还有的话跳过)。AccessKey 从 .env 读进环境变量(ossutil 2.0 认这两个变量);
+# --region 要和 Bucket 所在地域一致,就是 OSS_ENDPOINT 里 oss- 后面那段(如 cn-hangzhou)
+export $(grep -E '^OSS_(ACCESS_KEY_ID|ACCESS_KEY_SECRET|ENDPOINT|BUCKET)=' .env | xargs)
+ossutil cp "oss://$OSS_BUCKET/db/fde-20261105-031701.sql.gz" .data/backups/ -e "$OSS_ENDPOINT" --region cn-hangzhou
 
 ./infra/compose.sh stop app
 gunzip -c .data/backups/fde-20261105-031701.sql.gz \

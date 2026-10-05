@@ -2,7 +2,7 @@
 // 落地页的动态部分:场景卡片、开始按钮、没打完的对局。
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ScenarioSummary, SessionSummary } from "@fde/contracts";
 import { api, failureMessage, isFailure, loginHref, track } from "@/lib/client/api";
 import { formatDateTime } from "@/lib/client/format";
@@ -51,6 +51,20 @@ export function LandingClient() {
     };
   }, []);
 
+  // 没登录时点了"开始这一局":登录(和同意协议)之后带着 ?start=<场景> 回来,直接开局,不用再点一次
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!scenarios || autoStarted.current) return;
+    const id = new URLSearchParams(window.location.search).get("start");
+    if (!id) return;
+    autoStarted.current = true;
+    // 先把 start 从地址里去掉,刷新页面不会再开一局
+    window.history.replaceState(null, "", window.location.pathname);
+    if (scenarios.some((s) => s.id === id)) void start(id);
+    // start 每次渲染都是新函数,这里只在场景列表加载好时跑一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenarios]);
+
   async function start(scenarioId: string) {
     if (starting) return;
     setStarting(scenarioId);
@@ -61,7 +75,7 @@ export function LandingClient() {
     } catch (e) {
       // 没登录、没同意协议:都去登录页,登录页会接着把没做完的步骤做完
       if (isFailure(e, "unauthorized", "consent_required")) {
-        router.push(loginHref("/"));
+        router.push(loginHref(`/?start=${encodeURIComponent(scenarioId)}`));
         return;
       }
       setError(failureMessage(e));

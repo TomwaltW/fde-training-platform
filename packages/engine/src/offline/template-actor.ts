@@ -20,7 +20,8 @@ export class TemplateActor implements ActorPort {
       const mine = st.ledger.filter((e) => e.turn === st.turn).map((e) => e.valueText);
       parts.push(`${mine.join(",")}。行,我记下了。`);
     }
-    if (d.beat) parts.push(`(${d.beat})`);
+    // 压力时刻:说作者写好的台词。beat 是给导演和演员看的说明(可能含"红鲱鱼"之类的作者注),不能原样说出来
+    if (d.beat && d.fallback) parts.push(d.fallback);
     for (const r of plan.reveals) parts.push(r.level === "L1" ? r.text : `具体是这样:${r.text}`);
     for (const h of plan.hints) {
       if (h.kind === "redirect" && h.toRole) parts.push(`这个你得问${scn.role(h.toRole).name}。`);

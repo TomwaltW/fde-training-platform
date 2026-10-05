@@ -18,8 +18,8 @@ test("完整一局:从落地页走到复盘和申诉", async ({ page }, info) =>
   await expectNoHorizontalScroll(page, info);
   await page.getByRole("button", { name: "开始这一局" }).click();
 
-  // ---- 登录(没登录开局 → 401 → 登录页)
-  await expect(page).toHaveURL(/\/login\?next=%2F$/);
+  // ---- 登录(没登录开局 → 401 → 登录页,回跳地址带着选好的场景)
+  await expect(page).toHaveURL(/\/login\?next=%2F%3Fstart%3Dfreight-docs$/);
   await expectCompliance(page);
   await page.getByLabel("邮箱").fill("player@example.com");
   await page.getByLabel("邀请码").fill("FDE-INVITE");
@@ -41,10 +41,9 @@ test("完整一局:从落地页走到复盘和申诉", async ({ page }, info) =>
   await agree.click();
   await expect.poll(() => mock.callsTo("POST", /^\/api\/me\/consent$/).length).toBe(1);
 
-  // ---- 回到落地页开局
-  await expect(page).toHaveURL(/:\d+\/$/);
-  await page.getByRole("button", { name: "开始这一局" }).click();
+  // ---- 回到落地页后直接开局(不用再点一次)
   await expect(page).toHaveURL(new RegExp(`/play/${SESSION_ID}$`));
+  expect(mock.callsTo("POST", /^\/api\/sessions$/)).toHaveLength(2);
 
   // ---- 对局页
   await expect(page.getByTestId("time-left")).toHaveText("今天还剩 6 小时");
@@ -62,7 +61,7 @@ test("完整一局:从落地页走到复盘和申诉", async ({ page }, info) =>
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await expect(page.getByTestId("typing")).toHaveText(/周总正在说话…/);
   await expect(page.getByTestId("pending-line")).toHaveText(first);
-  await expect(composer).toBeDisabled();
+  await expect(composer).not.toBeEditable();
   await expect(page.getByTestId("chat-panel").locator('[data-speaker="npc"]').last()).toContainText("最大客户拓浪");
   await expect(page.getByTestId("typing")).toHaveCount(0);
   await expect(page.getByTestId("time-left")).toHaveText("今天还剩 5 小时 52 分");
@@ -149,7 +148,7 @@ test("完整一局:从落地页走到复盘和申诉", async ({ page }, info) =>
   await expectNoHorizontalScroll(page, info);
   await judgment.getByRole("button", { name: "提交判断" }).click();
   await expect(page.getByRole("button", { name: "已提交判断" })).toBeDisabled();
-  await expect(page.getByTestId("chat-panel")).toContainText("让对方直接说结论");
+  await expect(page.getByTestId("chat-panel")).toContainText("说吧,到底怎么回事?");
   expect(mock.callsTo("POST", /\/actions$/).at(-1)?.body).toEqual({ type: "submit_judgment", form: answers });
 
   // [收工]:确认 → end 动作 → POST finish(显示"正在生成复盘")→ 跳复盘页

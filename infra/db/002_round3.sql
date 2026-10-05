@@ -11,6 +11,20 @@ alter table login_codes rename column email to address;
 
 alter table feedback add column want_next boolean;
 
+-- 开局记录:只有谁、哪一局、什么时候开的,不含对局内容。删除本人对局后仍保留,
+-- 每日开局限额按它算(否则"删除我的数据"就能把当天的限额清零)
+create table session_starts (
+  session_id  text primary key,
+  user_id     text not null references users(id) on delete cascade,
+  started_at  timestamptz not null
+);
+create index session_starts_user_idx on session_starts(user_id, started_at);
+insert into session_starts (session_id, user_id, started_at) select id, user_id, started_at from sessions on conflict do nothing;
+
+-- 模型调用记录不含对局内容:删除对局时只解除关联,保留花费(否则删除数据会让总花费变少)
+alter table llm_calls drop constraint llm_calls_session_id_fkey;
+alter table llm_calls add constraint llm_calls_session_id_fkey foreign key (session_id) references sessions(id) on delete set null;
+
 create table waitlist (
   email        text primary key,                       -- 统一小写
   role         text,

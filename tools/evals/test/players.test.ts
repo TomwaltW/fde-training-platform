@@ -57,6 +57,11 @@ describe("scripted players (offline)", () => {
         for (const u of f.unlock) if ("say" in u && u.say) expect(blob.includes(u.say), `view 含 ${f.id} say`).toBe(false);
       }
       for (const tr of scn.data.traps) expect(blob.includes(tr.beat), `view 含 ${tr.id} beat`).toBe(false);
+      // 对话记录里(离线模板演员说的话)也不能出现压力时刻的导演说明(可能带"红鲱鱼"这类作者注)
+      for (const l of view.transcript.filter((x) => x.speaker !== "user")) {
+        for (const tr of scn.data.traps) expect(l.text.includes(tr.beat), `${l.ref} 说出了 ${tr.id} 的 beat`).toBe(false);
+        expect(l.text, `${l.ref} 带了作者注`).not.toMatch(/红鲱鱼|RH\d/);
+      }
       for (const flag of Object.keys(scn.data.flags)) expect(blob.includes(flag), `view 含 flag ${flag}`).toBe(false);
       expect(blob).not.toMatch(/"trust"|"ledger"|"directive"|"guardFlags"|"facts"/);
 

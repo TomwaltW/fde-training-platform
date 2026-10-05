@@ -228,10 +228,22 @@ export function artifactFileUrl(sessionId: string, artifactId: string, name: str
   return `/api/sessions/${enc(sessionId)}/artifacts/${enc(artifactId)}/files/${enc(name)}`;
 }
 
-/** 登录后回跳的站内路径;只接受以单个 "/" 开头的相对路径,防止开放重定向。 */
+/**
+ * 登录后回跳的站内路径,防止开放重定向。浏览器解析地址时会删掉制表符和换行、把 "\\" 当成 "/",
+ * 所以 "/\t/evil.com" 这类写法会变成 "//evil.com"(协议相对地址)。这里先拒绝控制字符和反斜杠,
+ * 再按浏览器的规则解析一遍,确认还在本站。
+ */
 export function safeNext(next: string | null | undefined, fallback = "/"): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return fallback;
-  return next;
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return fallback;
+  if (/[\u0000-\u001F\u007F\\]/.test(next)) return fallback;
+  try {
+    const base = "http://same-origin.invalid";
+    const u = new URL(next, base);
+    if (u.origin !== new URL(base).origin) return fallback;
+    return `${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return fallback;
+  }
 }
 
 export function loginHref(next: string): string {

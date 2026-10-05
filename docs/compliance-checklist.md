@@ -208,7 +208,7 @@
 
 - [x] 最小化收集:用户表只有 id、邮箱、创建时间、同意时间(infra/db/001_init.sql);不收手机号、姓名、证件号;不接第三方统计和广告。
 - [ ] 首次登录必须勾选同意《用户协议》和《隐私政策》(T2 登录页),`POST /api/me/consent` 记录同意时间;未同意不能开局,返回 403 `consent_required`(T1)。
-- [ ] 删除渠道:`/me` 页"删除我的对话" → `DELETE /api/me/data` → `Store.deleteUserSessions`,删除本人全部对局、复盘、反馈和模型调用记录(T1 + T2;B2 验收"删除数据")。
+- [ ] 删除渠道:`/me` 页"删除我的对话" → `DELETE /api/me/data` → `Store.deleteUserSessions`,删除本人全部对局、复盘、反馈和这些对局的事件;模型调用记录解除关联后保留(只有用量和费用),开局时间记录保留(每日限额,否则删数据就能清零当天限额)。隐私政策第四节已按此写明。
 - [ ] 验证码和登录 token 只存哈希;登录 cookie `fde_session` 为 httpOnly、SameSite=Lax、生产环境 Secure(T1)。
 - [x] 隐私政策草稿 `apps/web/content/legal/privacy.md`:收集清单、"改进产品需事先同意"、/me 删除、日志与备份保留期、境内存储(T4)。
 - [x] 数据库不对公网开放(compose 里 postgres 没有映射端口);备份文件权限 600(infra/backup.sh,T4)。

@@ -167,6 +167,7 @@ export interface Store {
   listSessions(userId: string): Promise<StoredSession[]>;
   /** 所有人的对局,按 startedAt 倒序;before 给出时只返回更早的。 */
   listAllSessions(limit: number, before?: string): Promise<StoredSession[]>;
+  /** 该用户在 since 之后开的局数,含已经被 deleteUserSessions 删掉的(每日限额用)。 */
   countSessionsSince(userId: string, since: string): Promise<number>;
   /**
    * 乐观锁写入:当前版本等于 expectedVersion 才写,返回新版本号;否则抛 VersionConflictError。
@@ -178,7 +179,10 @@ export interface Store {
    * fn 抛错时锁也要释放。
    */
   withSessionLock<T>(id: string, fn: () => Promise<T>, timeoutMs?: number): Promise<T>;
-  /** 删除该用户的所有对局及其复盘、反馈、模型调用记录(第三轮起还有这些对局的事件);返回删除的对局数。 */
+  /**
+   * 删除该用户的所有对局及其复盘、反馈、事件;返回删除的对局数。
+   * 模型调用记录不含对局内容,只解除关联(sessionId 变为 null),总花费不变;开局记录保留(每日限额照算)。
+   */
   deleteUserSessions(userId: string): Promise<number>;
 
   // ---------- 复盘

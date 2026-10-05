@@ -20,6 +20,10 @@ export interface ServerRuntime {
   codeRequests: Map<string, number>;
   /** 发信器,按 SMTP_URL 缓存。 */
   mailer?: { url: string; transport: Transporter };
+  /** 对局 id → 收工时裁判连续失败的次数(见 finish 路由:前几次不保存,让玩家稍后重试)。 */
+  finishJudgeFailures?: Map<string, number>;
+  /** 限频:用途 + 键 → 最近的请求时间(毫秒),见 ratelimit.ts。 */
+  rateLimits?: Map<string, number[]>;
 }
 
 const KEY = Symbol.for("fde.web.server-runtime");
@@ -38,6 +42,8 @@ export async function resetForTests(): Promise<void> {
   rt.closeStore = undefined;
   rt.scenarios = undefined;
   rt.mailer = undefined;
+  rt.finishJudgeFailures = undefined;
+  rt.rateLimits = undefined;
   rt.codeRequests.clear();
   if (store) await (await store.catch(() => undefined))?.close();
   if (closeStore) await closeStore();

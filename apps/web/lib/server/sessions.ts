@@ -9,6 +9,12 @@ import { getScenario, scenarioTitle, type ScenarioEntry } from "./scenarios.ts";
 /** 收工可能要几十秒(裁判 + 复盘);重复点收工时等前一个做完,直接拿到同一份复盘。 */
 export const FINISH_LOCK_WAIT_MS = 180_000;
 
+/**
+ * 裁判调用失败时,前几次收工不保存复盘(一旦保存就是最终结果,分数会因为没有裁判而偏低),
+ * 返回错误让玩家稍后再点;连续失败到第 FINISH_JUDGE_ATTEMPTS 次才保存带说明的复盘,免得永远卡住。
+ */
+export const FINISH_JUDGE_ATTEMPTS = 3;
+
 export async function loadSession(store: Store, id: string): Promise<StoredSession> {
   const s = await store.getSession(id);
   if (!s) throw new HttpError("not_found", "找不到这一局");

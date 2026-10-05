@@ -48,7 +48,12 @@ export interface SessionReport {
   judgeIssues: string[];
   debrief: DebriefData;
   markdown: string;
+  /** 裁判调用失败(超时、模型拒答、输出不是 JSON),本次按空裁判算分。调用方可以决定先不保存、稍后重试。 */
+  judgeFailed?: true;
 }
+
+/** 裁判失败时放在复盘最前面,让玩家知道分数不完整。 */
+export const JUDGE_FAILED_NOTICE = "> 这次评分模型没有响应,依赖它的几项(提问质量、判断、成功定义、报告)没有计分,总分偏低。可以在下面的申诉里说明,我们会人工复核。";
 
 export class Engine {
   private moderation: Moderation;
@@ -236,6 +241,7 @@ export class Engine {
     endSession(st, st.endedReason ?? "user");
     let judge: JudgeOutput;
     let issues: string[] = [];
+    let judgeFailed = false;
     const userTurns = st.transcript.filter((l) => l.speaker === "user").length;
     if (userTurns === 0) {
       judge = emptyJudge(this.scn);
@@ -249,12 +255,14 @@ export class Engine {
       } catch (e) {
         judge = emptyJudge(this.scn);
         issues = [`裁判调用失败:${(e as Error).message}`];
+        judgeFailed = true;
       }
     }
     if (!st.judgment) issues.push("用户没有提交判断,D4、D5、D7 只能按对话内容判定");
     const score = scoreSession(this.scn, st, judge);
     const debrief = buildDebriefData(this.scn, st, score, judge, issues);
-    const markdown = await this.deps.debrief.write({ scn: this.scn, st, data: debrief });
-    return { score, judge, judgeIssues: issues, debrief, markdown };
+    const written = await this.deps.debrief.write({ scn: this.scn, st, data: debrief });
+    const markdown = judgeFailed ? `${JUDGE_FAILED_NOTICE}\n\n${written}` : written;
+    return { score, judge, judgeIssues: issues, debrief, markdown, ...(judgeFailed && { judgeFailed: true as const }) };
   }
 }

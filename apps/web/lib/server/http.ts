@@ -60,11 +60,56 @@ function describeIssues(error: z.ZodError): string {
     .join(";");
 }
 
-/** 读 JSON 请求体并校验;不合法抛 400 bad_request。 */
+/** 请求体上限。最大的正常请求是判断表单(5 项 × 2000 字,UTF-8 约 30 KB)。 */
+export const MAX_BODY_BYTES = 64 * 1024;
+
+/** 边读边数,超过上限立即中止,不把超大的请求体整个读进内存。 */
+async function readBodyText(req: Request): Promise<string> {
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) throw new HttpError("bad_request", "请求体太大");
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new HttpError("bad_request", "请求体太大");
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
+
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/**
+ * 去掉 PostgreSQL 存不下的字符:NUL(text 和 jsonb 都不接受)和落单的代理项(jsonb 拒绝),
+ * 后者换成 U+FFFD。两套存储因此表现一致,不会因为一个怪字符返回 500。
+ */
+export function cleanStrings(v: unknown): unknown {
+  if (typeof v === "string") return v.replace(/\u0000/g, "").replace(LONE_SURROGATE, "\uFFFD");
+  if (Array.isArray(v)) return v.map(cleanStrings);
+  if (v !== null && typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    // defineProperty:键名是 "__proto__" 时也只建自有属性,不改原型
+    for (const [k, x] of Object.entries(v)) {
+      Object.defineProperty(out, cleanStrings(k) as string, { value: cleanStrings(x), enumerable: true, writable: true, configurable: true });
+    }
+    return out;
+  }
+  return v;
+}
+
+/** 读 JSON 请求体并校验;不合法或超过 64 KB 抛 400 bad_request。 */
 export async function readJson<S extends z.ZodType>(req: Request, schema: S): Promise<z.infer<S>> {
+  const text = await readBodyText(req);
   let raw: unknown;
   try {
-    raw = await req.json();
+    raw = cleanStrings(JSON.parse(text));
   } catch {
     throw new HttpError("bad_request", "请求体不是合法的 JSON");
   }

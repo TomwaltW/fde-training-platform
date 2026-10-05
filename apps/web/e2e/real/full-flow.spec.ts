@@ -10,9 +10,10 @@ import { expectCompliance, expectNoHorizontalScroll, isMobile, showPanel, trackP
 
 const scenario = parse(readFileSync(join(import.meta.dirname, "../../../../scenarios/freight-docs/scenario.yaml"), "utf8")) as {
   truth: { diagnosis_items: { statement: string }[] };
+  traps: { id: string; beat: string }[];
 };
-/** 收工前任何接口响应里都不能出现的:真相里的诊断结论。 */
-const TRUTH = scenario.truth.diagnosis_items.map((d) => d.statement);
+/** 收工前任何接口响应里都不能出现的:真相里的诊断结论、压力时刻的导演说明(含"红鲱鱼"这类作者注)。 */
+const TRUTH = [...scenario.truth.diagnosis_items.map((d) => d.statement), ...scenario.traps.map((t) => t.beat), "红鲱鱼"];
 /** 引擎内部状态的字段名(PublicView 里不该有)。 */
 const INTERNAL_KEYS = ["truth", "facts", "ledger", "trust", "directive", "guardFlags", "flags", "traps"];
 

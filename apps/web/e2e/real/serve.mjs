@@ -43,6 +43,8 @@ const env = {
   FDE_MEMORY_STORE_FILE: storeFile,
   FDE_AUTH_SECRET: "e2e-real-secret",
   FDE_DEV_LOGIN_CODES: "1",
+  // 这里跑的是生产构建(NODE_ENV=production),开发模式验证码要再加这个开关才生效
+  FDE_DEV_LOGIN_CODES_IN_PRODUCTION: "1",
   FDE_COOKIE_SECURE: "0",
   FDE_DAILY_SESSION_LIMIT: "20",
   ADMIN_EMAILS: "admin-desktop@e2e.test,admin-mobile@e2e.test",

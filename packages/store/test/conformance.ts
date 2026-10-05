@@ -208,13 +208,35 @@ export function runStoreConformance(name: string, make: () => Promise<Store>) {
         await s.saveReport("s1", sampleReport(50), T(4));
         await s.addFeedback({ sessionId: "s1", userId: u.id, rating: 5, text: null, dispute: null, wantNext: false, createdAt: T(5) });
         await s.logLlmCall({ sessionId: "s1", at: T(5), stage: "gate", provider: "bailian", model: "m", tokensIn: 1, tokensOut: 1, cachedTokens: 0, costYuan: 0.1, latencyMs: 1, ok: true, error: null });
+        const costBefore = await s.totalCostYuan();
+        expect(await s.countSessionsSince(u.id, T(0))).toBe(2);
         expect(await s.deleteUserSessions(u.id)).toBe(2);
         expect(await s.getSession("s1")).toBeNull();
         expect(await s.getReport("s1")).toBeNull();
         expect(await s.listFeedback({ sessionId: "s1" })).toEqual([]);
         expect(await s.listLlmCalls("s1")).toEqual([]);
+        // 花费保留、每日限额照算:删数据不能清零当天的开局数
+        expect(await s.totalCostYuan()).toBeCloseTo(costBefore, 6);
+        expect(await s.countSessionsSince(u.id, T(0))).toBe(2);
+        expect(await s.listSessions(u.id)).toEqual([]);
         expect(await s.getSession("s3")).not.toBeNull();
         expect(await s.getUser(u.id)).not.toBeNull();
+      }),
+    );
+
+    it(
+      "登录验证码:并发猜测也只有前 5 次会被比对(防暴力破解)",
+      withStore(async (s) => {
+        await s.saveLoginCode("x@example.com", "right", T(10));
+        // 第 10 个才是对的:不管实现怎么交错执行,前 5 次用完后它也必须失败
+        const guesses = Array.from({ length: 10 }, (_, i) => (i === 9 ? "right" : `wrong${i}`));
+        const results = await Promise.all(guesses.map((g) => s.verifyLoginCode("x@example.com", g, T(1))));
+        expect(results.filter(Boolean)).toEqual([]);
+        expect(await s.verifyLoginCode("x@example.com", "right", T(1))).toBe(false);
+        // 两个并发的正确提交只有一个成功
+        await s.saveLoginCode("y@example.com", "ok", T(10));
+        const twice = await Promise.all([s.verifyLoginCode("y@example.com", "ok", T(1)), s.verifyLoginCode("y@example.com", "ok", T(1))]);
+        expect(twice.filter(Boolean)).toHaveLength(1);
       }),
     );
 

@@ -3,8 +3,9 @@ import type { FinishResponse } from "@fde/contracts";
 import { publicReport } from "@fde/engine";
 import { requireUser } from "../../../../../lib/server/auth.ts";
 import { recordEvent } from "../../../../../lib/server/events.ts";
-import { handle, json, nowIso } from "../../../../../lib/server/http.ts";
-import { FINISH_LOCK_WAIT_MS, assertOwner, loadSession, scenarioOf } from "../../../../../lib/server/sessions.ts";
+import { HttpError, handle, json, nowIso } from "../../../../../lib/server/http.ts";
+import { runtime } from "../../../../../lib/server/runtime.ts";
+import { FINISH_JUDGE_ATTEMPTS, FINISH_LOCK_WAIT_MS, assertOwner, loadSession, scenarioOf } from "../../../../../lib/server/sessions.ts";
 import { getStore } from "../../../../../lib/server/store.ts";
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -31,6 +32,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         if (again) return respond(again.report);
         const s = await loadSession(store, id);
         const report = await engine.finish(s.state);
+        const failures = (runtime().finishJudgeFailures ??= new Map());
+        if (report.judgeFailed) {
+          const n = (failures.get(id) ?? 0) + 1;
+          failures.set(id, n);
+          if (n < FINISH_JUDGE_ATTEMPTS) {
+            console.warn(`[finish] ${id} 裁判调用失败(第 ${n} 次),先不保存复盘:${report.judgeIssues.join(";")}`);
+            throw new HttpError("internal", "评分模型暂时没有响应,请过一会儿再点一次「收工」。");
+          }
+        }
+        failures.delete(id);
         const now = nowIso();
         await store.saveSession(id, s.state, s.version, { endedAt: s.endedAt ?? now });
         await store.saveReport(id, report, now);

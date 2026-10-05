@@ -253,14 +253,17 @@ class PgStore implements Store {
 
   async verifyLoginCode(address: string, codeHash: string, now: string): Promise<boolean> {
     const e = normalizeEmail(address);
-    // 对了就删:一条 DELETE 带全部条件,并发的两次正确提交只有一次成功
-    const ok = await this.rows(
-      "delete from login_codes where address = $1 and code_hash = $2 and expires_at > $3::timestamptz and attempts < $4 returning address",
-      [e, codeHash, now, MAX_LOGIN_ATTEMPTS],
+    // 先原子地占用一次尝试机会:条件和加一在同一条 UPDATE 里,并发的猜测按行锁排队,
+    // 无论同时来多少个请求,最多只有 5 个能走到比对哈希这一步
+    const claimed = await this.rows(
+      "update login_codes set attempts = attempts + 1 where address = $1 and attempts < $2 returning code_hash, expires_at",
+      [e, MAX_LOGIN_ATTEMPTS],
     );
-    if (ok.length) return true;
-    await this.rows("update login_codes set attempts = attempts + 1 where address = $1", [e]);
-    return false;
+    const row = claimed[0];
+    if (!row || String(row.code_hash) !== codeHash || Date.parse(toIso(row.expires_at)) <= Date.parse(now)) return false;
+    // 对了就删:并发的两次正确提交只有一次删到(带上哈希,防止期间被新验证码覆盖)
+    const del = await this.rows("delete from login_codes where address = $1 and code_hash = $2 returning address", [e, codeHash]);
+    return del.length > 0;
   }
 
   // ---------------------------------------------------------------- 登录态
@@ -285,9 +288,15 @@ class PgStore implements Store {
   // ---------------------------------------------------------------- 对局
 
   async createSession(s: Omit<StoredSession, "version" | "endedAt" | "status">): Promise<StoredSession> {
+    // 同一条语句里顺带记开局记录(每日限额用,删除对局后保留)
     const r = await this.rows(
-      `insert into sessions (id, user_id, scenario_id, state, status, started_at, ended_at, version)
-       values ($1, $2, $3, $4::jsonb, 'active', $5::timestamptz, null, 1) returning ${SESSION_COLS}`,
+      `with s as (
+         insert into sessions (id, user_id, scenario_id, state, status, started_at, ended_at, version)
+         values ($1, $2, $3, $4::jsonb, 'active', $5::timestamptz, null, 1) returning ${SESSION_COLS}
+       ), st as (
+         insert into session_starts (session_id, user_id, started_at) select id, user_id, started_at from s
+       )
+       select ${SESSION_COLS} from s`,
       [s.id, s.userId, s.scenarioId, JSON.stringify(s.state), s.startedAt],
     );
     return toSession(r[0]!);
@@ -313,7 +322,7 @@ class PgStore implements Store {
   }
 
   async countSessionsSince(userId: string, since: string): Promise<number> {
-    const r = await this.rows<{ n: unknown }>("select count(*)::int as n from sessions where user_id = $1 and started_at >= $2::timestamptz", [
+    const r = await this.rows<{ n: unknown }>("select count(*)::int as n from session_starts where user_id = $1 and started_at >= $2::timestamptz", [
       userId,
       since,
     ]);
@@ -338,7 +347,7 @@ class PgStore implements Store {
   }
 
   async deleteUserSessions(userId: string): Promise<number> {
-    // reports、feedback、llm_calls、events(带 session_id 的)都是 on delete cascade
+    // reports、feedback、events(带 session_id 的)是 on delete cascade;llm_calls 是 set null(保留花费);session_starts 不动
     const r = await this.rows("delete from sessions where user_id = $1 returning id", [userId]);
     return r.length;
   }

@@ -76,8 +76,8 @@ USER node
 
 EXPOSE 3000
 
-# 镜像里没有 curl,用 Node 22 自带的 fetch 请求 /api/site(不需要登录、不碰模型)
+# 镜像里没有 curl,用 Node 22 自带的 fetch 请求 /api/health(真的连一次库、确认 FDE_AUTH_SECRET 已设置;不碰模型)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/site').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 
 CMD ["node", "apps/web/server.js"]

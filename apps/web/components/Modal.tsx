@@ -1,7 +1,30 @@
 "use client";
-// 对话框:手机上从底部弹出、占满宽度,电脑上居中。Esc 关闭,打开时锁住页面滚动。
+// 对话框:手机上从底部弹出、占满宽度,电脑上居中。Esc 关闭,打开时锁住页面滚动,Tab 不跑出对话框,关闭后焦点回到原处。
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { cx } from "@/lib/client/format";
+
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Tab / Shift+Tab 在容器里循环,不跑到对话框后面的页面上(aria-modal 的约定)。 */
+export function trapTab(e: KeyboardEvent, root: HTMLElement | null) {
+  if (!root) return;
+  const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
+  if (!items.length) {
+    e.preventDefault();
+    root.focus();
+    return;
+  }
+  const first = items[0]!;
+  const last = items[items.length - 1]!;
+  const active = document.activeElement;
+  if (e.shiftKey && (active === first || active === root || !root.contains(active))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (active === last || !root.contains(active))) {
+    e.preventDefault();
+    first.focus();
+  }
+}
 
 export function Modal({
   open,
@@ -34,8 +57,11 @@ export function Modal({
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // 关掉后把焦点还给打开它的那个元素
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Tab") trapTab(e, panel.current);
     };
     window.addEventListener("keydown", onKey);
     // 焦点移进对话框,方便键盘和读屏
@@ -43,6 +69,7 @@ export function Modal({
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus();
     };
   }, [open]);
 

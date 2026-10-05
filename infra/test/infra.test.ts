@@ -252,7 +252,7 @@ describe(".env.example", () => {
         // 第三轮
         "ALIYUN_SMS_ACCESS_KEY_ID", "ALIYUN_SMS_ACCESS_KEY_SECRET", "ALIYUN_SMS_SIGN_NAME", "ALIYUN_SMS_TEMPLATE_CODE",
         "ALIYUN_SMS_ENDPOINT", "SMS_HOURLY_LIMIT", "SMS_DAILY_PER_PHONE", "FDE_DEV_SMS_LOGIN", "SITE_URL", "WAITLIST_OPEN",
-        "FDE_PRODUCTS_CONFIG", "FDE_GATES_CONFIG",
+        "FDE_PRODUCTS_CONFIG", "FDE_GATES_CONFIG", "FDE_DEV_LOGIN_CODES_IN_PRODUCTION",
       ]),
     );
   });
@@ -318,13 +318,13 @@ describe("Dockerfile", () => {
     expect(read("package.json")).toMatch(/"packageManager":\s*"pnpm@10\./);
   });
 
-  it("运行镜像:非 root 用户、FDE_ROOT、HEALTHCHECK 请求 /api/site、启动 apps/web/server.js", () => {
+  it("运行镜像:非 root 用户、FDE_ROOT、HEALTHCHECK 请求 /api/health、启动 apps/web/server.js", () => {
     const runtime = text.slice(text.lastIndexOf("\nFROM "));
     const user = /^USER\s+(\S+)/m.exec(runtime)?.[1];
     expect(user).toBeDefined();
     expect(["root", "0"]).not.toContain(user);
     expect(runtime).toMatch(/FDE_ROOT=\/app\b/);
-    expect(runtime).toMatch(/HEALTHCHECK[\s\S]*\/api\/site/);
+    expect(runtime).toMatch(/HEALTHCHECK[\s\S]*\/api\/health/);
     expect(runtime).toMatch(/CMD \["node", "apps\/web\/server\.js"\]/);
     expect(read("apps/web/next.config.ts")).toMatch(/output:\s*"standalone"/);
   });
@@ -482,7 +482,7 @@ describe("docs/deploy.md", () => {
       "mirrors.aliyun.com",
       "registry-mirrors",
       "./infra/compose.sh up -d",
-      "invite_codes",
+      "/api/health",
       "ADMIN_EMAILS",
       "crontab",
       "backup.sh",

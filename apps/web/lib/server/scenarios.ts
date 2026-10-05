@@ -16,6 +16,7 @@ import {
   emptyJudge,
   loadScenario,
   type ChatFn,
+  type DebriefPort,
   type EngineDeps,
   type LoadedScenario,
 } from "@fde/engine";
@@ -56,6 +57,24 @@ function createChat(root: string): ChatFn {
   });
 }
 
+/**
+ * 复盘文稿由模型润色;模型失败(超时、拒答、内容审核拦截)时改用模板直接出稿。
+ * 分数和事实都在 DebriefData 里,模板稿内容完整,只是文字没润色——总比收工一直失败好。
+ */
+export function withTemplateFallback(llm: DebriefPort): DebriefPort {
+  const template = new TemplateDebrief();
+  return {
+    async write(input) {
+      try {
+        return await llm.write(input);
+      } catch (e) {
+        console.error(`[debrief] ${input.st.sessionId} 模型撰写复盘失败,改用模板`, e);
+        return template.write(input);
+      }
+    },
+  };
+}
+
 function engineDeps(scn: LoadedScenario, chat: ChatFn | undefined): EngineDeps {
   const moderation = Moderation.fromFile(process.env.FDE_BANNED_WORDS);
   if (!chat) {
@@ -68,7 +87,7 @@ function engineDeps(scn: LoadedScenario, chat: ChatFn | undefined): EngineDeps {
       moderation,
     };
   }
-  return { gate: new LlmGate(chat), actor: new LlmActor(chat), judge: new LlmJudge(chat), debrief: new LlmDebrief(chat), moderation };
+  return { gate: new LlmGate(chat), actor: new LlmActor(chat), judge: new LlmJudge(chat), debrief: withTemplateFallback(new LlmDebrief(chat)), moderation };
 }
 
 function loadAll(): Map<string, ScenarioEntry> {

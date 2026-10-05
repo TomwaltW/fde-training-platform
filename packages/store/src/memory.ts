@@ -58,6 +58,8 @@ interface MemoryData {
   waitlist: Record<string, WaitlistEntry>;
   events: StoredEvent[];
   redeemCodes: Record<string, RedeemCode>;
+  /** 开局记录(删除对局后保留,每日限额用)。 */
+  sessionStarts: { sessionId: string; userId: string; startedAt: string }[];
 }
 
 function emptyData(): MemoryData {
@@ -73,6 +75,7 @@ function emptyData(): MemoryData {
     waitlist: {},
     events: [],
     redeemCodes: {},
+    sessionStarts: [],
   };
 }
 
@@ -80,6 +83,7 @@ function emptyData(): MemoryData {
 function upgrade(d: MemoryData): MemoryData {
   for (const u of Object.values(d.users)) u.phone ??= null;
   for (const f of d.feedback) f.wantNext ??= null;
+  if (!d.sessionStarts.length) d.sessionStarts = Object.values(d.sessions).map((s) => ({ sessionId: s.id, userId: s.userId, startedAt: s.startedAt }));
   return d;
 }
 
@@ -238,6 +242,7 @@ class MemoryStore implements Store {
     if (this.data.sessions[s.id]) throw new Error(`对局 ${s.id} 已存在`);
     const row: StoredSession = { ...jsonClone(s), status: "active", endedAt: null, version: 1 };
     this.data.sessions[s.id] = row;
+    this.data.sessionStarts.push({ sessionId: s.id, userId: s.userId, startedAt: s.startedAt });
     this.persist();
     return jsonClone(row);
   }
@@ -264,7 +269,7 @@ class MemoryStore implements Store {
 
   async countSessionsSince(userId: string, since: string): Promise<number> {
     const t = ms(since);
-    return Object.values(this.data.sessions).filter((s) => s.userId === userId && ms(s.startedAt) >= t).length;
+    return this.data.sessionStarts.filter((s) => s.userId === userId && ms(s.startedAt) >= t).length;
   }
 
   async saveSession(id: string, state: SessionState, expectedVersion: number, end?: { endedAt: string }): Promise<number> {
@@ -292,7 +297,8 @@ class MemoryStore implements Store {
       delete this.data.reports[id];
     }
     this.data.feedback = this.data.feedback.filter((f) => !ids.has(f.sessionId));
-    this.data.llmCalls = this.data.llmCalls.filter((c) => c.sessionId === null || !ids.has(c.sessionId));
+    // 模型调用记录只解除关联,花费保留
+    for (const c of this.data.llmCalls) if (c.sessionId !== null && ids.has(c.sessionId)) c.sessionId = null;
     this.data.events = this.data.events.filter((ev) => ev.sessionId === null || !ids.has(ev.sessionId));
     this.persist();
     return ids.size;

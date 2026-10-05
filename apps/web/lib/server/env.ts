@@ -21,20 +21,23 @@ export function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
-/** FDE_DEV_LOGIN_CODES=1:验证码直接在响应里返回(仅开发和测试)。 */
+/**
+ * FDE_DEV_LOGIN_CODES=1:验证码直接在响应里返回(仅开发和测试)。
+ * 生产环境(NODE_ENV=production)还要同时设 FDE_DEV_LOGIN_CODES_IN_PRODUCTION=1 才生效——只给跑生产构建的
+ * 自动化测试用;上线时误开 FDE_DEV_LOGIN_CODES 不会让任何人都能拿到别人(包括管理员)的验证码。
+ */
 export function devLoginCodes(): boolean {
-  return process.env.FDE_DEV_LOGIN_CODES === "1";
+  if (process.env.FDE_DEV_LOGIN_CODES !== "1") return false;
+  return !isProduction() || process.env.FDE_DEV_LOGIN_CODES_IN_PRODUCTION === "1";
 }
 
 const DEV_AUTH_SECRET = "fde-dev-secret-do-not-use-in-production";
 
-/**
- * 验证码、token 哈希的 pepper。生产必填;开发、测试(含 FDE_DEV_LOGIN_CODES=1 的本地 next start)用默认值。
- */
+/** 验证码、token 哈希的 pepper。生产环境必填(没有例外);开发、测试用默认值。 */
 export function authSecret(): string {
   const v = process.env.FDE_AUTH_SECRET;
   if (v) return v;
-  if (isProduction() && !devLoginCodes()) throw new Error("生产环境必须设置 FDE_AUTH_SECRET");
+  if (isProduction()) throw new Error("生产环境必须设置 FDE_AUTH_SECRET");
   return DEV_AUTH_SECRET;
 }
 

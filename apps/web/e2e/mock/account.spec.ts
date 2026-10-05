@@ -39,8 +39,7 @@ test("没同意协议就开局(403 consent_required)会去登录页的同意步�
   await page.getByRole("checkbox", { name: /用户协议/ }).check();
   await page.getByRole("checkbox", { name: /隐私政策/ }).check();
   await page.getByRole("button", { name: "同意并继续" }).click();
-  await expect(page).toHaveURL(/:\d+\/$/);
-  await page.getByRole("button", { name: "开始这一局" }).click();
+  // 同意后带着选好的场景回到落地页,直接开局
   await expect(page).toHaveURL(new RegExp(`/play/${SESSION_ID}$`));
 });
 
