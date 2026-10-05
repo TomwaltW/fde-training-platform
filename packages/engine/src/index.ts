@@ -15,6 +15,7 @@ export * from "./debrief.ts";
 export * from "./moderation.ts";
 export * from "./ports.ts";
 export * from "./engine.ts";
+export * from "./view.ts";
 export * from "./llm-ports.ts";
 export * from "./prompts/actor.ts";
 export * from "./prompts/gate.ts";
