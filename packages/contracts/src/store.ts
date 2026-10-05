@@ -131,6 +131,8 @@ export interface Store {
   createInvites(count: number, maxUses: number, note?: string): Promise<string[]>;
   /** 有效且未用尽则用掉一次并返回 true;无效或用尽返回 false。并发调用不能超用。 */
   redeemInvite(code: string): Promise<boolean>;
+  /** 评审修复:只看不用——码存在且还有剩余次数返回 true(请求验证码时先核对,验证通过后才 redeemInvite)。 */
+  inviteAvailable(code: string): Promise<boolean>;
 
   // ---------- 用户
   /** email 统一小写后存(phone 为 null)。已存在时抛错(调用方应先 getUserByEmail)。 */

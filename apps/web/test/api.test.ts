@@ -107,7 +107,7 @@ async function login(email: string, inviteCode?: string): Promise<Client> {
   const r1 = await c.post<RequestCodeResponse>(requestCode.POST, { body: { email, ...(inviteCode && { inviteCode }) } });
   expect(r1.status, JSON.stringify(r1.body)).toBe(200);
   expect(r1.body.devCode).toMatch(/^\d{6}$/);
-  const r2 = await c.post<VerifyResponse>(verify.POST, { body: { email, code: r1.body.devCode } });
+  const r2 = await c.post<VerifyResponse>(verify.POST, { body: { email, code: r1.body.devCode, ...(inviteCode && { inviteCode }) } });
   expect(r2.status).toBe(200);
   expect(c.cookie).toBeTruthy();
   return c;
@@ -202,35 +202,49 @@ describe("登录与完整一局", () => {
     invites = inv.body.codes;
   });
 
-  it("新用户:带邀请码请求验证码 → 消耗邀请码并创建用户;60 秒内重复请求 429", async () => {
+  it("新用户:带邀请码请求验证码(只核对不消耗)→ 验证通过时才消耗邀请码并创建用户;60 秒内重复请求 429", async () => {
     const c = new Client();
+    const store = await getStore();
     // 邀请码大小写、空白都不影响
     const r = await c.post<RequestCodeResponse>(requestCode.POST, { body: { email: " Player@Example.com ", inviteCode: ` ${invites[0]!.toLowerCase()} ` } });
     expect(r.status).toBe(200);
     expect(r.body.ok).toBe(true);
     expect(r.body.devCode).toMatch(/^\d{6}$/);
-    const u = await (await getStore()).getUserByEmail("player@example.com");
-    expect(u).toMatchObject({ email: "player@example.com", consentAt: null });
+    // 还没验证:不建用户、不消耗邀请码(输错邮箱不会白白用掉一次性邀请码)
+    expect(await store.getUserByEmail("player@example.com")).toBeNull();
+    expect(await store.inviteAvailable(invites[0]!)).toBe(true);
 
     const again = await c.post(requestCode.POST, { body: { email: "player@example.com" } });
     expect(again.status).toBe(429);
     expect(errorCode(again)).toBe("rate_limited");
 
-    // 邀请码只能用一次
-    const reuse = await c.post(requestCode.POST, { body: { email: "someone@example.com", inviteCode: invites[0] } });
-    expect(reuse.status).toBe(400);
-    expect(errorCode(reuse)).toBe("invite_invalid");
+    // 同一个邀请码别人也能先请求验证码,谁先验证通过谁用掉
+    const other = new Client();
+    const r2 = await other.post<RequestCodeResponse>(requestCode.POST, { body: { email: "someone@example.com", inviteCode: invites[0] } });
+    expect(r2.status).toBe(200);
 
     // 错误验证码 → 400 code_invalid
     const wrongCode = r.body.devCode === "000000" ? "111111" : "000000";
-    const bad = await c.post(verify.POST, { body: { email: "player@example.com", code: wrongCode } });
+    const bad = await c.post(verify.POST, { body: { email: "player@example.com", code: wrongCode, inviteCode: invites[0] } });
     expect(bad.status).toBe(400);
     expect(errorCode(bad)).toBe("code_invalid");
     expect(c.cookie).toBeUndefined();
 
-    // 正确验证码 → 设置 cookie
-    const ok = await c.post<VerifyResponse>(verify.POST, { body: { email: "PLAYER@example.com", code: r.body.devCode } });
+    // 正确验证码 → 消耗邀请码、建用户、设置 cookie
+    const ok = await c.post<VerifyResponse>(verify.POST, { body: { email: "PLAYER@example.com", code: r.body.devCode, inviteCode: invites[0] } });
     expect(ok.status).toBe(200);
+    expect(await store.getUserByEmail("player@example.com")).toMatchObject({ email: "player@example.com", consentAt: null });
+    expect(await store.inviteAvailable(invites[0]!)).toBe(false);
+
+    // 邀请码只能用一次:后验证的人 → 400 invite_invalid,不建用户;再请求验证码也不行
+    const late = await other.post(verify.POST, { body: { email: "someone@example.com", code: r2.body.devCode, inviteCode: invites[0] } });
+    expect(late.status).toBe(400);
+    expect(errorCode(late)).toBe("invite_invalid");
+    expect(await store.getUserByEmail("someone@example.com")).toBeNull();
+    forgetCodeRequests();
+    const reuse = await other.post(requestCode.POST, { body: { email: "someone@example.com", inviteCode: invites[0] } });
+    expect(reuse.status).toBe(400);
+    expect(errorCode(reuse)).toBe("invite_invalid");
     expect(ok.body.user).toMatchObject({ email: "player@example.com", isAdmin: false, consentAt: null });
     const setCookie = ok.res.headers.get("set-cookie")!;
     expect(setCookie).toMatch(/^fde_session=[A-Za-z0-9_-]{43};/);

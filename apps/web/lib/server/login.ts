@@ -28,16 +28,29 @@ function claimRequestSlot(email: string, now: number): () => void {
   };
 }
 
+const INVITE_INVALID = "邀请码无效或已用完";
+
 /**
- * 新邮箱必须带有效邀请码:此时消耗邀请码并创建用户(consentAt=null);老用户不需要。
+ * 请求验证码时:新邮箱必须带一个还能用的邀请码(只核对,不消耗);老用户不需要。
  * 例外:ADMIN_EMAILS 里的邮箱首次登录不需要邀请码(否则没有人能生成第一批邀请码)。
  */
-async function findOrCreateUser(email: string, inviteCode: string | null | undefined): Promise<User> {
+async function assertMayRequest(email: string, inviteCode: string | null | undefined): Promise<void> {
+  const store = await getStore();
+  if (await store.getUserByEmail(email)) return;
+  if (isAdminEmail(email)) return;
+  if (!inviteCode || !(await store.inviteAvailable(inviteCode))) throw new HttpError("invite_invalid", INVITE_INVALID);
+}
+
+/**
+ * 验证码校验通过后:老用户直接返回;新用户此时才消耗邀请码并建用户(consentAt=null)。
+ * 这样输错邮箱、没收到验证码都不会白白用掉一次性邀请码,也不会给没验证过的邮箱建账号。
+ */
+async function findOrCreateVerifiedUser(email: string, inviteCode: string | null | undefined): Promise<User> {
   const store = await getStore();
   const existing = await store.getUserByEmail(email);
   if (existing) return existing;
   if (!isAdminEmail(email)) {
-    if (!inviteCode || !(await store.redeemInvite(inviteCode))) throw new HttpError("invite_invalid", "邀请码无效或已用完");
+    if (!inviteCode || !(await store.redeemInvite(inviteCode))) throw new HttpError("invite_invalid", "邀请码已经用完了,请向发给你邀请码的人再要一个");
   }
   try {
     return await store.createUser(email);
@@ -53,7 +66,7 @@ export async function requestLoginCode(email: string, inviteCode: string | null 
   const now = Date.now();
   const release = claimRequestSlot(email, now);
   try {
-    await findOrCreateUser(email, inviteCode);
+    await assertMayRequest(email, inviteCode);
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
     const store = await getStore();
     await store.saveLoginCode(email, secretHash(code), new Date(now + LOGIN_CODE_TTL_MS).toISOString());
@@ -72,11 +85,10 @@ export async function requestLoginCode(email: string, inviteCode: string | null 
   }
 }
 
-/** 校验验证码;成功返回用户,失败抛 400 code_invalid。 */
-export async function verifyLoginCode(email: string, code: string): Promise<User> {
+/** 校验验证码;失败抛 400 code_invalid。成功返回用户(新用户此时才消耗邀请码、建用户;邀请码用完了抛 400 invite_invalid)。 */
+export async function verifyLoginCode(email: string, code: string, inviteCode?: string | null): Promise<User> {
   const store = await getStore();
   const ok = await store.verifyLoginCode(email, secretHash(code), new Date().toISOString());
-  const user = ok ? await store.getUserByEmail(email) : null;
-  if (!user) throw new HttpError("code_invalid", "验证码错误或已过期");
-  return user;
+  if (!ok) throw new HttpError("code_invalid", "验证码错误或已过期");
+  return findOrCreateVerifiedUser(email, inviteCode);
 }

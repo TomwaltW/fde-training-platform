@@ -57,6 +57,7 @@ export const VerifySchema = z
     email: z.string().trim().toLowerCase().min(3).max(254).optional(),
     phone: phoneField.optional(),
     code: z.string().trim().min(1).max(16),
+    inviteCode: z.string().trim().toUpperCase().max(32).optional(),
   })
   .refine(oneAddress, ONE_ADDRESS);
 

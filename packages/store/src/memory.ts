@@ -137,6 +137,11 @@ class MemoryStore implements Store {
     return codes;
   }
 
+  async inviteAvailable(code: string): Promise<boolean> {
+    const row = this.data.invites[code];
+    return Boolean(row && row.used < row.maxUses);
+  }
+
   async redeemInvite(code: string): Promise<boolean> {
     // 检查和加一之间没有 await,单线程下天然不会超用
     const row = this.data.invites[code];

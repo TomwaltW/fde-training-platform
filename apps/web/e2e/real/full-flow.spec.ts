@@ -45,7 +45,8 @@ async function loginViaApi(request: APIRequestContext, email: string, inviteCode
   expect(r1.status()).toBe(200);
   const { devCode } = (await r1.json()) as { devCode?: string };
   expect(devCode).toMatch(/^\d{6}$/);
-  expect((await request.post("/api/auth/verify", { data: { email, code: devCode } })).status()).toBe(200);
+  // 新用户的邀请码在验证通过时才消耗,所以校验时也要带上
+  expect((await request.post("/api/auth/verify", { data: { email, code: devCode, inviteCode } })).status()).toBe(200);
   expect((await request.post("/api/me/consent")).status()).toBe(200);
 }
 

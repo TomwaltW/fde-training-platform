@@ -67,6 +67,8 @@ export interface Me {
 
 /**
  * POST /api/auth/request-code。新邮箱(或新手机号)必须带有效邀请码;老用户不用。
+ * 评审修复:这一步只核对邀请码还能用,不消耗、不建用户;验证码校验通过(verify)时才消耗邀请码并建用户,
+ * 输错邮箱不会白白用掉别人发来的一次性邀请码。
  * 第三轮:email 与 phone 必须且只能给一个;phone 只在 SiteInfo.smsLogin 为 true 时接受,否则 400。
  * phone 接受 11 位大陆手机号(可带 +86 / 86 前缀、空格和短横线),服务端统一成 "+86" 开头。
  */
@@ -87,6 +89,8 @@ export interface VerifyBody {
   email?: string;
   phone?: string;
   code: string;
+  /** 新用户必须带上请求验证码时用的邀请码(此时才消耗);老用户和 ADMIN_EMAILS 不用。用完了返回 400 invite_invalid。 */
+  inviteCode?: string;
 }
 export interface VerifyResponse {
   user: Me;

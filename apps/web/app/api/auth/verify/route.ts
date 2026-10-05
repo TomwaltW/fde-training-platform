@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const body = await readJson(req, VerifySchema);
     // T0 占位:手机号登录由 F4 实现
     if (body.email === undefined) throw new HttpError("bad_request", "暂不支持手机号登录");
-    const user = await verifyLoginCode(body.email, body.code);
+    const user = await verifyLoginCode(body.email, body.code, body.inviteCode);
     const token = newAuthToken();
     const store = await getStore();
     await store.createAuthToken(user.id, secretHash(token), new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString());

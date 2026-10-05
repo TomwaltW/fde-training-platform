@@ -193,6 +193,11 @@ class PgStore implements Store {
     return codes;
   }
 
+  async inviteAvailable(code: string): Promise<boolean> {
+    const r = await this.rows("select 1 from invite_codes where code = $1 and used < max_uses", [code]);
+    return r.length > 0;
+  }
+
   async redeemInvite(code: string): Promise<boolean> {
     // 条件写在同一条 UPDATE 里:并发时行锁保证 used 不会超过 max_uses
     const r = await this.rows("update invite_codes set used = used + 1 where code = $1 and used < max_uses returning code", [code]);

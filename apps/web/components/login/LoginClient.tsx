@@ -86,14 +86,22 @@ export function LoginClient() {
     }
     setBusy(true);
     try {
-      const r = await api.verify({ email: email.trim(), code: c });
+      // 新用户的邀请码在验证通过时才消耗,所以这里也要带上
+      const inviteCode = invite.trim();
+      const r = await api.verify(inviteCode ? { email: email.trim(), code: c, inviteCode } : { email: email.trim(), code: c });
       if (r.user.consentAt) router.replace(next);
       else {
         setStep("consent");
         setBusy(false);
       }
     } catch (err) {
-      setError(isFailure(err, "code_invalid") ? "验证码不对或已经过期" : failureMessage(err));
+      setError(
+        isFailure(err, "code_invalid")
+          ? "验证码不对或已经过期"
+          : isFailure(err, "invite_invalid")
+            ? "邀请码已经用完了。请向发给你邀请码的人再要一个,填好后重新发送验证码。"
+            : failureMessage(err),
+      );
       setBusy(false);
     }
   }

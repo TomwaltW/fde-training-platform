@@ -41,7 +41,11 @@ export function runStoreConformance(name: string, make: () => Promise<Store>) {
         expect(codes).toHaveLength(3);
         expect(new Set(codes).size).toBe(3);
         for (const c of codes) expect(c).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
+        expect(await s.inviteAvailable(codes[0]!)).toBe(true);
+        expect(await s.inviteAvailable(codes[0]!)).toBe(true); // 只看不用
         expect(await s.redeemInvite(codes[0]!)).toBe(true);
+        expect(await s.inviteAvailable(codes[0]!)).toBe(false);
+        expect(await s.inviteAvailable("NOPE2345")).toBe(false);
         expect(await s.redeemInvite(codes[0]!)).toBe(false);
         expect(await s.redeemInvite("NOPE2345")).toBe(false);
         const [multi] = await s.createInvites(1, 2);
