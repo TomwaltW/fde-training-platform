@@ -1,0 +1,71 @@
+{
+  "users": 12,
+  "sessionsStarted": 20,
+  "sessionsFinished": 9,
+  "completionRate": 0.45,
+  "medianMinutesUsed": 284,
+  "medianTotal": 58,
+  "disputeRate": 0.11,
+  "costYuanTotal": 7.42,
+  "costYuanPerSession": 0.37,
+  "scoreHistogram": [
+    {
+      "bucket": "0-9",
+      "count": 1
+    },
+    {
+      "bucket": "10-19",
+      "count": 0
+    },
+    {
+      "bucket": "20-29",
+      "count": 1
+    },
+    {
+      "bucket": "30-39",
+      "count": 1
+    },
+    {
+      "bucket": "40-49",
+      "count": 2
+    },
+    {
+      "bucket": "50-59",
+      "count": 1
+    },
+    {
+      "bucket": "60-69",
+      "count": 1
+    },
+    {
+      "bucket": "70-79",
+      "count": 1
+    },
+    {
+      "bucket": "80-89",
+      "count": 1
+    },
+    {
+      "bucket": "90-100",
+      "count": 0
+    }
+  ],
+  "dropOffByTurn": [
+    {
+      "turn": 1,
+      "count": 2
+    },
+    {
+      "turn": 3,
+      "count": 4
+    },
+    {
+      "turn": 9,
+      "count": 3
+    },
+    {
+      "turn": 15,
+      "count": 2
+    }
+  ]
+}

@@ -29,3 +29,8 @@ coverage/
 # local runs
 .sessions/
 tools/evals/out/
+
+# app data & browser test output
+.data/
+test-results/
+playwright-report/
