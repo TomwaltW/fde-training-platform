@@ -7,12 +7,17 @@ manifest.py —— 写 scenarios/freight-docs/artifacts/manifest.yaml(方案 4.1
 发现了线索,check_truth.py / check_docs.py 据此自检。render_xlsx.py 与 render_docs.py 都调用 write_manifest(),
 两者谁后跑都得到同一份完整清单;还没渲染出来的文件记为 status: pending。
 
+source_sha256 是「这个文件是用哪份 HTML 渲染出来的」的凭据(check_docs 拿它判断图片/PDF 是不是按当前真值与模板
+渲染的),所以只有本次真正渲染了的单据才重算(write_manifest 的 rendered 参数);别的单据沿用旧清单里的记录,
+旧清单里也没有就不写。否则只跑 render_xlsx.py 刷新清单时,会把真值变了却没重渲染的图片"洗白"。
+
 清单只由脚本生成,不要手改。
 """
 from __future__ import annotations
 
 import csv
 import hashlib
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import yaml
@@ -48,6 +53,18 @@ def _file_entry(path: Path, rel: str) -> dict:
     if path.exists():
         return {"path": rel, "sha256": sha256(path)}
     return {"path": rel, "status": "pending"}
+
+
+def previous_sources(path: Path = MANIFEST_PATH) -> dict[str, str]:
+    """旧清单里每个文件记录的 source_sha256(按 path);没有旧清单或读不出来时为空。"""
+    if not path.exists():
+        return {}
+    try:
+        old = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return {}
+    return {f["path"]: f["source_sha256"] for a in old.get("artifacts", []) for f in a.get("files", [])
+            if isinstance(f, dict) and f.get("path") and f.get("source_sha256")}
 
 
 def _scenario_artifacts() -> dict:
@@ -152,7 +169,8 @@ def _degrade_summary(p: dict) -> dict:
             "blur": p["blur"], "jpeg_quality": p["jpeg_quality"], "effects": effects}
 
 
-def doc_file_entry(d: S.Doc, env) -> dict:
+def doc_file_entry(d: S.Doc, src: Callable[[S.Doc], str | None]) -> dict:
+    """src(d) 给出这份单据的 source_sha256(本次渲染的按当前 HTML 重算,其余沿用旧清单),None 表示不写。"""
     e = _file_entry(d.path, d.rel)
     e["key"] = d.key
     e["title"] = d.title
@@ -165,8 +183,8 @@ def doc_file_entry(d: S.Doc, env) -> dict:
     e["shows"] = d.shows
     e["numbers"] = d.numbers
     e["clue_refs"] = list(d.clue_refs)
-    if d.template:
-        e["source_sha256"] = S.html_sha256(env, d)
+    if d.template and (source := src(d)):
+        e["source_sha256"] = source
     if d.degrade:
         e["degrade"] = _degrade_summary(d.degrade)
     e["label"] = {"visible": "右下角「合成样本·训练用」" if d.is_image else "页面/表格内「" + S.MARK + "」",
@@ -174,7 +192,8 @@ def doc_file_entry(d: S.Doc, env) -> dict:
     return e
 
 
-def doc_artifacts(t: S.Truth, docs: list[S.Doc], env, a5_xlsx: dict, a5_clue: dict) -> dict[str, dict]:
+def doc_artifacts(t: S.Truth, docs: list[S.Doc], src: Callable[[S.Doc], str | None], a5_xlsx: dict,
+                  a5_clue: dict) -> dict[str, dict]:
     scen = _scenario_artifacts()
     by_art: dict[str, list[S.Doc]] = {}
     for d in docs:
@@ -197,7 +216,7 @@ def doc_artifacts(t: S.Truth, docs: list[S.Doc], env, a5_xlsx: dict, a5_clue: di
     inv7, pl7 = f(p7, "发票"), f(p7, "装箱单")
     pl4, bl4 = f(p4, "装箱单"), f(p4, "提单")
     inv5, cd5 = f(p5, "发票"), f(p5, "报关草单")
-    out["A1"] = dict(base("A1"), files=[doc_file_entry(d, env) for d in a1],
+    out["A1"] = dict(base("A1"), files=[doc_file_entry(d, src) for d in a1],
                      supports={"facts": ["K4", "P7", "P4", "P5"], "experiments": ["X1", "X4"], "diagnosis": ["T5", "T2"]},
                      composition={"docs": len(a1), "images": len(imgs), "electronic": len(a1) - len(imgs),
                                   "by_form": {k: sum(1 for d in a1 if d.form == k) for k in
@@ -220,18 +239,18 @@ def doc_artifacts(t: S.Truth, docs: list[S.Doc], env, a5_xlsx: dict, a5_clue: di
                                 "2 票报关环节);样本包里 " + f"{p7}、{p4} 两票在其中")
     # ---- A3 ----
     a3 = by_art["A3"][0]
-    out["A3"] = dict(base("A3"), files=[doc_file_entry(a3, env)], supports={"facts": ["P5"], "diagnosis": ["T3"]},
+    out["A3"] = dict(base("A3"), files=[doc_file_entry(a3, src)], supports={"facts": ["P5"], "diagnosis": ["T3"]},
                      clues=[{"fact": "P5", "where": "「品名对照」靠个人整理:同一货号两人报两种编码、今年作废的老码划掉还留着、"
                                                     "多处「问报关行」;储能电源一栏申报品名仍写「电子配件」(与样本包 "
                                                     f"{cd5.file} 一致)。HS 编码一律为占位符 XXXX.XX-序号"}])
     # ---- A5 ----
     a5 = by_art["A5"][0]
-    out["A5"] = dict(base("A5"), files=[doc_file_entry(a5, env), a5_xlsx],
+    out["A5"] = dict(base("A5"), files=[doc_file_entry(a5, src), a5_xlsx],
                      supports={"facts": ["P3"], "diagnosis": ["T1"]}, clues=[a5_clue])
     # ---- A6 ----
     a6 = by_art["A6"]
     fx = t.facts
-    out["A6"] = dict(base("A6"), files=[doc_file_entry(d, env) for d in a6],
+    out["A6"] = dict(base("A6"), files=[doc_file_entry(d, src) for d in a6],
                      supports={"facts": ["P4"], "diagnosis": ["T2"]},
                      clues=[{"fact": "P4", "waybill": fx["a6.waybill"],
                              "where": f"{a6[0].file}:{fx['a6.t_rev2_posted']} 客户在群里加 {fx['a6.added_cartons']} 箱、"
@@ -241,14 +260,14 @@ def doc_artifacts(t: S.Truth, docs: list[S.Doc], env, a5_xlsx: dict, a5_clue: di
                                       "此后没有改单邮件"}])
     # ---- A7 ----
     a7 = by_art["A7"]
-    out["A7"] = dict(base("A7"), files=[doc_file_entry(d, env) for d in a7],
+    out["A7"] = dict(base("A7"), files=[doc_file_entry(d, src) for d in a7],
                      supports={"facts": ["K2"], "diagnosis": ["T4"]},
                      clues=[{"fact": "K2", "where": f"{a7[0].file}:「API 对接」按钮灰色、提示「数据接口为增值服务,当前版本未开通」;"
                                                     f"{a7[1].file}「填写说明」:系统不提供外部数据接口,批量数据只能按模板导入,"
                                                     "改单只能在界面逐票修改"}])
     # ---- A8 ----
     a8 = by_art["A8"]
-    out["A8"] = dict(base("A8"), files=[doc_file_entry(d, env) for d in a8],
+    out["A8"] = dict(base("A8"), files=[doc_file_entry(d, src) for d in a8],
                      supports={"facts": ["K1"], "diagnosis": ["T4"]},
                      clues=[{"fact": "K1", "where": f"{a8[0].file}:合同金额人民币 {int(fx['a8.contract_amount_cny']):,} 元"
                                                     f"({fx['a8.sign_date']} 签),第二条写明不含与运链通 FMS 的接口对接、数据写回,"
@@ -257,13 +276,22 @@ def doc_artifacts(t: S.Truth, docs: list[S.Doc], env, a5_xlsx: dict, a5_clue: di
     return out
 
 
-def build_manifest(t: S.Truth | None = None, docs: list[S.Doc] | None = None, env=None) -> dict:
+def build_manifest(t: S.Truth | None = None, docs: list[S.Doc] | None = None, env=None,
+                   rendered: Iterable[str] = (), previous: dict[str, str] | None = None) -> dict:
+    """rendered:本次运行真正渲染过的单据编号(Doc.key),只有它们的 source_sha256 按当前 HTML 重算;
+    previous:其余单据沿用的 source_sha256(按 path),默认读磁盘上的旧清单。"""
     t = t or S.load_truth()
     docs = docs if docs is not None else S.build_docs(t)
     env = env or S.make_env()
+    done = set(rendered)
+    prev = previous_sources() if previous is None else previous
+
+    def src(d: S.Doc) -> str | None:
+        return S.html_sha256(env, d) if d.key in done else prev.get(d.rel)
+
     p = load_params()
     a2, a4, a5_xlsx, a5_clue, joins = excel_entries()
-    d = doc_artifacts(t, docs, env, a5_xlsx, a5_clue)
+    d = doc_artifacts(t, docs, src, a5_xlsx, a5_clue)
     arts = [d["A1"], a2, d["A3"], a4, d["A5"], d["A6"], d["A7"], d["A8"]]
     return {
         "schema_version": 0.2,
@@ -278,8 +306,11 @@ def build_manifest(t: S.Truth | None = None, docs: list[S.Doc] | None = None, en
     }
 
 
-def write_manifest(t: S.Truth | None = None, docs: list[S.Doc] | None = None, env=None) -> Path:
-    m = build_manifest(t, docs, env)
+def write_manifest(t: S.Truth | None = None, docs: list[S.Doc] | None = None, env=None,
+                   rendered: Iterable[str] = ()) -> Path:
+    """重写清单。rendered 必须只列本次真正渲染过的单据:render_docs.py 传全部单据,render_xlsx.py 不传
+    (它不渲染单据,合成单据的 source_sha256 原样沿用,没重渲染的图片会被 check_docs 报出来)。"""
+    m = build_manifest(t, docs, env, rendered=rendered)
     body = yaml.safe_dump(m, allow_unicode=True, sort_keys=False, width=110, default_flow_style=None)
     MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST_PATH.write_text(HEADER + body, encoding="utf-8")

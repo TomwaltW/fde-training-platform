@@ -180,6 +180,19 @@ describe("一致性比例", () => {
   it("没有任何可比的单元格:不通过", () => {
     expect(summarizeAgreement([], ids)).toMatchObject({ total: 0, ratio: 0, ok: false });
   });
+
+  it("差异明细:✗ 一条不省(哪怕超过 3 条);一致但分数不同的只用来补满 3 条", () => {
+    // D1 上 5 个 ✗(差 2–4 档)+ 2 个一致但分数不同 + 1 个完全一样
+    const many = [[20, 0], [20, 4], [16, 0], [12, 0], [20, 8], [16, 12], [8, 9], [10, 10]].map(([h, j], i) =>
+      compareCell(`c${i}`, "D1", 20, h!, j!),
+    );
+    const d1 = summarizeAgreement(many, ["D1"]).byDim[0]!;
+    expect(d1.worst.filter((c) => !c.ok).map((c) => c.caseId).sort()).toEqual(["c0", "c1", "c2", "c3", "c4"]);
+    expect(d1.worst).toHaveLength(5); // 已经有 5 条 ✗,不再补一致的
+    // 只有 1 个 ✗:再补 2 条一致但分数不同的(差异大的在前),完全一样的不列
+    const few = [[20, 0], [16, 12], [8, 9], [12, 12.5], [10, 10]].map(([h, j], i) => compareCell(`f${i}`, "D1", 20, h!, j!));
+    expect(summarizeAgreement(few, ["D1"]).byDim[0]!.worst.map((c) => c.caseId)).toEqual(["f0", "f1", "f2"]);
+  });
 });
 
 describe("human.yaml 校验", () => {
@@ -194,6 +207,15 @@ describe("human.yaml 校验", () => {
   it("分数超过该维度满分:报错并点名维度和满分", () => {
     expectInputError(() => parseHuman(humanYaml({ D5: 11 }), dims), "dims.D5.score", "满分是 10");
     expectInputError(() => parseHuman(humanYaml({ D1: 20.5 }), dims), "满分是 20");
+  });
+
+  it("分数多于一位小数:报错并点名维度(否则显示的 16 和按 15.96 落的第 3 档对不上)", () => {
+    expectInputError(() => parseHuman(humanYaml({ D1: 15.96 }), dims, "c/human.yaml"), "c/human.yaml", "dims.D1.score", "D1", "最多一位小数", "15.96", "显示成 16");
+    expectInputError(() => parseHuman(humanYaml({ D6: 7.25 }), dims), "dims.D6.score", "最多一位小数");
+    // 一位小数(含二进制里不精确的 0.3、2.4)和整数照常通过
+    const r = parseHuman(humanYaml({ D1: 15.9, D2: 0.3, D3: 2.4, D4: 20 }), dims);
+    expect(r.status).toBe("ok");
+    if (r.status === "ok") expect([r.human.dims.D1!.score, r.human.dims.D2!.score, r.human.dims.D3!.score]).toEqual([15.9, 0.3, 2.4]);
   });
 
   it("负分、非数字、拼错的维度、多余的字段、缺维度都报错", () => {

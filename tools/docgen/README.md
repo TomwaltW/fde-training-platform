@@ -10,7 +10,7 @@
 python3 -m venv tools/docgen/.venv
 tools/docgen/.venv/bin/pip install -r tools/docgen/requirements.txt
 tools/docgen/.venv/bin/python tools/docgen/gen_truth.py     # 写 scenarios/freight-docs/truth/*
-tools/docgen/.venv/bin/python tools/docgen/render_xlsx.py   # 写 A2/A4/A5 的 xlsx(并刷新 manifest)
+tools/docgen/.venv/bin/python tools/docgen/render_xlsx.py   # 写 A2/A4/A5 的 xlsx(并刷新 manifest;不动合成单据的 source_sha256)
 tools/docgen/.venv/bin/python tools/docgen/render_docs.py   # 写 A1/A3/A5 图/A6/A7/A8(并刷新 manifest),约 15 秒
 tools/docgen/.venv/bin/python tools/docgen/check_truth.py   # 真值与 Excel 自检,全部 PASS 才返回 0
 tools/docgen/.venv/bin/python tools/docgen/check_docs.py    # 合成单据自检,全部 PASS 才返回 0
@@ -31,9 +31,9 @@ tools/docgen/.venv/bin/python tools/docgen/check_docs.py    # 合成单据自检
 | `docs_spec.py` | 合成单据清单:每份文件是什么、用哪一票的数字、藏了哪条线索、用哪个模板、怎么劣化 | (被下面三个脚本引用) |
 | `render_docs.py` | 步骤 5–6:Jinja2 模板 → 无头 Chromium 截图 / 打印 PDF → 照片与扫描件劣化 → 盖标识;三份 Excel 用 openpyxl | `artifacts/A1/*`(14 份)、`A3/cheatsheet.png`、`A5/intake_week.png`、`A6/*`(3 张)、`A7/*`、`A8/*` |
 | `degrade.py` | 劣化(旋转 1–7 度、透视、桌面背景与投影、不均匀光照、折痕、模糊、噪点、水印、JPEG)与标识(右下角标识牌、PNG 文本块、JPEG EXIF) | (被 render_docs / check_docs 引用) |
-| `manifest.py` | 步骤 7:写 `artifacts/manifest.yaml`,A1–A8 每个文件对应哪票、显示了哪些数字、藏了哪条线索、sha256、劣化参数 | `artifacts/manifest.yaml` |
+| `manifest.py` | 步骤 7:写 `artifacts/manifest.yaml`,A1–A8 每个文件对应哪票、显示了哪些数字、藏了哪条线索、sha256、劣化参数;合成单据的 `source_sha256`(渲染所用 HTML 的指纹)只在这份单据本次真正渲染时重算,其余沿用旧清单——所以真值改了只跑 `render_xlsx.py`,`check_docs.py` 会报出没重渲染的图片 | `artifacts/manifest.yaml` |
 | `check_truth.py` | 步骤 8 + 4.3 校验器中与数据相关的项:合计、比例、双向对齐、A2 不含真值列、按运单号联表还原 X3/X5、逐条复算 YAML 里的文字结论、无真实主体、manifest 的 sha256 | 终端 PASS/FAIL 表,失败返回非零 |
-| `check_docs.py` | 合成单据自检:文件数与命名(与引擎 `artifactFiles()` 同一规则)、≤1.5 MB、显式标识(按像素核对)与隐式标识、manifest 覆盖与 sha256、三条 A1 线索落点、劣化范围;独立地从 `truth/*.csv` 推出每份文件应显示的数字,与 manifest 和文件里实际渲染的文字逐一比对;合规(无真实主体、HS 只用占位符、公司名带「虚构」、邮箱用 `.example`) | 终端 PASS/FAIL 表,失败返回非零 |
+| `check_docs.py` | 合成单据自检:文件数与命名(与引擎 `artifactFiles()` 同一规则)、≤1.5 MB、显式标识(按像素核对)与隐式标识、manifest 覆盖与 sha256、三条 A1 线索落点、劣化范围;独立地从 `truth/*.csv` 推出每份文件应显示的数字,与 manifest 和文件里实际渲染的文字逐一比对;合规(无真实主体、HS 只用占位符、邮箱用 `.example`;逐份扫描单据上实际出现的文字,客户/供应商名称每一处都要带「虚构」,截图里的圈内简称走 `BARE_NAME_ALLOW` 白名单) | 终端 PASS/FAIL 表,失败返回非零 |
 
 ## 资料与线索
 
@@ -80,6 +80,7 @@ tools/docgen/.venv/bin/python tools/docgen/check_docs.py    # 合成单据自检
 ## 合规约定(方案 4.1 规矩、8.2 标识)
 
 - 公司名、产品名一律带「(虚构)/(FICTITIOUS)」;人名用称呼或化名(阿May、老郑、刘、孟××);邮箱只用保留域名 `.example`;地址写「示例路…(虚构地址)」。
+  例外只有截图/照片里写成「(虚构)」反而一眼假的圈内简称:微信群名与群昵称、聊天正文、邮件称呼与文件夹名、小陈的个人小抄、手写栏、软件界面里厂商的自称、品牌字标、船名。这些逐条列在 `check_docs.py` 的 `BARE_NAME_ALLOW`(写明原因),只允许出现在右下角带「合成样本·训练用」标识牌的图片里;PDF、Excel 和打印件上的名称不在此列。
 - HS 编码一律是明显无效的占位符 `XXXX.XX-序号`(序号只表示「同一个码 / 不同的码」);具体编码与申报要素留给作者按真实经验补。
 - 报关类只做货代内部「出口报关资料草单(内部核对稿,非正式报关单)」,不仿制任何官方抬头;合同、验收单、发票签章处只写「(合成样本,不含印章)」,不画印章。
 - 手写效果用文泉驿正黑逐字随机旋转、位移模拟,没有引入额外的手写字体。

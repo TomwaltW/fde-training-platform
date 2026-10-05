@@ -7,11 +7,11 @@
 //   pnpm calibrate --init-player EV_good --id <caseId>
 //                                           同上,对局由脚本化玩家离线跑出来
 //   通用:--runs 3(每个用例跑几次)、--case <id>(可重复)、--scenario scenarios/freight-docs、--dir <标定集目录>、-v
-// 输出稳定性表、一致性表和总结论。退出码:0 两道门槛都过;1 有门槛没过或用例出错;2 参数或配置错误(如缺 Key)。
+// 输出稳定性表、一致性表和总结论。退出码:0 两道门槛都过;1 有门槛没过或用例出错;2 参数或配置错误(如缺 Key、场景读不进来)。
 import { mkdirSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { loadScenario } from "@fde/engine";
+import { loadScenario, type LoadedScenario } from "@fde/engine";
 import { initCase } from "./calibration/cases.ts";
 import { CalibrationInputError } from "./calibration/human.ts";
 import { createLiveJudge, type LiveJudge } from "./calibration/live.ts";
@@ -75,7 +75,14 @@ async function main(): Promise<number> {
   if (values.record && !values.live) return fail("--record 只在 --live 下有意义(mock 本来就是回放 fixture)");
 
   const scnDir = resolve(root, values.scenario!);
-  const scn = loadScenario(scnDir);
+  let scn: LoadedScenario;
+  try {
+    scn = loadScenario(scnDir);
+  } catch (e) {
+    // 场景目录写错、scenario.yaml 解析或校验不过:属于配置错误(退出码 2),只给原因,不打堆栈
+    console.error(`无法读取场景 --scenario ${values.scenario}:${(e as Error).message}`);
+    return 2;
+  }
   const dir = values.dir ? resolve(userCwd, values.dir) : join(scnDir, "evals/calibration");
 
   // ---------- --init / --init-player:建用例目录

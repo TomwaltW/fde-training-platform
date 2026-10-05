@@ -8,11 +8,15 @@ check_docs.py —— 合成单据(A1/A3/A5/A6/A7/A8)自检(方案 4.1 步骤 8 +
     文件名按 scenario.yaml 的 files 解析(与引擎 artifactFiles() 同一规则);目录里没有多余或缺失的文件
   · 标识:每张图片 ≤ 1.5 MB、右下角显式标识(按像素核对)、隐式标识(PNG tEXt/iTXt AIGC、JPEG EXIF);
     PDF 元数据 Subject 与页面标识;xlsx 工作簿属性与单元格标识
-  · 清单:manifest 覆盖全部文件、sha256 一致、没有 pending;A1 三条线索(P7/P4/P5)各至少落在一份文件上;
+  · 清单:manifest 覆盖全部文件、sha256 一致、没有 pending;刷新清单只重算本次渲染了的单据的 source_sha256
+    (render_xlsx.py 刷新清单不会洗白没重渲染的图片);A1 三条线索(P7/P4/P5)各至少落在一份文件上;
     A1 的组成与 shipments.csv 的 a1_docs 计划一致;劣化参数在要求范围内
   · 数字:由本脚本独立地从 truth/*.csv 推出每份文件应显示的数字,与 manifest 里的 numbers、
     以及文件里实际渲染出的文字(PDF 抽文字、xlsx 读单元格、图片读渲染所用 HTML 并核对其 sha256)逐一比对
-  · 合规:无真实主体名称、无形似真实的信用代码/海关编码、HS 编码只用占位符、公司名带「虚构」、邮箱用 .example
+  · 合规:无真实主体名称、无形似真实的信用代码/海关编码、HS 编码只用占位符、邮箱用 .example;
+    公司/产品名带「虚构」:逐份扫描单据上实际出现的文字(不是只看 docs_spec 的常量),每个客户/供应商名称的出现
+    都要带「(虚构)/(FICTITIOUS)」;截图/照片里的圈内简称(群名、昵称、聊天、称呼、小抄、手写栏等)走显式白名单
+    BARE_NAME_ALLOW,且只允许用在带「合成样本·训练用」标识牌的图片上
 """
 from __future__ import annotations
 
@@ -36,6 +40,7 @@ import check_truth as CT  # noqa: E402  复用真实主体黑名单与编码正�
 import degrade as D  # noqa: E402
 import docs_spec as S  # noqa: E402
 import gen_truth as G  # noqa: E402
+import manifest as M  # noqa: E402
 
 SCN = G.SCENARIO_DIR
 ART = SCN / "artifacts"
@@ -92,8 +97,9 @@ def has(txt: str, s: str) -> bool:
 
 
 def html_text(html: str) -> str:
-    """HTML → 纯文字:去掉样式;行内 span(手写体逐字拆开的)直接拼回,其余标签换成空格。"""
-    s = re.sub(r"<style.*?</style>", " ", html, flags=re.S)
+    """HTML → 页面上看得见的纯文字:去掉样式和 <title>(不渲染进截图);行内 span(手写体逐字拆开的)直接拼回,
+    其余标签换成空格。"""
+    s = re.sub(r"<style.*?</style>|<title>.*?</title>", " ", html, flags=re.S)
     s = re.sub(r"</?span[^>]*>", "", s)
     s = re.sub(r"<[^>]+>", " ", s)
     return re.sub(r"\s+", " ", htmllib.unescape(s))
@@ -126,6 +132,93 @@ def scenario_files(scen: dict) -> dict[str, list[Path]]:
             p = SCN / pat
             out[a["id"]] = [p] if p.is_file() else []
     return out
+
+
+# ---------------------------------------------------------------------------
+# 公司/产品名的「虚构」标记:逐份扫描单据上实际出现的文字(PDF 抽文字、xlsx 单元格、图片渲染所用 HTML 的可见文字)
+# ---------------------------------------------------------------------------
+MARKER_RE = r"\s*[((]\s*(?:虚\s*构|FICTITIOUS)\s*[))]"
+# 虚构的货代、报关行、承运人、OCR 厂商及其产品、FMS 的名称核心词;客户的核心词由 truth/customers.csv 推出
+# (全称、别名、前两个字)和 docs_spec.CUSTOMER_PROFILE 的英文名首词。docs_spec 里每个主体常量都必须含其中一个核心词,
+# 否则改了名字扫描就会漏(「主体常量」那一项会报出来)。
+VENDOR_CORES = ("澜途", "LANTU", "恒通", "鸿屿", "HONGYU", "识图云", "票据识别助手", "运链通")
+# 圈内简称白名单:只给截图/照片里「写成(虚构)反而一眼假」的地方——微信群名与群昵称、聊天正文、邮件称呼与文件夹名、
+# 个人小抄、手写栏、软件界面里厂商的自称、品牌字标、船名。这些文件都是图片,右下角有不透明的「合成样本·训练用」标识牌
+# (「图片右下角显式标识」一项按像素核对),白名单那一项也会要求它们通过了像素核对。
+# 键:资料/文件名;值:(允许不带标记出现的名称核心词, 原因)。条目必须用得上,用不上的也算失败,保持白名单最小。
+BARE_NAME_ALLOW: dict[str, tuple[frozenset[str], str]] = {
+    "A1/LT2609-0412_bill-of-lading_scan.jpg": (
+        frozenset({"HONGYU"}), "船名 HONGYU PIONEER(船名不是公司名);同一张提单抬头印着 HONGYU LINE (FICTITIOUS)"),
+    "A1/LT2609-0446_invoice_photo.jpg": (
+        frozenset({"TUOLANG"}), "发票抬头的品牌字标 TUOLANG;紧挨着印着 TUOLANG TECH (FICTITIOUS)"),
+    "A1/LT2609-2589_invoice_handwritten.jpg": (
+        frozenset({"稻禾健康"}), "手写单「客户:」栏的手写字;同一张单据印着「稻禾健康(虚构) · 手写单据(合成样本)」"),
+    "A1/LT2609-2589_packing-list_handwritten.jpg": (
+        frozenset({"稻禾健康"}), "手写单「客户:」栏的手写字;同一张单据印着「稻禾健康(虚构) · 手写单据(合成样本)」"),
+    "A3/cheatsheet.png": (
+        frozenset({"拓浪", "青禾", "栖木", "稻禾", "野径", "星渚", "鲸帆", "砚舟", "栗壳", "雀屏", "橡山"}),
+        "小陈个人 Excel 小抄里的客户简称列"),
+    "A6/01_group-chat_LT2609-0412.png": (
+        frozenset({"栖木家居", "栖木", "澜途"}), "微信群名「栖木家居 × 澜途 出货对接群」与群昵称「栖木-阿May」"),
+    "A6/02_warehouse-chat_LT2609-0412.png": (
+        frozenset({"栖木", "澜途"}), "群名「澜途操作部 × 仓库 对接群」、群昵称「澜途操作部-刘」、聊天里的「栖木的折叠凳」"),
+    "A6/03_email-to-broker_LT2609-0412.png": (
+        frozenset({"栖木", "恒通"}), "邮箱文件夹名「客户-栖木」与邮件开头的称呼「恒通单证组好」"),
+    "A7/fms_order-entry.png": (
+        frozenset({"运链通"}), "系统界面提示「请联系运链通客户经理」(厂商自称);同一界面标题栏印着「运链通 FMS(虚构)」"),
+}
+NAME_FILL = "〇"   # 掩掉已核对过的片段;不出现在任何名称里
+
+
+def _loose(name: str) -> str:
+    """名称 → 正则:字与字之间允许空白(PDF 抽出的文字会在中英文之间、标点两侧插空格)。"""
+    return r"\s*".join(re.escape(ch) for ch in name if not ch.isspace())
+
+
+def _mask(s: str, pattern: str, flags: int = 0) -> str:
+    return re.sub(pattern, lambda m: NAME_FILL * len(m.group()), s, flags=flags)
+
+
+def entity_constants() -> list[str]:
+    """docs_spec 里写到单据上的虚构主体全称(都应带「(虚构)/(FICTITIOUS)」)。"""
+    return [S.FORWARDER["cn"], S.FORWARDER["en"], S.FORWARDER["short"], S.BROKER["cn"], S.CARRIER["cn"], S.CARRIER["en"],
+            S.OCR_VENDOR["cn"], S.OCR_VENDOR["product"], S.FMS] + \
+        [v for p in S.CUSTOMER_PROFILE.values() for v in (p["cn"], p["en"])]
+
+
+def fictional_names(customers: dict[str, dict]) -> tuple[list[str], list[str]]:
+    """(名称全称:后面紧跟标记就算已标注;名称核心词:掩掉已标注的全称后还出现就是没标注),都按长度从长到短。"""
+    bases = {re.sub(MARKER_RE, "", c).strip() for c in entity_constants()}
+    cores = set(VENDOR_CORES) | {p["en"].split(" ")[0] for p in S.CUSTOMER_PROFILE.values()}
+    for c, row in customers.items():
+        names = {c, c[:2], *(a for a in row["aliases"].split("|") if a)}
+        bases |= names
+        cores |= names
+    by_len = lambda xs: sorted(xs, key=lambda x: (-len(x), x))  # noqa: E731
+    return by_len(bases), by_len(cores)
+
+
+def unmarked_names(txt: str, bases: list[str], cores: list[str]) -> list[tuple[str, str]]:
+    """一份单据文字里没带「虚构」标记的名称出现:[(核心词, 上下文)]。
+
+    先掩掉邮箱与 .example 域名(由「邮箱只用保留域名」一项单独查),再掩掉「全称 + (虚构)/(FICTITIOUS)」
+    (全称内部允许 PDF 插进来的空白;英文全称后允许跟最多 3 个大写词再接标记,如 QIMU HOME US STORE (FICTITIOUS)),
+    剩下的核心词逐个报出。核心词按原样匹配(不跨空白:截图与表格里空白是单元格分界,跨过去会把「野径」+「户外头灯」
+    误拼成「野径户外」);PDF 把全称拆开时,两个字的简称核心词照样能抓到。"""
+    s = _mask(txt, r"[A-Za-z0-9._-]+@[A-Za-z0-9.-]+|[A-Za-z0-9-]+\.example\b")
+    for b in bases:
+        tail = r"(?:\s+[A-Z][A-Za-z.&'-]*){0,3}" if b.isascii() else ""
+        s = _mask(s, _loose(b) + tail + MARKER_RE)
+    hits = []
+    for c in cores:
+        if c.isascii():
+            pat, flags = rf"(?<![A-Za-z]){re.escape(c)}(?![A-Za-z])", re.I
+        else:
+            pat, flags = re.escape(c), 0
+        spans = [m.span() for m in re.finditer(pat, s, flags)]
+        hits += [(c, re.sub(r"\s+", " ", txt[max(0, a - 8): b + 8]).strip()) for a, b in spans]
+        s = _mask(s, pat, flags)
+    return hits
 
 
 def width(s: str) -> int:
@@ -318,6 +411,20 @@ def main() -> int:
     bad = [k for k, (_, f) in mfiles.items() if not (SCN / k).exists()
            or hashlib.sha256((SCN / k).read_bytes()).hexdigest() != f.get("sha256")]
     check("manifest sha256 与文件一致", f"{len(mfiles)} 个", bad or "全部一致", not bad)
+    # 回归:render_xlsx.py 也会刷新清单,但它不渲染单据;刷新时只能重算本次渲染了的单据的 source_sha256,
+    # 否则真值改了、图片没重渲染,下面「按当前真值与模板渲染」一项会被这次刷新洗白
+    fake = "0" * 64
+    tpl = [d for d in docs if d.template]
+    probe = next(d for d in tpl if d.is_image)
+
+    def srcs(mm: dict) -> dict:
+        return {f["path"]: f.get("source_sha256") for a in mm["artifacts"] for f in a["files"]}
+    kept = srcs(M.build_manifest(t, docs, env, rendered=(), previous={d.rel: fake for d in tpl}))
+    redo = srcs(M.build_manifest(t, docs, env, rendered={probe.key}, previous={d.rel: fake for d in tpl}))
+    stale_kept = all(kept[d.rel] == fake for d in tpl)
+    redo_ok = redo[probe.rel] == S.html_sha256(env, probe) and all(redo[d.rel] == fake for d in tpl if d is not probe)
+    check("刷新清单只重算本次渲染了的单据的 source_sha256(只跑 render_xlsx.py 不会洗白旧图片)",
+          "未渲染的沿用旧值 / 渲染的重算", f"{stale_kept} / {redo_ok}", stale_kept and redo_ok)
     a1m = marts["A1"]["files"]
     for clue in ("P7", "P4", "P5"):
         wb = next(s["waybill"] for s in ships.values() if s["clue_ids"] == clue)
@@ -353,7 +460,8 @@ def main() -> int:
             src_bad.append(d.file)
         if d.is_image:
             texts[d.path.as_posix()] = html_text(html)
-    check("图片/PDF 的渲染源 HTML 与 manifest 记录一致(未改模板却没重渲染)", "全部", src_bad or "全部", not src_bad)
+    check("图片/PDF 按当前真值与模板渲染(渲染源 HTML 的 sha256 = manifest 记录)", "全部",
+          f"{src_bad} 没重渲染,请跑 render_docs.py" if src_bad else "全部", not src_bad)
     mismatch, missing_in_text = [], []
     for rel, (art, f) in sorted(mfiles.items()):
         k = manifest_key(f, art) if art in DOC_ARTS else ""
@@ -494,10 +602,37 @@ def main() -> int:
     hs_docs = [d for d in docs if d.key in ("A3-01", "A7-01", "A7-02") or d.doc_type == "报关草单"]
     hs_ok = all(HS_PLACEHOLDER_RE.search(txt_of(d)) for d in hs_docs)
     check("出现 HS 编码的资料只用占位符 XXXX.XX-序号", f"{len(hs_docs)} 份", "是" if hs_ok else "否", hs_ok)
-    names = [S.FORWARDER["cn"], S.FORWARDER["en"], S.BROKER["cn"], S.CARRIER["cn"], S.CARRIER["en"], S.OCR_VENDOR["cn"],
-             S.OCR_VENDOR["product"], S.FMS] + [v for p in S.CUSTOMER_PROFILE.values() for v in (p["cn"], p["en"])]
-    unmarked = [n for n in names if "虚构" not in n and "FICTITIOUS" not in n]
-    check("单据上的公司/产品名都标「虚构 / FICTITIOUS」", f"{len(names)} 个", unmarked or "全部", not unmarked)
+    # 常量只是源头;真正要核对的是下一项:单据上实际印出来的每一处名称
+    bases, cores = fictional_names(t.customers)
+    consts = entity_constants()
+    bad_const = [n for n in consts if not re.search(MARKER_RE + r"$", n)
+                 or not any(re.search(re.escape(c), n, re.I if c.isascii() else 0) for c in cores)]
+    check("docs_spec 主体全称常量带「(虚构)/(FICTITIOUS)」且含被扫描的名称核心词", f"{len(consts)} 个",
+          bad_const or "全部", not bad_const)
+    bare, allowed_hits = [], {}
+    for d in docs:
+        key = f"{d.artifact}/{d.file}"
+        ok_names = BARE_NAME_ALLOW.get(key, (frozenset(), ""))[0]
+        for core, ctx in unmarked_names(txt_of(d), bases, cores):
+            if core in ok_names:
+                allowed_hits.setdefault(key, set()).add(core)
+            else:
+                bare.append(f"{d.file}:{core}「{ctx}」")
+    no_text = [d.file for d in docs if not txt_of(d).strip()]
+    n_allowed = sum(len(v) for v in allowed_hits.values())
+    check("单据上实际出现的公司/产品名都带「虚构 / FICTITIOUS」(逐份扫 PDF 文字、xlsx 单元格、图片渲染 HTML 的可见文字)",
+          f"{len(docs)} 份 0 处未标", bare or (f"没有文字可扫 {no_text}" if no_text else
+                                              f"0 处未标(白名单内 {len(allowed_hits)} 份 {n_allowed} 个名称)"),
+          not bare and not no_text)
+    labeled = {p.name for p in images} - {x.rsplit(":", 1)[0] for x in bad_vis}
+    not_img = [k for k in BARE_NAME_ALLOW if k.split("/", 1)[1] not in labeled]
+    unused = [f"{k}:{n}" for k, (names_, _) in BARE_NAME_ALLOW.items() for n in sorted(names_)
+              if n not in allowed_hits.get(k, set())]
+    check("未标名称白名单(群名、昵称、聊天、称呼、小抄、手写栏、界面文案、字标、船名)只用于带「合成样本·训练用」"
+          "标识牌的图片,且每条都用得上",
+          f"{len(BARE_NAME_ALLOW)} 份图片,右下角标识已按像素核对",
+          (not_img and f"不是带标识的图片:{not_img}") or (unused and f"用不上的条目:{unused}") or "全部",
+          not not_img and not unused)
     mails = re.findall(r"[\w.-]+@[\w.-]+", " ".join(txt for _, txt in blobs))
     check("邮箱只用保留域名 .example", f"{len(mails)} 处", [x for x in mails if not x.endswith(".example")] or "全部",
           all(x.endswith(".example") for x in mails))

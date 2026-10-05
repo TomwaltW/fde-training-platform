@@ -117,11 +117,17 @@ export function compareCell(caseId: string, dim: string, max: number, human: num
   return { caseId, dim, max, human, judge, humanBand, judgeBand, gap, ok: gap <= MAX_BAND_GAP };
 }
 
+/** 差异明细里每个维度最多列几条(只限制"一致但分数不同"的条目;✗ 一条不省)。 */
+export const DETAIL_ROWS = 3;
+
 export interface DimAgreement {
   dim: string;
   agreed: number;
   total: number;
-  /** 这个维度上差异最大的用例(档位差大的在前,同档差按分差),最多 3 个,只列有差异的。 */
+  /**
+   * 这个维度上有差异的用例,差异大的在前(档位差大的在前,同档差按分差)。
+   * 相差超过 1 档(✗)的全部列出;一致但分数不同的只用来补位,和 ✗ 合计最多 DETAIL_ROWS 条。
+   */
   worst: AgreementCell[];
 }
 
@@ -145,11 +151,13 @@ export function summarizeAgreement(cells: AgreementCell[], dims: string[]): Agre
   const ratio = total ? agreed / total : 0;
   const byDim = dims.map((dim) => {
     const mine = cells.filter((c) => c.dim === dim);
-    const worst = mine
-      .filter((c) => c.gap > 0 || c.human !== c.judge)
+    // ✗ 一条不省(docs/calibration.md:差异明细逐条列出 ✗);一致但分数不同的只补到 DETAIL_ROWS 条
+    const bad = mine.filter((c) => !c.ok).sort(byDisagreement);
+    const near = mine
+      .filter((c) => c.ok && (c.gap > 0 || c.human !== c.judge))
       .sort(byDisagreement)
-      .slice(0, 3);
-    return { dim, agreed: mine.filter((c) => c.ok).length, total: mine.length, worst };
+      .slice(0, Math.max(0, DETAIL_ROWS - bad.length));
+    return { dim, agreed: mine.filter((c) => c.ok).length, total: mine.length, worst: [...bad, ...near] };
   });
   // 比较时留一点余量:12/15 这类恰好 80% 的情况不能因为浮点误差判成不过
   return { cells, agreed, total, ratio, ok: total > 0 && ratio >= AGREEMENT_MIN - 1e-12, byDim };
