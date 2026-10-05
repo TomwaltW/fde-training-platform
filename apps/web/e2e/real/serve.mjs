@@ -48,8 +48,8 @@ const env = {
   FDE_DEV_LOGIN_CODES_IN_PRODUCTION: "1",
   FDE_COOKIE_SECURE: "0",
   FDE_DAILY_SESSION_LIMIT: "20",
-  // full-flow.spec.ts 两个视口各一个管理员;resume.spec.ts 用自己的,免得撞上验证码 60 秒的限频
-  ADMIN_EMAILS: "admin-desktop@e2e.test,admin-mobile@e2e.test,admin-resume@e2e.test",
+  // full-flow.spec.ts 两个视口各一个管理员;resume.spec.ts、growth.spec.ts 各用自己的,免得撞上验证码 60 秒的限频
+  ADMIN_EMAILS: "admin-desktop@e2e.test,admin-mobile@e2e.test,admin-resume@e2e.test,admin-growth@e2e.test",
   SITE_MODEL_DISCLOSURE: "通义千问 qwen-plus(e2e)",
   SITE_ICP_NUMBER: "",
   // 这些一旦从外部环境漏进来,测试就不再是"离线 + 内存库"了

@@ -39,6 +39,8 @@ export default defineConfig({
     {
       name: "mobile",
       use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
+      // 候补名单到注册、兑换的运营流程主要在电脑上的管理页里走,只跑一遍
+      testIgnore: "growth.spec.ts",
     },
   ],
   webServer: {
