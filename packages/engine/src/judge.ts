@@ -200,9 +200,14 @@ export function checkJudgeOutput(scn: LoadedScenario, st: SessionState, raw: unk
     }
     const evidence = got.evidence.filter(validRef);
     if (got.verdict !== "miss") {
+      // 降成 miss 时去掉裁判原来的等级和理由,换成程序校验的原因,免得复盘把它写成"证据扎实"
+      const downgrade = (reason: string) => {
+        issues.push(`${item.id}:${reason}`);
+        const { grade: _g, ...rest } = got;
+        T.push({ ...rest, verdict: "miss", evidence, note: `程序校验:${reason}(裁判原判 ${got.verdict}${got.grade ? `·${got.grade}` : ""})` });
+      };
       if (!evidence.some(isUserRef)) {
-        issues.push(`${item.id}:没有出自用户的有效引用,按 miss`);
-        T.push({ ...got, verdict: "miss", evidence });
+        downgrade("没有出自用户的有效引用,按 miss");
         continue;
       }
       // 结论相反不需要证据等级;不能让一个多余的 A 级把扣分校验成 miss
@@ -212,8 +217,7 @@ export function checkJudgeOutput(scn: LoadedScenario, st: SessionState, raw: unk
         continue;
       }
       if (got.grade === "A" && !supported.has(item.id)) {
-        issues.push(`${item.id}:标了 A 级,但事件日志里没有支持它的资料或验证,按 miss`);
-        T.push({ ...got, verdict: "miss", evidence });
+        downgrade("标了 A 级,但事件日志里没有支持它的资料或验证,按 miss");
         continue;
       }
       if (!got.grade) {

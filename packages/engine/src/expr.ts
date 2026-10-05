@@ -17,6 +17,7 @@ export interface Resolver {
   call?(fn: string, args: string[]): boolean | undefined;
 }
 
+export type ExprNode = Node;
 type Node =
   | { t: "num"; v: number }
   | { t: "id"; name: string }

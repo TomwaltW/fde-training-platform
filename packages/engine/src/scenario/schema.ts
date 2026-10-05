@@ -198,6 +198,8 @@ const Trap = z.strictObject({
   reveal: Id.optional(),
   /** 触发时角色的态度(不填则由导演按常规规则决定)。 */
   stance: Stance.optional(),
+  /** 作者写好的一句台词:演员和守卫都失败时原样说出,保证压力时刻不丢。只能包含此刻可以说的内容。 */
+  line: z.string().optional(),
 });
 export type Trap = z.infer<typeof Trap>;
 

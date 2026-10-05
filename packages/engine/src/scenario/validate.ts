@@ -1,6 +1,6 @@
 // 场景校验器(方案 4.3)。结构层面的"不允许未定义的键"由 schema 在加载时完成;
 // 这里做语义检查:引用、合计、可达性、证据来源、参考路径时长、泄露风险。
-import { evalExpr, evalRequirement, exprIdentifiers, isExpression, requirementLeaves, type Resolver } from "../expr.ts";
+import { exprIdentifiers, isExpression, parseExpr, requirementLeaves, type ExprNode } from "../expr.ts";
 import { extractNumbers } from "../numbers.ts";
 import { IMPLEMENTED_DIMENSIONS, d2Ids, parseD2Key, parseD3Key, parseD5Key } from "../rubric-keys.ts";
 import { knownIdentifiers } from "../state.ts";
@@ -120,6 +120,8 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
     }
   }
   if (semanticTraps.length) info.push(`由闸门识别条件的压力时刻:${semanticTraps.join("、")}`);
+  const noLine = d.traps.filter((t) => !t.line).map((t) => t.id);
+  if (noLine.length) warnings.push(`压力时刻没有兜底台词(line):${noLine.join("、")}。演员出错时这个压力时刻会丢`);
 
   // ---------------- 2. 合计数自洽 ----------------
   const tr = d.truth;
@@ -199,7 +201,7 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
   for (const x of d.experiments) if (!reach.experiments.has(x.id)) errors.push(`验证 ${x.id} 永远做不了`);
   for (const t of tr.diagnosis_items) {
     const src = [
-      ...d.artifacts.filter((a) => reach.artifacts.has(a.id) && a.supports?.includes(t.id)).map((a) => a.id),
+      ...d.artifacts.filter((a) => reach.openable.has(a.id) && a.supports?.includes(t.id)).map((a) => a.id),
       ...d.experiments.filter((x) => reach.experiments.has(x.id) && x.supports.includes(t.id)).map((x) => x.id),
     ];
     if (!src.length) errors.push(`诊断对照项 ${t.id} 没有任何可达的资料或验证能提供 A 级证据`);
@@ -256,17 +258,27 @@ export interface Reachability {
   flags: Set<string>;
   facts: Map<string, Level>;
   artifacts: Set<string>;
+  /** 汇报阶段之前就能拿到、因而能打开看的资料(A 级证据只能来自这些)。 */
+  openable: Set<string>;
   experiments: Set<string>;
   actions: Set<string>;
   traps: Set<string>;
 }
 
+/** 三值判断:这个条件在某个时刻"可能为真"、"可能为假"。 */
+interface TV {
+  t: boolean;
+  f: boolean;
+}
+const BOTH: TV = { t: true, f: true };
+
 /**
  * 乐观可达性:假设玩家每一步都做对。和引擎的约束保持一致:
- *   - 开场只能和开场人说话;调研阶段可以和任何已出现的人说话;汇报阶段只能和老板说话;判断、复盘阶段不能说话
- *   - 去现场、做验证只能在开场和调研阶段
+ *   - 分阶段推进(开场 → 调研 → 汇报),后面阶段才拿到的东西不能满足前面阶段的条件
+ *   - 开场只能和开场人说话;调研阶段可以和任何已出现的人说话;汇报阶段只能和老板说话
+ *   - 去现场、做验证、看资料只能在调研阶段(开场时做这些会直接进入调研)
  *   - 主动说出的事实(volunteered)只能由压力时刻的 reveal 说出来
- *   - 一个前提要在同一个阶段里整体成立
+ *   - 条件按三值逻辑判断:每个标识符取它在这一阶段可能取到的值的范围,"TR1 and not TR3" 这类混合条件不会被误判
  */
 export function reachability(scn: LoadedScenario): Reachability {
   const d = scn.data;
@@ -276,59 +288,123 @@ export function reachability(scn: LoadedScenario): Reachability {
     flags: new Set(),
     facts: new Map(),
     artifacts: new Set(),
+    openable: new Set(),
     experiments: new Set(),
     actions: new Set(),
     traps: new Set(),
   };
+  const startRoles = new Set(R.roles);
   const has = (p: string) => d.phases.includes(p as never);
-  const talkPhases = (role: string) => [
-    ...(has("kickoff") && role === boss ? ["kickoff"] : []),
-    ...(has("discovery") ? ["discovery"] : []),
-    ...(has("report") && role === boss ? ["report"] : []),
-  ];
-  const actionPhases = ["kickoff", "discovery"].filter(has);
+  let stage = "kickoff";
+  const talkable = (role: string) => (stage === "discovery" ? R.roles.has(role) : role === boss && R.roles.has(boss));
 
-  // reachable=true:按"能达到的最好状态"解析;false:按开局状态解析(给 not X 这类条件用)
-  const resolverFor = (phase: string, reachable: boolean, derived: boolean): Resolver => ({
-    get(name) {
-      if (name === "phase") return phase;
-      const dot = name.indexOf(".");
-      if (dot > 0) {
-        const ns = name.slice(0, dot);
-        const key = name.slice(dot + 1);
-        const ok = reachable && R.roles.has(key);
-        if (ns === "trust") return ok ? (scn.roles.get(key)?.trust?.max ?? 0) : (scn.roles.get(key)?.trust?.initial ?? 0);
-        if (ns === "exchanges") return ok ? 999 : 0;
-        if (ns === "discovered") return reachable ? R.roles.has(key) : d.roles.some((r) => r.id === key && r.discovered === "start");
-        if (ns === "opened") return reachable && R.artifacts.has(key);
-        return undefined;
-      }
-      if (name === "no_artifact_opened" || name === "committed_before_any_artifact") return derived;
-      if (name in d.flags) return reachable && (name === "seen_any_artifact" ? R.artifacts.size > 0 : R.flags.has(name));
-      if (scn.facts.has(name)) return reachable && R.facts.has(name);
-      if (scn.artifacts.has(name)) return reachable && R.artifacts.has(name);
-      if (scn.experiments.has(name)) return reachable && R.experiments.has(name);
-      if (name in d.actions) return reachable && R.actions.has(name);
-      if (scn.traps.has(name)) return reachable && R.traps.has(name);
+  const boolOf = (name: string): TV | undefined => {
+    const dot = name.indexOf(".");
+    if (dot > 0) {
+      const ns = name.slice(0, dot);
+      const key = name.slice(dot + 1);
+      if (ns === "discovered") return startRoles.has(key) ? { t: true, f: false } : { t: R.roles.has(key), f: true };
+      if (ns === "opened") return { t: stage === "discovery" && R.artifacts.has(key), f: true };
       return undefined;
-    },
-    call: () => true,
-  });
-  const canIn = (req: Requirement | string | undefined, phase: string): boolean => {
-    if (req === undefined) return true;
-    for (const reachable of [true, false]) {
-      for (const derived of [true, false]) {
-        try {
-          if (evalRequirement(req, resolverFor(phase, reachable, derived))) return true;
-        } catch {
-          /* 未知标识符:由引用检查报错,这里当作不可达 */
+    }
+    if (name === "no_artifact_opened" || name === "committed_before_any_artifact") return BOTH;
+    if (name === "seen_any_artifact") return { t: R.openable.size > 0 || (stage === "discovery" && R.artifacts.size > 0), f: true };
+    if (name in d.flags) return { t: R.flags.has(name), f: true };
+    if (scn.facts.has(name)) return { t: R.facts.has(name), f: true };
+    if (scn.artifacts.has(name)) return { t: R.artifacts.has(name), f: true };
+    if (scn.experiments.has(name)) return { t: R.experiments.has(name), f: true };
+    if (name in d.actions) return { t: R.actions.has(name), f: true };
+    if (scn.traps.has(name)) return { t: R.traps.has(name), f: true };
+    return undefined;
+  };
+  const rangeOf = (name: string): [number, number] | undefined => {
+    const dot = name.indexOf(".");
+    if (dot < 0) return undefined;
+    const ns = name.slice(0, dot);
+    const key = name.slice(dot + 1);
+    const role = scn.roles.get(key);
+    if (!role) return undefined;
+    if (ns === "trust") {
+      const t = role.trust ?? { initial: 0, max: 0 };
+      return [t.initial, R.roles.has(key) ? t.max : t.initial];
+    }
+    if (ns === "exchanges") return [0, R.roles.has(key) ? Number.POSITIVE_INFINITY : 0];
+    return undefined;
+  };
+  const cmpRange = (op: string, [lo, hi]: [number, number], c: number): TV => {
+    switch (op) {
+      case ">=":
+        return { t: hi >= c, f: lo < c };
+      case ">":
+        return { t: hi > c, f: lo <= c };
+      case "<=":
+        return { t: lo <= c, f: hi > c };
+      case "<":
+        return { t: lo < c, f: hi >= c };
+      case "==":
+        return { t: lo <= c && c <= hi, f: !(lo === c && hi === c) };
+      case "!=":
+        return { t: !(lo === c && hi === c), f: lo <= c && c <= hi };
+    }
+    return BOTH;
+  };
+  const kleene = (n: ExprNode): TV => {
+    switch (n.t) {
+      case "num":
+        return { t: n.v !== 0, f: n.v === 0 };
+      case "id": {
+        const b = boolOf(n.name);
+        if (b) return b;
+        const r = rangeOf(n.name);
+        if (r) return { t: r[1] > 0, f: r[0] === 0 };
+        return BOTH;
+      }
+      case "call":
+        return BOTH;
+      case "not": {
+        const v = kleene(n.e);
+        return { t: v.f, f: v.t };
+      }
+      case "and": {
+        const a = kleene(n.l);
+        const b = kleene(n.r);
+        return { t: a.t && b.t, f: a.f || b.f };
+      }
+      case "or": {
+        const a = kleene(n.l);
+        const b = kleene(n.r);
+        return { t: a.t || b.t, f: a.f && b.f };
+      }
+      case "cmp": {
+        if (n.l.t === "id" && n.l.name === "phase") {
+          const rhs = n.r.t === "id" ? n.r.name : n.r.t === "num" ? String(n.r.v) : "";
+          const eq = stage === rhs;
+          const v = n.op === "==" ? eq : n.op === "!=" ? !eq : false;
+          return { t: v, f: !v };
         }
+        if (n.l.t === "id" && n.r.t === "num") {
+          const r = rangeOf(n.l.name);
+          if (r) return cmpRange(n.op, r, n.r.v);
+        }
+        return BOTH;
       }
     }
-    return false;
   };
-  const canTalk = (req: Requirement | undefined, role: string) => talkPhases(role).some((p) => canIn(req, p));
-  const canAct = (req: Requirement | undefined) => actionPhases.some((p) => canIn(req, p));
+  const can = (req: Requirement | undefined): boolean => {
+    const tv = (q: Requirement): TV => {
+      if (typeof q === "string") {
+        try {
+          return kleene(parseExpr(q));
+        } catch {
+          return { t: false, f: true }; // 写不成表达式:由引用检查报错
+        }
+      }
+      const parts = (Array.isArray(q) ? q : "any" in q ? q.any : q.all).map(tv);
+      if (!Array.isArray(q) && "any" in q) return { t: parts.some((p) => p.t), f: parts.every((p) => p.f) };
+      return { t: parts.every((p) => p.t), f: parts.some((p) => p.f) };
+    };
+    return req === undefined || tv(req).t;
+  };
   const addFact = (id: string, l: Level) => {
     const cur = R.facts.get(id);
     if (!cur || levelRank(l) > levelRank(cur)) {
@@ -338,61 +414,73 @@ export function reachability(scn: LoadedScenario): Reachability {
     return false;
   };
 
-  for (let changed = true; changed; ) {
-    changed = false;
-    const mark = <T>(set: Set<T>, v: T) => {
-      if (!set.has(v)) {
-        set.add(v);
-        changed = true;
+  const fixpoint = () => {
+    for (let changed = true; changed; ) {
+      changed = false;
+      const mark = <T>(set: Set<T>, v: T) => {
+        if (!set.has(v)) {
+          set.add(v);
+          changed = true;
+        }
+      };
+      const speakers = [...R.roles].filter(talkable);
+      for (const r of d.roles) {
+        if (r.discovered === "start" || R.roles.has(r.id)) continue;
+        const disc = r.discovered;
+        const byRole = disc.by_role?.some((x) => speakers.includes(x));
+        const byAction = stage === "discovery" && disc.by_action?.some((x) => R.actions.has(x));
+        const byAsk = disc.by_ask !== undefined && speakers.length > 0;
+        const byRedirect = speakers.some((x) => Object.values(scn.role(x).redirects).includes(r.id));
+        if (byRole || byAction || byAsk || byRedirect) mark(R.roles, r.id);
       }
-    };
-    for (const r of d.roles) {
-      if (r.discovered === "start" || R.roles.has(r.id)) continue;
-      const disc = r.discovered;
-      const byRole = disc.by_role?.some((x) => R.roles.has(x));
-      const byAction = disc.by_action?.some((x) => R.actions.has(x));
-      const byAsk = disc.by_ask !== undefined && R.roles.size > 0;
-      const byRedirect = [...R.roles].some((x) => Object.values(scn.role(x).redirects).includes(r.id));
-      if (byRole || byAction || byAsk || byRedirect) mark(R.roles, r.id);
-    }
-    for (const [f, def] of Object.entries(d.flags)) if (def.granted_by && R.roles.has(def.granted_by)) mark(R.flags, f);
-    for (const t of d.traps) {
-      if (R.traps.has(t.id) || !R.roles.has(t.by)) continue;
-      if ((t.after ?? []).some((a) => !R.traps.has(a))) continue;
-      if (isExpression(t.when) && !talkPhases(t.by).some((p) => canIn(t.when, p))) continue;
-      mark(R.traps, t.id);
-      for (const f of t.sets ?? []) mark(R.flags, f);
-      for (const r of t.discover ?? []) mark(R.roles, r);
-      if (t.reveal) {
-        const rule = scn.facts.get(t.reveal)?.unlock.find((u) => !isViaUnlock(u) && u.role === t.by);
-        if (rule) {
-          if (addFact(t.reveal, rule.level)) changed = true;
-          if (rule.gives) mark(R.artifacts, rule.gives);
+      for (const [f, def] of Object.entries(d.flags)) if (def.granted_by && talkable(def.granted_by)) mark(R.flags, f);
+      for (const t of d.traps) {
+        if (R.traps.has(t.id) || !talkable(t.by)) continue;
+        if ((t.after ?? []).some((a) => !R.traps.has(a))) continue;
+        if (isExpression(t.when) && !can(t.when)) continue;
+        mark(R.traps, t.id);
+        for (const f of t.sets ?? []) mark(R.flags, f);
+        for (const r of t.discover ?? []) mark(R.roles, r);
+        if (t.reveal) {
+          const rule = scn.facts.get(t.reveal)?.unlock.find((u) => !isViaUnlock(u) && u.role === t.by);
+          if (rule) {
+            if (addFact(t.reveal, rule.level)) changed = true;
+            if (rule.gives) mark(R.artifacts, rule.gives);
+          }
+        }
+      }
+      if (stage === "discovery") {
+        for (const [id, a] of Object.entries(d.actions)) {
+          if (!can(a.requires)) continue;
+          mark(R.actions, id);
+          for (const eff of a.effects) {
+            const m = eff.match(/^discover\s+(\w+)$/);
+            if (m) mark(R.roles, m[1]!);
+            const s = eff.match(/^set\s+(\w+)$/);
+            if (s) mark(R.flags, s[1]!);
+          }
+        }
+        for (const x of d.experiments) if (can(x.requires)) mark(R.experiments, x.id);
+      }
+      for (const a of d.artifacts) if (a.unlock && talkable(a.holder) && can(a.unlock.requires)) mark(R.artifacts, a.id);
+      for (const f of d.facts) {
+        for (const u of f.unlock) {
+          let ok: boolean;
+          if (isViaUnlock(u)) ok = stage === "discovery" && (R.artifacts.has(u.via) || R.actions.has(u.via) || R.experiments.has(u.via));
+          else ok = !u.volunteered && Boolean(u.ask) && talkable(u.role) && can(u.requires);
+          if (!ok) continue;
+          if (addFact(f.id, u.level)) changed = true;
+          if (u.gives) mark(R.artifacts, u.gives);
         }
       }
     }
-    for (const [id, a] of Object.entries(d.actions)) {
-      if (!canAct(a.requires)) continue;
-      mark(R.actions, id);
-      for (const eff of a.effects) {
-        const m = eff.match(/^discover\s+(\w+)$/);
-        if (m) mark(R.roles, m[1]!);
-        const s = eff.match(/^set\s+(\w+)$/);
-        if (s) mark(R.flags, s[1]!);
-      }
-    }
-    for (const a of d.artifacts) if (a.unlock && R.roles.has(a.holder) && canTalk(a.unlock.requires, a.holder)) mark(R.artifacts, a.id);
-    for (const x of d.experiments) if (canAct(x.requires)) mark(R.experiments, x.id);
-    for (const f of d.facts) {
-      for (const u of f.unlock) {
-        let ok: boolean;
-        if (isViaUnlock(u)) ok = R.artifacts.has(u.via) || R.actions.has(u.via) || R.experiments.has(u.via);
-        else ok = !u.volunteered && Boolean(u.ask) && R.roles.has(u.role) && canTalk(u.requires, u.role);
-        if (!ok) continue;
-        if (addFact(f.id, u.level)) changed = true;
-        if (u.gives) mark(R.artifacts, u.gives);
-      }
-    }
+  };
+
+  for (const p of ["kickoff", "discovery", "report"]) {
+    if (!has(p)) continue;
+    stage = p;
+    fixpoint();
+    if (p === "discovery") R.openable = new Set(R.artifacts);
   }
   return R;
 }

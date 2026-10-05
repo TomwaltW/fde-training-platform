@@ -169,8 +169,9 @@ export class Engine {
         text = await this.deps.actor.speak({ scn: this.scn, st, plan, userText, attempt, previousFlags: previous, prompt });
       } catch (e) {
         // 模型出错时状态已经改过了(时间、解锁、压力时刻),不能把异常抛出去留下半截状态:重试,最后用兜底台词
-        previous = [`actor_error:${(e as Error).message.slice(0, 80)}`];
-        addEvent(st, "actor_error", { attempt, error: (e as Error).message });
+        const msg = e instanceof Error ? e.message : String(e);
+        previous = [`actor_error:${msg.slice(0, 80)}`];
+        addEvent(st, "actor_error", { attempt, error: msg });
         continue;
       }
       const flags = checkReply(text, {

@@ -30,18 +30,13 @@ const OOC_WORDS = [
   "语言模型", "大模型", "AI助手", "AI 助手", "人工智能助手", "作为AI", "作为一个AI", "我是AI", "玩家", "NPC", "游戏",
 ];
 
-// 附和式开头:只看每个分句的开头(先去掉括号里的动作),后面紧跟"不/吗/么"的不算("你说的对不上")
-const SYCOPHANCY = ["对对对", "你说得对", "你说的对", "您说得对", "您说的对", "说得太对了", "你们专业", "您真专业", "完全同意", "太对了"];
+// 附和式开头:分句开头(允许前面有括号动作、引号、"嗯/好好好"之类的语气词、"我/我觉得/我也"),
+// "你说得(太)对""对对对""完全同意""太对了""你们专业";后面紧跟"不/吗/么"的不算("你说的对不上""你说的对吗")
+const SYCOPHANCY_RE =
+  /(?:^|[。!?;…,，\n—])[\s—]*(?:\([^)]*\)\s*)*[“"'「]?\s*(?:[嗯哎哦啊呀是好]+[,，—\s]*)?(?:(?:我也|我觉得|我看|说实话|我)\s*)?(对对对|[你您]说[得的]?太?对(?![不吗么])|说得太对了|[你您]们?真?专业|完全同意|太对了)/gu;
 
 function sycophancyHits(text: string): string[] {
-  const hits: string[] = [];
-  for (const raw of text.split(/[。!?;…,，\n]/)) {
-    const clause = raw.replace(/^\s*(?:\([^)]*\)\s*)*/, "").trim();
-    for (const w of SYCOPHANCY) {
-      if (clause.startsWith(w) && !/^[不吗么]/.test(clause.slice(w.length))) hits.push(w);
-    }
-  }
-  return hits;
+  return [...text.matchAll(SYCOPHANCY_RE)].map((m) => m[1]!);
 }
 
 const MAX_CHARS = 200;
@@ -63,7 +58,10 @@ export function checkReply(reply: string, ctx: GuardContext): GuardFlag[] {
   const allowed = numberSet(allowedText);
   for (const n of extractNumbers(text)) {
     if (exempt(n)) continue;
-    if (!allowed.has(round(n.value))) flags.push({ type: "number", detail: n.raw });
+    if (allowed.has(round(n.value))) continue;
+    // 约数("五六十个人")只要有一端是已知的数字,就是对已知事实的约略说法
+    if (n.range && n.range.some((v) => allowed.has(round(v)))) continue;
+    flags.push({ type: "number", detail: n.raw });
   }
 
   const corpus = [...allowedText, ...(ctx.seenTexts ?? []).map(foldWidth)].join("\n");
@@ -98,11 +96,11 @@ export function activeCanaries(scn: LoadedScenario, st: SessionState): string[] 
 }
 
 /** 守卫重试仍不通过(或模型出错)时的兜底台词。不含未披露的事实;必须说出的 beat 不丢。 */
-export function fallbackLine(scn: LoadedScenario, roleId: string, d: Pick<Directive, "stance" | "redirectTo" | "beat" | "fallback">): string {
+export function fallbackLine(scn: LoadedScenario, roleId: string, d: Pick<Directive, "stance" | "redirectTo" | "fallback">): string {
+  // 导演的 beat 是写给演员的指令(可能含"红鲱鱼"之类的作者注),绝不原样给用户看;只用作者写好的台词
   if (d.fallback) return d.fallback;
   const to = d.redirectTo && d.redirectTo !== roleId ? scn.roles.get(d.redirectTo)?.name : undefined;
   if (to) return `这个你得去问${to}。`;
-  if (d.beat) return `(${d.beat})`;
   const stance: Stance = d.stance;
   switch (stance) {
     case "guarded":

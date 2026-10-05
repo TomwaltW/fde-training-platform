@@ -402,6 +402,7 @@ traps:
     by: zhou
     when: phase==kickoff and exchanges.zhou>=2
     beat: 催问演示什么时候能给
+    line: 演示到底什么时候能给我?大会可不等人。
     good: 说明要先看数据和现场,并给出今天之内的具体下一步
     bad: 直接给日期或报价
   - id: TR2
@@ -409,6 +410,7 @@ traps:
     when: 用户向周总问操作细节    # 无法写成表达式的条件交给闸门识别
     beat: 不耐烦,指路去找操作部的刘姐
     stance: impatient
+    line: 这些细节别问我,你去找操作部的刘姐。
     sets: [auth_ops]
     discover: [liu]
   - id: TR3
@@ -416,25 +418,30 @@ traps:
     when: 用户回避给出演示时间或工期
     after: [TR1]
     beat: 搬出同行——人家说两周就上线了
+    line: 人家同行说两周就上线了,你这边怎么还没个准话?
   - id: TR4
     by: liu
     when: exchanges.liu>=1
     beat: 把问题归到新人不认真(红鲱鱼 RH1)
     reveal: RH1
+    line: 说白了,就是那几个新人不认真。
   - id: TR5
     by: chen
     when: exchanges.chen>=2
     beat: 问上了系统是不是要裁人
+    line: 上了系统,我们是不是要被裁?
     good: 正面回应并说明目标是减少返工
     bad: 回避,或直接说可以少用人
   - id: TR6
     by: zhou
     when: phase==report
     beat: 范围蔓延(顺便把报价和对账也做了)加压价(上次那个才六万八)
+    line: 顺便把报价和对账也做了吧。上次那个才六万八,你这个凭什么要这么多?
   - id: TR7
     by: wang
     when: not auth_finance
     beat: 没有周总点头不给数字
+    line: 没有周总点头,数字我不能给你。
 
 budget:
   discovery_minutes: 360

@@ -140,8 +140,11 @@ function fireTrap(scn: LoadedScenario, st: SessionState, t: Trap, plan: TurnPlan
     const rule = fact.unlock.find((u) => !isViaUnlock(u) && u.role === t.by);
     if (rule && !isViaUnlock(rule)) {
       const text = rule.level === "L1" ? (rule.say ?? fact.statement) : fact.statement;
-      plan.reveals.push({ factId: fact.id, level: rule.level, text, ruleId: `${fact.id}@${t.by}:${rule.level}` });
+      const rv: Reveal = { factId: fact.id, level: rule.level, text, ruleId: `${fact.id}@${t.by}:${rule.level}` };
+      if (rule.gives) rv.gives = rule.gives;
+      plan.reveals.push(rv);
       recordReveal(st, fact.id, rule.level, t.by, t.by);
+      if (rule.gives) obtainArtifact(st, rule.gives, t.by, plan);
     }
   }
   return t.beat;
@@ -205,8 +208,21 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   // 2. 换人。换人失败时这句话没人接,但里面的承诺照样记账(听到承诺就锁定)
   if (gate.acts.includes("switch_role") && gate.target_role && gate.target_role !== st.currentRole) {
     const from = st.currentRole;
+    // 同一句话里先问"谁管钱"、再说去找他:当前角色先说出这个人,然后再换人
+    if (!gate.meta_or_injection && !st.discovered.includes(gate.target_role)) {
+      for (const t of matched) {
+        if (t.kind !== "find" || t.findRole !== gate.target_role) continue;
+        const via = redirectTarget(scn, st, from, t.findRole) ?? t.findRole;
+        if (via !== from) discover(scn, st, via, `ask:${t.id}`, plan);
+      }
+    }
     if (!switchRole(scn, st, gate.target_role, plan)) {
-      if (!gate.meta_or_injection) recordCommitments(scn, st, gate, from);
+      // 没换成:这句话是对当前角色说的,承诺、信任行为、授权请求照样算
+      if (!gate.meta_or_injection) {
+        recordCommitments(scn, st, gate, from);
+        applyTrustMoves(scn, st, from, gate, "all");
+        applyPerms(st, from, matched, plan);
+      }
       return plan;
     }
   }
@@ -217,6 +233,8 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   // 3. 只是去现场或做验证(自然语言等价于按钮):直接做,不需要角色回话
   const actReq = st.phase === "report" ? undefined : actionRequest(gate, matched);
   if (actReq && isActionOnly(gate, matched)) {
+    // 起身去现场时的态度:无礼照样扣信任;"肯去现场看"的加分由现场本身的效果负责,不重复加
+    applyTrustMoves(scn, st, role, gate, "minus");
     const r = runActionRequest(scn, st, actReq);
     plan.system.push(...r.system);
     plan.obtained.push(...r.obtained);
@@ -252,32 +270,18 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
     addEvent(st, "meta_injection", { summary: gate.summary });
     plan.directive = makeDirective("confused");
     spend(scn, st, roleDef.time_cost_min, plan);
+    if (actReq) appendAction(plan, runActionRequest(scn, st, actReq), "after");
     return plan;
   }
 
   // 7. 承诺账本(用本轮披露之前的状态判断是否过早)
   const commitsNow = recordCommitments(scn, st, gate, role);
 
-  // 8. 信任:每轮最多 +1(每种加分行为只算一次),减分行为每条 -1;与数组顺序无关
-  if (roleDef.trust) {
-    const before = st.trust[role] ?? 0;
-    const used = (st.trustPlusUsed[role] ??= []);
-    const fresh = gate.trust_moves.find((m) => m.dir === "plus" && !used.includes(m.what));
-    if (fresh) used.push(fresh.what);
-    const minus = gate.trust_moves.filter((m) => m.dir === "minus").length;
-    const after = Math.max(0, Math.min(roleDef.trust.max, before + (fresh ? 1 : 0) - minus));
-    if (after !== before) {
-      st.trust[role] = after;
-      addEvent(st, "trust_change", { role, from: before, to: after, moves: gate.trust_moves.map((m) => `${m.dir}:${m.what}`) });
-    }
-  }
+  // 8. 信任
+  applyTrustMoves(scn, st, role, gate, "all");
 
   // 9. 授权
-  for (const t of matched) {
-    if (t.kind !== "perm") continue;
-    if (t.role === role) setFlag(st, t.flag, role);
-    else plan.hints.push({ kind: "blocked", ruleId: t.id, missing: t.flag, missingKind: "auth", toRole: t.role });
-  }
+  applyPerms(st, role, matched, plan);
 
   // 10. 找人:问"谁管钱"之类,当前角色会说出这个人(问的就是自己则跳过)
   for (const t of matched) {
@@ -367,6 +371,42 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   return plan;
 }
 
+/**
+ * 信任:每轮最多 +1,每种加分行为只算一次;减分行为每条 -1。
+ * 同一轮有几种新的加分行为时,按场景 trust_moves.plus 的顺序取第一种(和闸门输出的顺序无关)。
+ */
+function applyTrustMoves(scn: LoadedScenario, st: SessionState, role: string, gate: GateOutput, which: "all" | "minus") {
+  const def = scn.role(role).trust;
+  if (!def) return;
+  const before = st.trust[role] ?? 0;
+  const used = (st.trustPlusUsed[role] ??= []);
+  const order = (w: string) => {
+    const i = scn.data.trust_moves.plus.indexOf(w);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const fresh =
+    which === "all"
+      ? gate.trust_moves
+          .filter((m) => m.dir === "plus" && !used.includes(m.what))
+          .sort((a, b) => order(a.what) - order(b.what) || a.what.localeCompare(b.what))[0]
+      : undefined;
+  if (fresh) used.push(fresh.what);
+  const minus = gate.trust_moves.filter((m) => m.dir === "minus").length;
+  const after = Math.max(0, Math.min(def.max, before + (fresh ? 1 : 0) - minus));
+  if (after !== before) {
+    st.trust[role] = after;
+    addEvent(st, "trust_change", { role, from: before, to: after, moves: gate.trust_moves.map((m) => `${m.dir}:${m.what}`) });
+  }
+}
+
+function applyPerms(st: SessionState, role: string, matched: Trigger[], plan: TurnPlan) {
+  for (const t of matched) {
+    if (t.kind !== "perm") continue;
+    if (t.role === role) setFlag(st, t.flag, role);
+    else plan.hints.push({ kind: "blocked", ruleId: t.id, missing: t.flag, missingKind: "auth", toRole: t.role });
+  }
+}
+
 type ActionRequest = { kind: "act"; id: string } | { kind: "exp"; id: string };
 
 function actionRequest(gate: GateOutput, matched: Trigger[]): ActionRequest | undefined {
@@ -377,14 +417,13 @@ function actionRequest(gate: GateOutput, matched: Trigger[]): ActionRequest | un
   return undefined;
 }
 
-/** 这句话除了去现场/做验证之外,没有任何别的内容(没问事、没要授权、没承诺、没有信任行为)。 */
+/** 这句话除了去现场/做验证之外,没有任何别的内容(没问事、没要授权、没承诺)。信任行为不算"别的内容"。 */
 function isActionOnly(gate: GateOutput, matched: Trigger[]): boolean {
   const allowed = new Set(["request_site_visit", "request_experiment", "smalltalk", "ask"]);
   return (
     gate.acts.every((a) => allowed.has(a)) &&
     matched.every((t) => t.kind === "act" || t.kind === "exp") &&
     !gate.commitments.some((c) => c.firm) &&
-    gate.trust_moves.length === 0 &&
     !gate.meta_or_injection
   );
 }
@@ -447,6 +486,8 @@ export function pickDirective(scn: LoadedScenario, st: SessionState, c: Directiv
   const extra: Partial<Directive> = {};
   if (c.beat) extra.beat = c.beat;
   if (c.trapId) extra.trapId = c.trapId;
+  const trapLine = c.trapId ? scn.traps.get(c.trapId)?.line : undefined;
+  if (trapLine) extra.fallback = trapLine;
   const redirect = plan.hints.find((h) => h.kind === "redirect" && h.toRole !== role.id);
   if (redirect?.toRole) extra.redirectTo = redirect.toRole;
 
@@ -536,8 +577,10 @@ export function switchRole(scn: LoadedScenario, st: SessionState, roleId: string
 
 export function doSwitchRole(scn: LoadedScenario, st: SessionState, roleId: string): ActionResult {
   const plan = emptyPlan();
-  const ok = switchRole(scn, st, roleId, plan);
-  return ar(ok, plan.system);
+  const before = st.currentRole;
+  // switchRole 返回"换过去之后还能说话";按钮只关心"换了没有"(换过去时正好用完时间也算换了)
+  const allowed = switchRole(scn, st, roleId, plan);
+  return ar(allowed || st.currentRole !== before, plan.system);
 }
 
 export function doOpenArtifact(scn: LoadedScenario, st: SessionState, artifactId: string): ActionResult {
@@ -637,7 +680,10 @@ export function planReportOpening(scn: LoadedScenario, st: SessionState): TurnPl
       fallback: `你上午说${said},现在还算数吗?`,
     });
   } else {
-    plan.directive = makeDirective("push_back", { beat: "让对方直接说结论:到底怎么回事、要多少钱、多久能在大会上演示" });
+    plan.directive = makeDirective("push_back", {
+      beat: "让对方直接说结论:到底怎么回事、要多少钱、多久能在大会上演示",
+      fallback: "说吧,到底怎么回事?要多少钱,多久能在大会上演示?",
+    });
   }
   return plan;
 }

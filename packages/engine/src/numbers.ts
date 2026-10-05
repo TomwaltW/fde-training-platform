@@ -8,6 +8,8 @@ export interface NumberMention {
   /** 紧跟在数字后面的量词或单位(没有则为空串)。 */
   unit: string;
   percent: boolean;
+  /** 约数("五六十个人")的两端;守卫里只要有一端在白名单内,整个约数就放行。 */
+  range?: [number, number];
 }
 
 const CN_DIGITS: Record<string, number> = {
@@ -121,6 +123,8 @@ const IDIOMS = [
 const CN_D = "[零〇一二两三四五六七八九十]";
 const CLOCK = new RegExp(`(${CN_D}{1,3}|\\d{1,2})(点钟|点|:)(半|一刻|三刻|(${CN_D}{1,3}|\\d{1,2})(分)?)?`, "y");
 const NOT_CLOCK_AFTER = /^[万亿千百%倍个元块]/;
+/** 口语里的分钟:"零五""十五""二十""三十八";逐位读的"二八""四五"是小数,不是分钟。 */
+const CN_MINUTES = /^(零[一二三四五六七八九]|十[一二三四五六七八九]?|[二三四五]十[一二三四五六七八九]?)$/;
 
 /** 钟点:"三点""八点二十""十点半""8:30"。返回小时数和结束位置;不是钟点返回 null。 */
 function clockAt(text: string, i: number): { hour: number; end: number } | null {
@@ -138,17 +142,21 @@ function clockAt(text: string, i: number): { hour: number; end: number } | null 
   const end = CLOCK.lastIndex;
   const rest = text.slice(end);
   if (sep === ":") {
-    if (!m[4] || !/^\d+$/.test(m[4]) || Number(m[4]) >= 60) return null;
+    // 8:30 是钟点;3:1、3:7 是比例
+    if (!m[4] || !/^\d{2}$/.test(m[4]) || Number(m[4]) >= 60) return null;
     return { hour: h, end };
   }
   if (!m[3]) return { hour: h, end }; // "三点" "三点钟"
   if (m[3] === "半" || m[3] === "一刻" || m[3] === "三刻") return { hour: h, end };
   const mins = m[4]!;
-  if (m[5]) return { hour: h, end }; // 带"分"
-  if (/^\d+$/.test(mins)) return Number(mins) < 60 && !NOT_CLOCK_AFTER.test(rest) ? { hour: h, end } : null;
-  // 中文分钟要两个字以上("二十""十五""零五"),单字是小数("十二点五万")
-  if (mins.length >= 2 && !NOT_CLOCK_AFTER.test(rest)) return { hour: h, end };
-  return null;
+  if (m[5]) {
+    // "八点五分" 是 8:05;"四点五分钟" 是 4.5 分钟,按小数检查
+    if (rest.startsWith("钟")) return null;
+    return /^\d+$/.test(mins) || CN_MINUTES.test(mins) || /^[一二三四五六七八九]$/.test(mins) ? { hour: h, end } : null;
+  }
+  if (NOT_CLOCK_AFTER.test(rest)) return null;
+  if (/^\d+$/.test(mins)) return mins.length === 2 && Number(mins) < 60 ? { hour: h, end } : null; // "8点30";"7点5" 是小数
+  return CN_MINUTES.test(mins) ? { hour: h, end } : null;
 }
 
 export function extractNumbers(input: string): NumberMention[] {
@@ -214,21 +222,34 @@ export function extractNumbers(input: string): NumberMention[] {
         const unit = matchMeasure(text, r.end);
         const raw = text.slice(i, r.end);
         const isWord = ["万一", "千万", "一一"].some((w) => text.startsWith(w, i));
-        // 约数"五六个人""两三天":第一个数字后面紧跟另一个数字,用后一个数字的量词
+        // 约数"五六个人""五六十个人""四五万块":第一个数字借用后一个数字的数量级和量词
         let rangeUnit = "";
+        let lo = r.value;
+        let hi: number | undefined;
         if (consumed === 1 && !unit && CN_DIGIT_ONLY.test(text[r.end] ?? "")) {
           const r2 = parseCnAt(text, r.end);
-          if (r2) rangeUnit = matchMeasure(text, r2.end);
+          if (r2) {
+            rangeUnit = matchMeasure(text, r2.end);
+            if (rangeUnit) {
+              hi = r2.value;
+              lo = parseCnAt(text[i]! + text.slice(r.end + 1, r2.end), 0)?.value ?? r.value;
+            }
+          }
         }
         if (!isWord && (consumed >= 2 || unit || rangeUnit)) {
           const u = unit || rangeUnit;
-          out.push({ value: r.value, raw, index: i, unit: u, percent: u === "%" });
+          out.push({ value: round(lo), raw, index: i, unit: u, percent: u === "%", ...(hi !== undefined && { range: [round(lo), round(hi)] as [number, number] }) });
         }
         i = r.end;
         continue;
       }
     }
     i++;
+  }
+  // 约数的后一个数字也带上同一个 range,守卫按整个约数判断
+  for (let k = 0; k + 1 < out.length; k++) {
+    const r = out[k]!.range;
+    if (r && !out[k + 1]!.range && out[k + 1]!.value === r[1]) out[k + 1]!.range = r;
   }
   return out;
 }
