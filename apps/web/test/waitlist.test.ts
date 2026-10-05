@@ -99,7 +99,8 @@ async function login(email: string, inviteCode?: string): Promise<Client> {
   const c = new Client();
   const r1 = await c.post<RequestCodeResponse>(requestCode.POST, { body: { email, ...(inviteCode && { inviteCode }) } });
   expect(r1.status, JSON.stringify(r1.body)).toBe(200);
-  const r2 = await c.post(verify.POST, { body: { email, code: r1.body.devCode } });
+  // 新用户的邀请码在验证通过时才消耗,校验时也要带上
+  const r2 = await c.post(verify.POST, { body: { email, code: r1.body.devCode, ...(inviteCode && { inviteCode }) } });
   expect(r2.status).toBe(200);
   return c;
 }
@@ -381,9 +382,9 @@ describe("POST /api/admin/waitlist/invite", () => {
     }
     expect(rows.find((x) => x.email === "fourth@example.com")).toMatchObject({ inviteCode: null, invitedAt: null });
 
-    // 邀请码能登录,但只能用一次
+    // 邀请码能登录(验证通过时消耗),但只能用一次
     const code = r.body.invited[0]!.inviteCode;
-    expect((await new Client().post(requestCode.POST, { body: { email: "second@example.com", inviteCode: code } })).status).toBe(200);
+    await login("second@example.com", code);
     const reuse = await new Client().post(requestCode.POST, { body: { email: "stranger@example.com", inviteCode: code } });
     expect(reuse.status).toBe(400);
     expect(errorCode(reuse)).toBe("invite_invalid");
