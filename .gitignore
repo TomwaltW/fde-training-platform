@@ -25,3 +25,7 @@ venv/
 *.log
 coverage/
 .vercel/
+
+# local runs
+.sessions/
+tools/evals/out/

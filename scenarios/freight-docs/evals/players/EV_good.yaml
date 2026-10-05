@@ -1,0 +1,135 @@
+# 资深 FDE 按参考路径走(方案 3.5.3)。累计用时应与参考路径一致:80 / 120 / 185 / 235 / 275 / 320 分钟。
+id: EV_good
+persona: 资深 FDE 按参考路径走
+steps:
+  # 1. 周总 5 轮(40 分钟)
+  - say: 周总您好。系统的事先放一放,我想先搞清楚:为什么是现在想做这件事?最近是出过什么事,还是哪个客户让您特别担心?
+    gate: {t: [S2@zhou:L2], tags: [open]}
+    check: {reveals: [S2@L2]}
+  - say: 下个月大会您想在台上讲什么?讲给谁听?演示成什么样您觉得算成功?
+    gate: {t: [S1@zhou:L2, K7@zhou:L2], tags: [open, follow_up]}
+    check: {trap: TR1, reveals: [S1@L2, K7@L2]}
+  - say: 演示日期我今天下午给您一个准话,我得先看看数据和现场再说。之前有没有试过类似的工具?
+    gate: {t: [K1@zhou:L1, TR3@zhou], tags: [open]}
+    check: {trap: TR3, reveals: [K1@L1]}
+  - say: 接下来我想找操作部和财务的人聊聊,看看出错的记录和损失的数字。您能跟他们打个招呼吗?钱和损失这块是谁在管?
+    gate: {t: [perm:auth_ops, perm:auth_finance, find:wang, P1@liu:L3], acts: [ask, request_permission], tags: [evidence_ask], bundled: 2}
+    check: {discovered: [wang, liu]}
+  - say: 人手这块现在压力大吗?操作部是不是一直在要人?
+    gate: {t: [S3@zhou:L2]}
+    check: {reveals: [S3@L2], minutes_used: 40}
+
+  # 2. 小林 3 轮 + 看样本包(80 分钟)
+  - switch: lin
+  - say: 小林你好,周总说样本单据在你这儿,能给我看看吗?
+    gate: {t: [A1@lin:L3], acts: [ask, request_artifact], tags: [evidence_ask]}
+    check: {obtained: [A1]}
+  - say: 这 14 份是怎么挑出来的?跟平时的来料比,大概占多大比例?
+    gate: {t: [K4@lin:L2], tags: [quantifying, follow_up]}
+    check: {reveals: [K4@L2]}
+  - say: 前年买的那个工具,当时是怎么采购的?合同和验收单还在吗?
+    gate: {t: [K1@lin:L2], tags: [open, evidence_ask]}
+    check: {reveals: [K1@L2], obtained: [A8]}
+  - open: A1
+    check: {reveals: [P7@L3], minutes_used: 80}
+
+  # 3. 现场(120 分钟)
+  - action: site_visit
+    check: {reveals: [P3@L2, P6@L2, K2@L1], discovered: [chen], obtained: [A7], minutes_used: 120}
+
+  # 4. 小陈 5 轮 + 来料统计、改单截图(185 分钟)
+  - switch: chen
+  - say: 刚才在旁边看了一会儿,辛苦。我不是来追责的,也不会点名。想请教一下,客户改单一般怎么处理?谁通知谁?
+    gate: {t: [P4@chen:L2], tags: [open], trust: [+说明来意不是追责]}
+    check: {directive: test_user, reveals: [P4@L2]}
+  - say: 能给我看一个最近的改单例子吗?比如微信群里的截图,还有发给报关行的邮件。
+    gate: {t: [P4@chen:L3], acts: [ask, request_artifact], tags: [evidence_ask, follow_up]}
+    check: {trap: TR5, obtained: [A6]}
+  - say: 不会裁人。我要做的是让你们少返工、少半夜追客户。客户资料一般是什么格式?能帮我数一下你下载文件夹里上周各类文件有多少吗?
+    gate: {t: [P3@chen:L3], tags: [quantifying, evidence_ask], bundled: 2}
+    check: {reveals: [P3@L3], obtained: [A5]}
+  - say: HS 编码和申报品名平时是怎么定的?
+    gate: {t: [P5@chen:L2], tags: [open]}
+    check: {reveals: [P5@L2]}
+  - say: 系统这边能不能批量导入,或者跟别的系统对接?
+    gate: {t: [K2@chen:L2]}
+    check: {reveals: [K2@L2]}
+  - open: A5
+  - open: A6
+    check: {minutes_used: 185}
+
+  # 5. 刘姐 5 轮 + 异常登记表(235 分钟)
+  - switch: liu
+  - say: 刘姐您好,我刚在下面看了半天,大家确实辛苦。我不是来追责的。想问问,出了错有没有地方记?
+    gate: {t: [P1@liu:L1], tags: [open], trust: [+说明来意不是追责]}
+    check: {trap: TR4, reveals: [P1@L1, RH1@L1]}
+  - say: 新人的情况我记下了,我想先看看整体。能把异常登记表导一份给我吗?
+    gate: {t: [P1@liu:L3], acts: [ask, request_artifact], tags: [evidence_ask]}
+    check: {obtained: [A2], reveals: [P1@L3]}
+  - say: 之前那个识别工具,为什么没用下去?
+    gate: {t: [K1@liu:L2], tags: [open, follow_up]}
+  - say: 现在团队人手够用吗?
+    gate: {t: [S3@liu:L2]}
+  - say: 如果上新系统,最后是谁在用、谁对结果负责?上次那个工具大家用下来什么感受?
+    gate: {t: [S4@liu:L2], tags: [open], bundled: 2}
+    check: {reveals: [S4@L2]}
+  - open: A2
+    check: {reveals: [K5@L2, RH1@L3], minutes_used: 235}
+
+  # 6. 王会计 3 轮 + 费用汇总(275 分钟)
+  - switch: wang
+  - say: 王会计您好,周总让我来了解一下出错带来的费用。出一次错,一般会产生哪些费用?
+    gate: {t: [C1@wang:L2], tags: [open]}
+    check: {reveals: [C1@L2]}
+  - say: 能给我看一下上季度异常费用的汇总吗?
+    gate: {t: [C2@wang:L3], acts: [ask, request_artifact], tags: [evidence_ask, quantifying]}
+    check: {obtained: [A4]}
+  - say: 按类别看,哪类最花钱?
+    gate: {t: [C3@wang:L2], tags: [quantifying, follow_up]}
+  - open: A4
+    check: {minutes_used: 275}
+
+  # 7. 验证 X3(320 分钟)
+  - experiment: X3
+    check: {reveals: [P2@L3, C3@L3], minutes_used: 320}
+
+  # 判断与汇报
+  - judgment:
+      J1: 1) 主因不是识别:按异常登记表重新归类,资料矛盾和改单未同步合计占 57%,录入只占 13.6%(损失 5.5%),图片来料只有 17%。2) 按金额最贵的是 HS 与申报类(43%),靠单证员各自的小抄。3) 上次 OCR 工具死在识别后还要核对、且写不回 FMS。4) 样本包是挑难认的,不能代表日常来料。
+      J2: 异常登记表 + 财务费用汇总按类别对上的验证(X3);小陈的来料统计和改单截图;现场观察;刘姐讲的上次工具;小林讲的样本怎么挑。
+      J3: 大会上能现场演示、留住拓浪(别再因申报被查验)、年底前不加人。刘姐的部门要愿意用。
+      J4: 第一步:两周小验证,做三单一致性校验和改单同步提醒,通过 FMS 的 Excel 模板导入写回。验收:试点客户的不一致在出货前拦下 90% 以上,单证员核对时间减少三成。大会演示:拍一张单据识别后与装箱单、提单自动比对并标红,演示不等于上线。不做:报价、对账、HS 自动归类(放第二期)。前提:刘姐指定 2 位单证员配合,周总确认客户资料能否发给外部模型。
+      J5: 拓浪 HS 问题的具体编码与申报要素;改单在报关行那边的真实丢失率;FMS 供应商开接口的报价。
+    check: {phase: report, directive: push_back}
+  - say: 周总,结论先说:单据识别不是主要问题,出错主要在单据对不上和改单没同步,最花钱的是申报类。大会上可以演示拍单识别加自动比对标红;第一期做一致性校验和改单同步,先做两周小验证。预算这块,您心里有个范围吗?
+    gate: {t: [K6@zhou:L2], acts: [ask, propose_solution], tags: [open]}
+    check: {trap: TR6, reveals: [K6@L2]}
+  - say: 报价和对账这次不放进来,先把一致性校验做扎实。两周验证的费用我按工作量给您一个范围,验证结果出来再谈正式合同。
+    gate: {acts: [propose_solution], commit: [{type: price, text: 给一个范围, firm: false}]}
+  - end: true
+
+judge:
+  claims:
+    - {text: 主因是单据不一致和改单未同步，不是识别, source: J1}
+    - {text: 按金额最贵的是 HS 与申报类, source: J1}
+  T:
+    - {id: T1, verdict: hit, evidence: [J1, J2], grade: A, note: 引用了 X3 和来料统计}
+    - {id: T2, verdict: hit, evidence: [J1, J2], grade: A, note: 引用了改单截图}
+    - {id: T3, verdict: hit, evidence: [J1, J2], grade: A, note: 引用了费用汇总}
+    - {id: T4, verdict: hit, evidence: [J1], grade: B, note: 刘姐和小林都提到}
+    - {id: T5, verdict: hit, evidence: [J1], grade: C, note: 小林说的}
+  S:
+    - {id: S1, mentioned_in_judgment: true, evidence: [J3]}
+    - {id: S2, mentioned_in_judgment: true, evidence: [J3]}
+    - {id: S3, mentioned_in_judgment: true, evidence: [J3]}
+    - {id: S4, mentioned_in_judgment: true, evidence: [J3]}
+  W:
+    - {id: W1, met: true, evidence: [J4]}
+    - {id: W2, met: true, evidence: [J4]}
+    - {id: W3, met: true, evidence: [J4]}
+    - {id: W4, met: true, evidence: [J4]}
+    - {id: W5, met: true, evidence: [J4]}
+  key_moments:
+    - {turn: U1, type: good, what: 先问为什么是现在, knew: 只有开场白, did_not_know: 拓浪的压力}
+    - {turn: U3, type: good, what: 被催日期时给了今天之内的下一步, knew: 大会诉求, did_not_know: 任何数据}
+    - {turn: U11, type: good, what: 用日常来料统计检验样本的代表性, knew: 样本包, did_not_know: 来料格式分布}

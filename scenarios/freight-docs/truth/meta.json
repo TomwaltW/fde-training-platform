@@ -1,0 +1,114 @@
+{
+  "notice": "合成样本·训练用 · 公司与数据均为虚构",
+  "generator": "tools/docgen/gen_truth.py",
+  "seed": 20260930,
+  "params_source": "scenarios/freight-docs/scenario.yaml",
+  "period": "2026-07-01..2026-09-30",
+  "exceptions": {
+    "total": 428,
+    "by_category": {
+      "E_INCONSIST": {
+        "name": "客户资料自相矛盾(发票、装箱单、箱唛对不上)",
+        "count": 132,
+        "loss": 61800,
+        "costed": 64
+      },
+      "E_CHANGE": {
+        "name": "客户改单后未同步(系统、报关行、仓库版本不一致)",
+        "count": 113,
+        "loss": 148500,
+        "costed": 92
+      },
+      "E_HS": {
+        "name": "HS 编码、品名归类、申报要素错误",
+        "count": 71,
+        "loss": 212000,
+        "costed": 61
+      },
+      "E_KEYIN": {
+        "name": "录入手误或看错(其中 21 件来自图片或扫描件)",
+        "count": 58,
+        "loss": 27400,
+        "costed": 33
+      },
+      "E_MISSING": {
+        "name": "资料缺失或迟交",
+        "count": 37,
+        "loss": 38600,
+        "costed": 29
+      },
+      "E_OTHER": {
+        "name": "其他(地址、仓代码、标签)",
+        "count": 17,
+        "loss": 9700,
+        "costed": 11
+      }
+    },
+    "keyin_image_source": 21,
+    "costed": 290,
+    "customs_inspections": 4
+  },
+  "loss": {
+    "total": 498000,
+    "lines": 454,
+    "by_fee_type": {
+      "改单费": 166450,
+      "查验费": 8600,
+      "滞港/仓储费": 145650,
+      "罚款": 4600,
+      "客户赔付": 135150,
+      "其他": 37550
+    }
+  },
+  "key_customer": {
+    "name": "拓浪科技",
+    "rows": 60,
+    "hs_rows": 19,
+    "hs_loss": 86000,
+    "inspections": 2
+  },
+  "handlers": {
+    "count": 14,
+    "new_hires": 5,
+    "volume_total": 19800,
+    "new_hire_volume": 6138,
+    "new_hire_exceptions": 146
+  },
+  "intake_week": {
+    "xlsx": 937,
+    "pdf": 318,
+    "image": 257
+  },
+  "shipments": {
+    "total": 60,
+    "clues": {
+      "LT2609-0387": "P7",
+      "LT2609-0412": "P4",
+      "LT2609-0446": "P5"
+    },
+    "x4_sample": 30,
+    "x4_issues": 7
+  },
+  "targets": {
+    "volume_q3": 19800,
+    "keyin_image": 21,
+    "new_hires": 5,
+    "new_hire_volume": 6138,
+    "new_hire_exceptions": 146,
+    "new_hire_volume_pct": 31,
+    "new_hire_exception_pct": 34,
+    "key_rows": 60,
+    "key_share_pct": 14,
+    "key_hs": 19,
+    "key_hs_loss": 86000,
+    "key_inspections": 2
+  },
+  "files_sha256": {
+    "customers.csv": "bb0fcc33ae710b30b3d0f3b92102d322e88e0fdf81b765f2dc9a7437e572e196",
+    "exceptions.csv": "deecdba347a416781a7d61ab347523e92ae0b3d2ef89e90b7127e47056f5b9b4",
+    "handler_volume.csv": "a48a142ab59ca6791163ab0a0392dd49c1f5c3c372722943f75026f798206cdb",
+    "intake_week.csv": "9b6b5715fee103a23bdc4dc4654a50c475c97b324c8209bd8e9134e3f2a0481f",
+    "loss.csv": "be2c2ed3ac91dc4452a1199d848b05734f8781599d724d82a4ca3a3385af180e",
+    "shipments.csv": "093794c70cd3da080353e553375911aacf97276b705607d96a7546f30883f53c"
+  }
+}

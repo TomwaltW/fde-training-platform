@@ -1,0 +1,55 @@
+# 线上模型配置:按环节(闸门、演员、裁判、复盘)选模型。换供应商只改这里。
+# 线上一律用国内已备案的模型(方案 2.3);上线后要在页脚公示模型名称和备案号。
+# 每次改模型都要全量跑回归评测:pnpm evals --live
+
+providers:
+  bailian:                       # 阿里云百炼(OpenAI 兼容模式)
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: DASHSCOPE_API_KEY
+  deepseek:
+    base_url: https://api.deepseek.com
+    api_key_env: DEEPSEEK_API_KEY
+
+stages:
+  # 闸门:小模型,非思考,温度 0,JSON 输出
+  gate:
+    provider: bailian
+    model: qwen3.7-flash
+    temperature: 0
+    max_tokens: 600
+    json: true
+    extra: {enable_thinking: false}
+  # 演员:中档模型,非思考,温度 0.7–0.9。上线前换成带日期的快照名,固定角色脾气
+  actor:
+    provider: bailian
+    model: qwen-plus
+    temperature: 0.8
+    max_tokens: 300
+    extra: {enable_thinking: false}
+  # 裁判:强模型,温度 0,每局 1 次;建议和演员不同厂商
+  judge:
+    provider: deepseek
+    model: deepseek-v4-pro
+    temperature: 0
+    max_tokens: 8000
+    json: true
+    timeout_ms: 120000
+  # 复盘撰写:中强模型,只润色
+  debrief:
+    provider: bailian
+    model: qwen3.7-plus
+    temperature: 0.5
+    max_tokens: 2000
+    extra: {enable_thinking: false}
+
+# 元/百万 token,[输入, 输出]。2026-10-05 标价(方案 2.3),以官网为准。
+# DeepSeek 按高峰价记;空闲时段约半价。
+prices:
+  qwen3.7-flash: [0.2, 0.8]
+  qwen-plus: [0.8, 2]
+  qwen3.5-plus: [0.8, 4.8]
+  qwen3.7-plus: [2, 8]
+  qwen3-max: [2.5, 10]
+  qwen3.7-max: [12, 36]
+  deepseek-flash: [2, 8]
+  deepseek-v4-pro: [9, 27]

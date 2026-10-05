@@ -1,0 +1,16 @@
+# 三轮后收工,不提交判断。验证:不交判断也能生成复盘;过早给方案扣分。
+id: EV_lazy
+persona: 三轮后收工
+steps:
+  - say: 您好,说说你们的问题吧。
+    gate: {tags: [open]}
+  - say: 好的,大概了解了。
+    gate: {acts: [smalltalk]}
+    check: {trap: TR1}
+  - say: 那我回去给你们出个方案。
+    gate: {acts: [propose_solution]}
+  - end: true
+
+expect:
+  D6_max: 8
+  cap: 只和周总说过话
