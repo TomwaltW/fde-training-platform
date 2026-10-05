@@ -1,0 +1,16 @@
+{
+  "sessions": [
+    {
+      "id": "s-fixture-0001",
+      "scenarioId": "freight-docs",
+      "title": "货代公司的「单据识别」",
+      "phase": "debrief",
+      "startedAt": "2026-10-05T08:00:00.000Z",
+      "endedAt": "2026-10-05T08:31:00.000Z",
+      "total": 22,
+      "userEmail": "player@example.com",
+      "turns": 3,
+      "costYuan": 0.31
+    }
+  ]
+}

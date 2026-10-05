@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "今天的 3 局已经用完了,明天再来"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "artifact": {
+    "id": "A1",
+    "title": "样本单据包(14 份)",
+    "opened": true,
+    "files": [
+      {
+        "name": "01_invoice_LT2609-0387.pdf",
+        "kind": "pdf",
+        "bytes": 48213
+      },
+      {
+        "name": "02_packing_LT2609-0387.jpg",
+        "kind": "image",
+        "bytes": 412877
+      },
+      {
+        "name": "03_import_template.xlsx",
+        "kind": "xlsx",
+        "bytes": 9120
+      }
+    ]
+  }
+}
