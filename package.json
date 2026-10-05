@@ -8,17 +8,24 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && pnpm --filter @fde/web typecheck",
     "validate": "tsx apps/cli/src/validate.ts",
     "play": "tsx apps/cli/src/play.ts",
     "evals": "tsx tools/evals/src/run.ts",
-    "check": "pnpm typecheck && pnpm test && pnpm validate && pnpm evals"
+    "check": "pnpm typecheck && pnpm test && pnpm validate && pnpm evals",
+    "dev:web": "pnpm --filter @fde/web dev",
+    "build:web": "pnpm --filter @fde/web build",
+    "test:e2e:mock": "pnpm --filter @fde/web test:e2e:mock",
+    "test:e2e:real": "pnpm --filter @fde/web test:e2e:real",
+    "calibrate": "tsx tools/evals/src/calibrate.ts",
+    "fixtures": "tsx packages/contracts/scripts/gen-fixtures.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "yaml": "^2.9.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
