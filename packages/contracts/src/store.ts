@@ -242,8 +242,11 @@ export interface SqlClient {
   exec?(sql: string): Promise<unknown>;
 }
 
-/** 兑换码的规范格式:去掉空格和短横线、转大写后每 4 位一组用 "-" 连接。两套实现与接口层共用。 */
+/**
+ * 兑换码的规范格式:先做 NFKC(全角字母数字转半角),转大写,去掉字母数字以外的一切(空格、各种横线、
+ * 零宽字符),再每 4 位一组用 "-" 连接。两套实现与接口层共用。
+ */
 export function normalizeRedeemCode(input: string): string {
-  const raw = input.toUpperCase().replace(/[\s-]/g, "");
+  const raw = input.normalize("NFKC").toUpperCase().replace(/[^A-Z0-9]/g, "");
   return raw.match(/.{1,4}/g)?.join("-") ?? "";
 }

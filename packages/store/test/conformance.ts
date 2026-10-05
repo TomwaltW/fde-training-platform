@@ -341,6 +341,10 @@ export function runStoreConformance(name: string, make: () => Promise<Store>) {
         const [c0, c1] = codes as [string, string];
         const messy = ` ${c0.toLowerCase().replace(/-/g, " ")} `;
         expect(normalizeRedeemCode(messy)).toBe(c0);
+        // 全角、各种横线、零宽空格也认
+        const fullWidth = c0.replace(/[A-Z0-9]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) + 0xfee0)).replace(/-/g, "–");
+        expect(normalizeRedeemCode(fullWidth)).toBe(c0);
+        expect(normalizeRedeemCode(c0.replace(/-/g, "\u200b—"))).toBe(c0);
         expect(await s.getRedeemCode(messy)).toMatchObject({ code: c0, productId: "sprint", note: "早鸟", redeemedBy: null, redeemedAt: null });
         expect(await s.getRedeemCode("NOPE-NOPE-NOPE")).toBeNull();
         expect(await s.redeemCode("NOPE-NOPE-NOPE", u.id, T(1))).toBeNull();

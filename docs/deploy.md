@@ -272,13 +272,18 @@ ssh -L 8443:127.0.0.1:443 <用户>@<ECS 公网 IP>
 ./infra/compose.sh exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
-**用户要求注销账号时**(隐私政策第五条;用户自己在 `/me` 只能删除对话,账号本身要人工删):
+**用户要求注销账号时**(隐私政策第五条;用户自己在 `/me` 只能删除对话,账号本身要人工删)。手机号注册的用户把 `email = '…'` 换成 `phone = '+8613800000000'`:
 
 ```bash
 ./infra/compose.sh exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' <<'SQL'
 begin;
-delete from login_codes where email = 'user@example.com';
--- 外键是 on delete cascade:对局、复盘、反馈、模型调用记录、登录态一并删除
+-- 验证码按"地址"存(邮箱或 +86 手机号);候补名单按邮箱存,没有外键,要单独删
+delete from login_codes where address in (select email from users where email = 'user@example.com' union select phone from users where email = 'user@example.com');
+delete from waitlist where email = 'user@example.com';
+-- 这个人的使用记录(登录、打开页面等;对局里的事件会随对局一起删)
+delete from events where user_id in (select id from users where email = 'user@example.com');
+-- 外键是 on delete cascade:对局、复盘、反馈、对局事件、登录态、开局记录一并删除;
+-- 模型调用记录只解除关联(保留花费),兑换码保留为"已使用"(兑换人置空)
 delete from users where email = 'user@example.com';
 commit;
 SQL
@@ -339,12 +344,15 @@ export $(grep -E '^OSS_(ACCESS_KEY_ID|ACCESS_KEY_SECRET|ENDPOINT|BUCKET)=' .env 
 ossutil cp "oss://$OSS_BUCKET/db/fde-20261105-031701.sql.gz" .data/backups/ -e "$OSS_ENDPOINT" --region cn-hangzhou
 
 ./infra/compose.sh stop app
+# 先清空整个 schema 再灌:备份只认识它自己那个版本的表,升级后新增的表(比如 events、waitlist)
+# 引用着 users,直接灌会卡在删表这一步,留下一半旧一半新的库
+./infra/compose.sh exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "drop schema public cascade; create schema public;"'
 gunzip -c .data/backups/fde-20261105-031701.sql.gz \
   | ./infra/compose.sh exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -q'
 ./infra/compose.sh start app
 ```
 
-备份是带 `--clean --if-exists` 的纯 SQL,可以直接灌回正在用的库(先删表再重建)。
+备份是纯 SQL(含建表和 `schema_migrations` 里已执行的迁移记录),恢复后 app 启动时只会补跑备份之后才有的迁移。
 
 **建议每月演练一次**,恢复到一个临时库,不影响线上:
 
@@ -382,8 +390,9 @@ docker tag fde-app:previous fde-app:latest
 git checkout "$(cat .data/previous-commit)"   # 让代码和正在跑的镜像一致;下次升级前先 git checkout main
 ```
 
-- 迁移脚本都是只增不删的(`create table if not exists`),旧版本一般能直接跑在新表结构上。
-- 如果新版本已经把数据改坏了,或者表结构不兼容,再按 8.3 节用升级前的备份恢复。
+- 先看这次升级有没有带新的迁移脚本:`git diff --name-only "$(cat .data/previous-commit)" HEAD -- infra/db/`(在回滚前的代码目录里执行)。
+- **没有新迁移**:直接回滚镜像就行,表结构没变。
+- **有新迁移**(比如第三轮的 `002_round3.sql` 把 `login_codes.email` 改名为 `address`、`users.email` 改成可空):旧版本的代码跑不了新表结构,登录会出错。回滚镜像后**必须**按 8.3 节用升级前的备份恢复整个库(升级后产生的数据会丢,所以升级前先确认新版本能用)。
 
 ### 9.3 更新 Caddy 和 PostgreSQL 镜像
 
