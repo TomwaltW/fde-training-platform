@@ -140,13 +140,15 @@ export function LoginClient() {
         setBusy(false);
       }
     } catch (err) {
-      setError(
-        isFailure(err, "code_invalid")
-          ? "验证码不对或已经过期"
-          : isFailure(err, "invite_invalid")
-            ? "邀请码已经用完了。请向发给你邀请码的人再要一个,填好后重新发送验证码。"
-            : failureMessage(err),
-      );
+      if (isFailure(err, "invite_invalid")) {
+        // 验证码已经用掉了:回到第一步,换一个邀请码后重新发验证码(地址保留)
+        setStep("address");
+        setInvite("");
+        setCode("");
+        setError("邀请码已经用完了。请向发给你邀请码的人再要一个,填在下面后重新发送验证码。");
+      } else {
+        setError(isFailure(err, "code_invalid") ? "验证码不对或已经过期" : failureMessage(err));
+      }
       setBusy(false);
     }
   }

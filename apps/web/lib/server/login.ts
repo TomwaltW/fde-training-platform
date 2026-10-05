@@ -6,7 +6,7 @@ import { devLoginCodes, isAdminEmail, smsConfig, smsDailyPerPhone, smsHourlyLimi
 import { HttpError } from "./http.ts";
 import { sendLoginCodeMail } from "./mail.ts";
 import { maskPhone } from "./phone.ts";
-import { LIMITS, allow, allowDistinct } from "./ratelimit.ts";
+import { LIMITS, allow, allowDistinct, wouldAllow } from "./ratelimit.ts";
 import { runtime } from "./runtime.ts";
 import { sendLoginSms } from "./sms.ts";
 import { getStore } from "./store.ts";
@@ -69,12 +69,16 @@ function beijingDate(now: number): string {
  */
 function takeSmsQuota(phone: string, now: number): void {
   // 键里带上日期:过了北京时间零点自动换一个桶
-  if (!allow("sms:phone-day", `${phone}|${beijingDate(now)}`, smsDailyPerPhone(), DAY_MS, now)) {
+  const dayKey = `${phone}|${beijingDate(now)}`;
+  // 两道额度先都只看不记,都没超才一起记:全站额度满了时不能白白扣掉这个号码当天的条数(没发出短信)
+  if (!wouldAllow("sms:phone-day", dayKey, smsDailyPerPhone(), DAY_MS, now)) {
     throw new HttpError("rate_limited", "这个手机号今天收验证码的次数用完了,明天再试,或者改用邮箱登录");
   }
-  if (!allow("sms:site-hour", "all", smsHourlyLimit(), HOUR_MS, now)) {
+  if (!wouldAllow("sms:site-hour", "all", smsHourlyLimit(), HOUR_MS, now)) {
     throw new HttpError("rate_limited", "短信验证码发送太频繁,请过一会儿再试,或者改用邮箱登录");
   }
+  allow("sms:phone-day", dayKey, smsDailyPerPhone(), DAY_MS, now);
+  allow("sms:site-hour", "all", smsHourlyLimit(), HOUR_MS, now);
 }
 
 const INVITE_INVALID = "邀请码无效或已用完";

@@ -70,6 +70,12 @@ export function allowDistinct(bucket: string, key: string, member: string, limit
   return true;
 }
 
+/** 只看不记:windowMs 内再来一次会不会超过 limit。几道额度要一起判断时,先都看一遍再一起记(见 login.ts 的短信额度)。 */
+export function wouldAllow(bucket: string, key: string, limit: number, windowMs: number, now = Date.now()): boolean {
+  const ts = runtime().rateLimits?.get(`${bucket}\u0000${key}`) ?? [];
+  return ts.filter((t) => now - t < windowMs).length < limit;
+}
+
 /** 测试用:清空全部计数(resetForTests 也会清)。 */
 export function resetRateLimitsForTests(): void {
   runtime().rateLimits = undefined;

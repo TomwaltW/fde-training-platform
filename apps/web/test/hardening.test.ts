@@ -11,7 +11,7 @@ import * as verify from "../app/api/auth/verify/route.ts";
 import { HttpError, MAX_BODY_BYTES, cleanStrings, readJson } from "../lib/server/http.ts";
 import { LIMITS, allow, clientIp } from "../lib/server/ratelimit.ts";
 import { authSecret, devLoginCodes } from "../lib/server/env.ts";
-import { resetForTests } from "../lib/server/runtime.ts";
+import { resetForTests, runtime } from "../lib/server/runtime.ts";
 import { inviteFromWaitlist } from "../lib/server/waitlist.ts";
 import { getStore } from "../lib/server/store.ts";
 import { safeNext } from "../lib/client/api.ts";
@@ -86,7 +86,7 @@ describe("readJson:请求体上限与清洗", () => {
 // ---------------------------------------------------------------- 登录相关
 
 const env = process.env as Record<string, string | undefined>;
-const KEYS = ["NODE_ENV", "FDE_DEV_LOGIN_CODES", "FDE_DEV_LOGIN_CODES_IN_PRODUCTION", "FDE_AUTH_SECRET", "FDE_ROOT", "FDE_MEMORY_STORE_FILE", "ADMIN_EMAILS", "DATABASE_URL"];
+const KEYS = ["NODE_ENV", "FDE_DEV_LOGIN_CODES", "FDE_DEV_LOGIN_CODES_IN_PRODUCTION", "FDE_AUTH_SECRET", "FDE_ROOT", "FDE_MEMORY_STORE_FILE", "ADMIN_EMAILS", "DATABASE_URL", "FDE_DEV_SMS_LOGIN", "SMS_HOURLY_LIMIT", "SMS_DAILY_PER_PHONE"];
 let saved: Record<string, string | undefined> = {};
 beforeEach(async () => {
   saved = Object.fromEntries(KEYS.map((k) => [k, env[k]]));
@@ -199,5 +199,29 @@ describe("评审第三轮:邀请码在验证前不消耗之后的防滥用", () 
     expect(all.map((x) => x.email).sort()).toEqual(["c1@example.com", "c2@example.com"]);
     const rows = await store.listWaitlist();
     for (const x of all) expect(rows.find((r) => r.email === x.email)?.inviteCode).toBe(x.inviteCode);
+  });
+});
+
+describe("评审第三轮:手机号登录", () => {
+  const post = (handler: (req: Request) => Promise<Response>, body: unknown) =>
+    handler(new Request("http://x/api", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.77" } }));
+
+  it("全站每小时额度满了时,不扣这个号码当天的条数", async () => {
+    Object.assign(env, { FDE_DEV_SMS_LOGIN: "1", SMS_HOURLY_LIMIT: "1", SMS_DAILY_PER_PHONE: "2" });
+    const [code] = await (await getStore()).createInvites(1, 10);
+    expect((await post(requestCode.POST, { phone: "13800000001", inviteCode: code })).status).toBe(200); // 用掉全站这一小时的 1 条
+    for (let i = 0; i < 3; i++) {
+      runtime().codeRequests.clear(); // 跳过同一号码 60 秒一次的限制
+      expect((await post(requestCode.POST, { phone: "13800000002", inviteCode: code })).status).toBe(429);
+    }
+    env.SMS_HOURLY_LIMIT = "100";
+    runtime().codeRequests.clear();
+    expect((await post(requestCode.POST, { phone: "13800000002", inviteCode: code })).status).toBe(200);
+  });
+
+  it("校验时 email 字段也要是邮箱:手机号字符串不能走邮箱的路", async () => {
+    const r = await post(verify.POST, { email: "+8613800000003", code: "123456" });
+    expect(r.status).toBe(400);
+    expect(((await r.json()) as { error: { code: string } }).error.code).toBe("bad_request");
   });
 });

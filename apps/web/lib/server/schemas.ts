@@ -54,7 +54,8 @@ export const RequestCodeSchema = z
 
 export const VerifySchema = z
   .object({
-    email: z.string().trim().toLowerCase().min(3).max(254).optional(),
+    // 和 request-code 用同一套邮箱校验:否则 "+86…" 这种手机号字符串会被当成邮箱,绕过手机号登录的开关
+    email: emailField.optional(),
     phone: phoneField.optional(),
     code: z.string().trim().min(1).max(16),
     inviteCode: z.string().trim().toUpperCase().max(32).optional(),
