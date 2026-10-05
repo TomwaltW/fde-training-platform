@@ -34,3 +34,6 @@ tools/evals/out/
 .data/
 test-results/
 playwright-report/
+
+# workflow agent worktrees
+.claude/worktrees/
