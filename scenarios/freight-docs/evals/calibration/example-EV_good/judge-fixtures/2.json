@@ -1,0 +1,158 @@
+{
+  "claims": [
+    {
+      "text": "主因是单据不一致和改单未同步，不是识别",
+      "source": "J1"
+    },
+    {
+      "text": "按金额最贵的是 HS 与申报类",
+      "source": "J1"
+    }
+  ],
+  "T": [
+    {
+      "id": "T1",
+      "verdict": "hit",
+      "evidence": [
+        "J1",
+        "J2"
+      ],
+      "note": "引用了 X3 和来料统计",
+      "grade": "A"
+    },
+    {
+      "id": "T2",
+      "verdict": "hit",
+      "evidence": [
+        "J1",
+        "J2"
+      ],
+      "note": "引用了改单截图",
+      "grade": "A"
+    },
+    {
+      "id": "T3",
+      "verdict": "hit",
+      "evidence": [
+        "J1",
+        "J2"
+      ],
+      "note": "引用了费用汇总",
+      "grade": "A"
+    },
+    {
+      "id": "T4",
+      "verdict": "hit",
+      "evidence": [
+        "J1"
+      ],
+      "note": "刘姐和小林都提到",
+      "grade": "B"
+    },
+    {
+      "id": "T5",
+      "verdict": "hit",
+      "evidence": [
+        "J1"
+      ],
+      "note": "小林说的",
+      "grade": "C"
+    }
+  ],
+  "S": [
+    {
+      "id": "S1",
+      "mentioned_in_judgment": true,
+      "evidence": [
+        "J3"
+      ]
+    },
+    {
+      "id": "S2",
+      "mentioned_in_judgment": true,
+      "evidence": [
+        "J3"
+      ]
+    },
+    {
+      "id": "S3",
+      "mentioned_in_judgment": true,
+      "evidence": [
+        "J3"
+      ]
+    },
+    {
+      "id": "S4",
+      "mentioned_in_judgment": true,
+      "evidence": [
+        "J3"
+      ]
+    },
+    {
+      "id": "S5",
+      "mentioned_in_judgment": false,
+      "evidence": []
+    }
+  ],
+  "W": [
+    {
+      "id": "W1",
+      "met": true,
+      "evidence": [
+        "J4"
+      ]
+    },
+    {
+      "id": "W2",
+      "met": true,
+      "evidence": [
+        "J4"
+      ]
+    },
+    {
+      "id": "W3",
+      "met": true,
+      "evidence": [
+        "J4"
+      ]
+    },
+    {
+      "id": "W4",
+      "met": true,
+      "evidence": [
+        "J4"
+      ]
+    },
+    {
+      "id": "W5",
+      "met": true,
+      "evidence": [
+        "J4"
+      ]
+    }
+  ],
+  "key_moments": [
+    {
+      "turn": "U1",
+      "type": "good",
+      "what": "先问为什么是现在",
+      "knew": "只有开场白",
+      "did_not_know": "拓浪的压力"
+    },
+    {
+      "turn": "U3",
+      "type": "good",
+      "what": "被催日期时给了今天之内的下一步",
+      "knew": "大会诉求",
+      "did_not_know": "任何数据"
+    },
+    {
+      "turn": "U11",
+      "type": "good",
+      "what": "用日常来料统计检验样本的代表性",
+      "knew": "样本包",
+      "did_not_know": "来料格式分布"
+    }
+  ],
+  "npc_inconsistencies": []
+}
