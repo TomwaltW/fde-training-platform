@@ -112,7 +112,7 @@ export function LoginClient() {
       setCooldown(60);
       setStep("code");
     } catch (err) {
-      if (isFailure(err, "invite_invalid")) setError("邀请码无效或已经用完。第一次登录需要有效的邀请码。");
+      if (isFailure(err, "invite_invalid")) setError("邀请码无效或已经用完。第一次登录需要有效的邀请码(买了兑换码的话,填兑换码也行)。");
       else setError(failureMessage(err));
     } finally {
       setBusy(false);
@@ -244,7 +244,7 @@ export function LoginClient() {
               name="invite"
               autoComplete="off"
               autoCapitalize="characters"
-              placeholder="第一次登录需要;老用户不用填"
+              placeholder="第一次登录需要;买了兑换码的可以直接填兑换码"
               value={invite}
               onChange={(e) => setInvite(e.target.value)}
             />

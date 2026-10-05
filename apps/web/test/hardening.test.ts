@@ -15,6 +15,9 @@ import { resetForTests, runtime } from "../lib/server/runtime.ts";
 import { inviteFromWaitlist } from "../lib/server/waitlist.ts";
 import { getStore } from "../lib/server/store.ts";
 import { safeNext } from "../lib/client/api.ts";
+import { renderMarkdown } from "../lib/client/markdown.ts";
+import * as consentRoute from "../app/api/me/consent/route.ts";
+import * as redeemRoute from "../app/api/redeem/route.ts";
 
 describe("safeNext:只放行站内路径", () => {
   it.each([
@@ -223,5 +226,49 @@ describe("评审第三轮:手机号登录", () => {
     const r = await post(verify.POST, { email: "+8613800000003", code: "123456" });
     expect(r.status).toBe(400);
     expect(((await r.json()) as { error: { code: string } }).error.code).toBe("bad_request");
+  });
+});
+
+describe("评审第三轮:预售与兑换码", () => {
+  const req = (body: unknown, cookie?: string) =>
+    new Request("http://x/api", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.88", ...(cookie && { cookie }) } });
+  const cookieOf = (res: Response) => /^(fde_session=[^;]+)/.exec(res.headers.get("set-cookie") ?? "")?.[1];
+
+  it("在第三方平台买了兑换码、没有邀请码的人:第一次登录用兑换码代替邀请码,注册的同时兑换给他", async () => {
+    const store = await getStore();
+    const [code] = await store.createRedeemCodes("sprint", 1);
+    const r1 = await requestCode.POST(req({ email: "buyer@example.com", inviteCode: code }));
+    expect(r1.status).toBe(200);
+    const { devCode } = (await r1.json()) as { devCode: string };
+    const r2 = await verify.POST(req({ email: "buyer@example.com", code: devCode, inviteCode: code }));
+    expect(r2.status).toBe(200);
+    const user = (await store.getUserByEmail("buyer@example.com"))!;
+    expect((await store.getRedeemCode(code!))?.redeemedBy).toBe(user.id);
+    // 登录后跳回 /redeem?code=…:自己已经兑换过的码照样成功
+    const cookie = cookieOf(r2)!;
+    await consentRoute.POST(req({}, cookie));
+    const again = await redeemRoute.POST(req({ code }, cookie));
+    expect(again.status).toBe(200);
+    // 同一个码不能再给第二个人当邀请码
+    expect((await requestCode.POST(req({ email: "second@example.com", inviteCode: code }))).status).toBe(400);
+  });
+
+  it("兑换失败的限频:同时发一批错码也最多试 10 次", async () => {
+    const store = await getStore();
+    const [invite] = await store.createInvites(1, 1);
+    const r1 = await requestCode.POST(req({ email: "guesser@example.com", inviteCode: invite }));
+    const { devCode } = (await r1.json()) as { devCode: string };
+    const r2 = await verify.POST(req({ email: "guesser@example.com", code: devCode, inviteCode: invite }));
+    const cookie = cookieOf(r2)!;
+    await consentRoute.POST(req({}, cookie));
+    const all = await Promise.all(Array.from({ length: 30 }, (_, i) => redeemRoute.POST(req({ code: `ZZZZ-ZZZZ-${String(i).padStart(4, "Z")}` }, cookie))));
+    expect(all.filter((r) => r.status === 400)).toHaveLength(10);
+    expect(all.filter((r) => r.status === 429)).toHaveLength(20);
+  });
+
+  it("复盘与商品说明的 Markdown:\"/\\evil.com\" 不渲染成站内链接", () => {
+    const html = renderMarkdown("[看这里](/\\evil.com) [站内](/me)");
+    expect(html).not.toContain('href="/\\evil.com"');
+    expect(html).toContain('href="/me"');
   });
 });

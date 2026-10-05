@@ -194,7 +194,8 @@ describe("上架与未上架", () => {
       },
     ]);
     expect(r.body.freeScenarios).toEqual(["freight-docs"]);
-    expect(r.body.humanReviewHowTo).toBe("加微信预约");
+    // 预约方式只给兑换了含真人复盘商品的人,公开接口不给
+    expect(r.body.humanReviewHowTo).toBeNull();
     expect((await c.get<SiteInfo>(site.GET)).body.presaleOpen).toBe(true);
   });
 

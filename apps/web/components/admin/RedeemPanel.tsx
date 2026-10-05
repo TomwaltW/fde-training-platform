@@ -2,7 +2,7 @@
 // 管理页:兑换码(第三轮 F3)。管理页底部的一个可折叠区块,展开后才请求数据(不展开不发任何请求)。
 // 生成:选商品(未上架的也能选,比如先发给企业试点)、数量、备注 → 一批兑换码,可以复制码或复制兑换链接;
 // 下面是按商品的汇总和全部兑换码的状态。
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { AdminRedeemCodesResponse } from "@fde/contracts";
 import { api, failureMessage } from "@/lib/client/api";
 import { cx, formatDateTime } from "@/lib/client/format";
@@ -49,11 +49,12 @@ function RedeemBody() {
   const codes = batch?.codes ?? null;
   const [copied, setCopied] = useState<"codes" | "links" | null>(null);
 
+  /** 生成之后刷新列表;刷新失败只在表单下面提示,不把刚生成的那批码盖掉。 */
   async function reload() {
     try {
       setData(await api.adminRedeemCodes());
     } catch (e) {
-      setError(failureMessage(e));
+      setFormError(`兑换码已经生成,但刷新列表失败:${failureMessage(e)}`);
     }
   }
 
@@ -72,12 +73,15 @@ function RedeemBody() {
     };
   }, []);
 
-  // 默认选第一个上架的商品,没有就选第一个
+  // 默认选第一个上架的商品,没有就选配置里的第一个;上架信息晚到时再选一次(管理员自己选过就不动)
+  const touched = useRef(false);
+  const choices = data?.byProduct.filter((p) => p.configured) ?? [];
   useEffect(() => {
-    if (!data || productId) return;
-    const first = data.byProduct.find((p) => onSale?.has(p.productId)) ?? data.byProduct[0];
+    if (!data || touched.current) return;
+    const configured = data.byProduct.filter((p) => p.configured);
+    const first = configured.find((p) => onSale?.has(p.productId)) ?? configured[0];
     if (first) setProductId(first.productId);
-  }, [data, onSale, productId]);
+  }, [data, onSale]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -135,8 +139,16 @@ function RedeemBody() {
             <>
               <label className={field.label}>
                 商品
-                <select className={field.input} value={productId} onChange={(e) => setProductId(e.target.value)}>
-                  {data.byProduct.map((p) => (
+                <select
+                  className={field.input}
+                  value={productId}
+                  onChange={(e) => {
+                    touched.current = true;
+                    setProductId(e.target.value);
+                  }}
+                >
+                  {/* 配置里已经删掉的商品不能再生成,只在下面的汇总里出现 */}
+                  {choices.map((p) => (
                     <option key={p.productId} value={p.productId}>
                       {label(p.productId, p.productName)}
                     </option>

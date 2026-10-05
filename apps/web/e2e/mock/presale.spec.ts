@@ -97,7 +97,8 @@ test("兑换页:没登录先去登录(带着兑换码回来)", async ({ page }) 
   const mock = new MockApi({ auth: "anon" });
   await mock.install(page);
   await page.goto("/redeem?code=abcd-efgh-jklm");
-  await expect(page).toHaveURL(/\/login\?next=%2Fredeem%3Fcode%3Dabcd-efgh-jklm$/);
+  // 还没有账号的买家:登录页的邀请码一栏预填兑换码
+  await expect(page).toHaveURL(/\/login\?next=%2Fredeem%3Fcode%3Dabcd-efgh-jklm&invite=abcd-efgh-jklm$/);
   expect(mock.callsTo("POST", /^\/api\/redeem$/)).toHaveLength(0);
 
   // 登录了但还没同意协议:同样先去登录页(登录页接着做同意那一步)
@@ -184,7 +185,17 @@ test("管理页:兑换码展开才请求;列表与状态;生成兑换码(可选�
   await page.route("**/api/admin/redeem-codes*", (route) => {
     if (route.request().method() !== "GET") return route.fallback();
     listRequests += 1;
-    return route.fulfill({ json: { ...codes, byProduct: [...codes.byProduct, { productId: "scenario-pack", productName: "场景包", created: 0, redeemed: 0 }] } });
+    return route.fulfill({
+      json: {
+        ...codes,
+        byProduct: [
+          ...codes.byProduct,
+          { productId: "scenario-pack", productName: "场景包", created: 0, redeemed: 0, configured: true },
+          // 配置里已经删掉、库里还有码的商品:汇总里有,生成的下拉框里没有
+          { productId: "legacy", productName: "legacy", created: 1, redeemed: 1, configured: false },
+        ],
+      },
+    });
   });
   await page.goto("/admin");
   await expect(page.getByTestId("score-histogram")).toBeVisible();

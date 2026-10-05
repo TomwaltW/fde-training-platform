@@ -35,14 +35,15 @@ export async function GET(req: Request) {
     // 汇总要看全部兑换码;列表再按商品筛、按 limit 截
     const all = await store.listRedeemCodes();
     const stats = new Map<string, ProductStat>();
-    for (const p of productsConfig().products) stats.set(p.id, { productId: p.id, productName: p.name, created: 0, redeemed: 0 });
+    for (const p of productsConfig().products) stats.set(p.id, { productId: p.id, productName: p.name, created: 0, redeemed: 0, configured: true });
     // 库里有、配置里已经没有的商品排在后面(按 id),名称就用 id
     const unknown = [...new Set(all.map((c) => c.productId))].filter((id) => !stats.has(id)).sort();
-    for (const id of unknown) stats.set(id, { productId: id, productName: id, created: 0, redeemed: 0 });
+    for (const id of unknown) stats.set(id, { productId: id, productName: id, created: 0, redeemed: 0, configured: false });
     for (const c of all) {
       const s = stats.get(c.productId)!;
       s.created += 1;
-      if (c.redeemedBy) s.redeemed += 1;
+      // 看兑换时间而不是兑换人:兑换人的账号被删后 redeemed_by 置空,但码仍然算用过
+      if (c.redeemedAt) s.redeemed += 1;
     }
 
     const labels = new Map<string, string>();

@@ -94,7 +94,7 @@ test("smsLogin 开:手机号 / 邮箱两个入口,默认手机号;手机号登�
   await phone.fill("138-1234-5678");
   await page.getByLabel("邀请码").fill("WRONG");
   await page.getByRole("button", { name: "发送验证码" }).click();
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText("邀请码无效或已经用完。第一次登录需要有效的邀请码。");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("邀请码无效或已经用完。第一次登录需要有效的邀请码(买了兑换码的话,填兑换码也行)。");
 
   await page.getByLabel("邀请码").fill("FDE-INVITE");
   await page.getByRole("button", { name: "发送验证码" }).click();
@@ -155,7 +155,7 @@ test("smsLogin 开 + ?invite=&email=:停在邮箱入口并预填;切到手机号
 
   // 邮箱入口照常走邮箱的请求(这个邀请码 mock 不认)
   await page.getByRole("button", { name: "发送验证码" }).click();
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText("邀请码无效或已经用完。第一次登录需要有效的邀请码。");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("邀请码无效或已经用完。第一次登录需要有效的邀请码(买了兑换码的话,填兑换码也行)。");
   expect(mock.callsTo("POST", /^\/api\/auth\/request-code$/).at(-1)?.body).toEqual({ email: "first@example.com", inviteCode: "WAIT2222" });
   await expectCompliance(page);
   expect(mock.unhandled).toEqual([]);

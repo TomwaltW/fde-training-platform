@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import type { RequestCodeResponse, User } from "@fde/contracts";
 import { secretHash } from "./auth.ts";
 import { devLoginCodes, isAdminEmail, smsConfig, smsDailyPerPhone, smsHourlyLimit, smsLoginEnabled } from "./env.ts";
+import { recordEvent } from "./events.ts";
 import { HttpError } from "./http.ts";
 import { sendLoginCodeMail } from "./mail.ts";
 import { maskPhone } from "./phone.ts";
@@ -101,7 +102,9 @@ async function assertMayRequest(a: LoginAddress, inviteCode: string | null | und
   if (await findUser(a)) return;
   if (exemptFromInvite(a)) return;
   const store = await getStore();
-  if (!inviteCode || !(await store.inviteAvailable(inviteCode))) throw new HttpError("invite_invalid", INVITE_INVALID);
+  if (!inviteCode || !((await store.inviteAvailable(inviteCode)) || (await unusedRedeemCode(inviteCode)))) {
+    throw new HttpError("invite_invalid", INVITE_INVALID);
+  }
   // 邀请码在验证通过时才消耗;这之前同一个码每小时最多给几个新地址发验证码,免得被拿来批量发信
   const { limit, windowMs } = LIMITS.requestCodePerInvite;
   if (!allowDistinct("request-code:invite", inviteCode, addressKey(a), limit, windowMs)) {
@@ -117,17 +120,40 @@ async function findOrCreateVerifiedUser(a: LoginAddress, inviteCode: string | nu
   const existing = await findUser(a);
   if (existing) return existing;
   const store = await getStore();
+  /** 用兑换码代替邀请码注册时,建好用户后把这个码兑换给他。 */
+  let redeemAfter: string | null = null;
   if (!exemptFromInvite(a)) {
-    if (!inviteCode || !(await store.redeemInvite(inviteCode))) throw new HttpError("invite_invalid", "邀请码已经用完了,请向发给你邀请码的人再要一个");
+    if (!inviteCode) throw new HttpError("invite_invalid", INVITE_INVALID);
+    if (!(await store.redeemInvite(inviteCode))) {
+      if (!(await unusedRedeemCode(inviteCode))) throw new HttpError("invite_invalid", "邀请码已经用完了,请向发给你邀请码的人再要一个");
+      redeemAfter = inviteCode;
+    }
   }
+  let user: User;
   try {
-    return a.kind === "email" ? await store.createUser(a.email) : await store.createUserByPhone(a.phone);
+    user = a.kind === "email" ? await store.createUser(a.email) : await store.createUserByPhone(a.phone);
   } catch (e) {
     // 同一个新地址的并发请求:另一个请求已经建好了用户
     const again = await findUser(a);
     if (again) return again;
     throw e;
   }
+  if (redeemAfter) {
+    const row = await store.redeemCode(redeemAfter, user.id, new Date().toISOString());
+    if (row) await recordEvent({ type: "code_redeemed", userId: user.id, props: { productId: row.productId, atSignup: true } });
+    // 极少数情况:验证这几百毫秒里码被别人抢先兑换了。账号照样建好(他确实拿着一个有效的码来的),记一笔日志
+    else console.warn(`[auth] ${addressForLog(a)} 用兑换码注册时,这个码刚被别人兑换`);
+  }
+  return user;
+}
+
+/**
+ * 买了兑换码、还没有账号的人(方案 7.3:在第三方平台买码)没有邀请码:第一次登录时可以用一个还没兑换的兑换码
+ * 代替邀请码,注册成功的同时把这个码兑换给他。邀请码(8 位)和兑换码(12 位)长度不同,不会混。
+ */
+async function unusedRedeemCode(code: string): Promise<boolean> {
+  const r = await (await getStore()).getRedeemCode(code);
+  return r !== null && r.redeemedAt === null;
 }
 
 /** 把验证码发出去。返回是否真的发出(没配置 SMTP 时邮件不发)。手机号:配置了短信就发,没配置(只可能是开发模式)不发。 */

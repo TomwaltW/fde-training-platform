@@ -228,7 +228,7 @@ write("admin-redeem-codes.json", {
     { code: "ABCD-EFGH-JKLM", productId: "sprint", note: "早鸟第一批", createdAt: "2026-10-05T09:00:00.000Z", redeemedAt: "2026-10-05T09:10:00.000Z", redeemedBy: "player@example.com" },
     { code: "NPQR-STUV-WXYZ", productId: "sprint", note: "早鸟第一批", createdAt: "2026-10-05T09:00:00.000Z", redeemedAt: null, redeemedBy: null },
   ],
-  byProduct: [{ productId: "sprint", productName: "求职冲刺包", created: 2, redeemed: 1 }],
+  byProduct: [{ productId: "sprint", productName: "求职冲刺包", created: 2, redeemed: 1, configured: true }],
 } satisfies AdminRedeemCodesResponse);
 
 write("error-unauthorized.json", { error: { code: "unauthorized", message: "请先登录" } });

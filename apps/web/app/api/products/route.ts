@@ -12,7 +12,8 @@ export async function GET() {
     const body: ProductsResponse = {
       products: config.products.filter((p) => p.available),
       freeScenarios: freeScenarioIds(),
-      humanReviewHowTo: config.humanReviewHowTo,
+      // 真人复盘的预约方式只给兑换了含真人复盘商品的人(见 /api/me/entitlements),公开接口不给
+      humanReviewHowTo: null,
     };
     return json(body);
   });

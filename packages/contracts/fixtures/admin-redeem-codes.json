@@ -22,7 +22,8 @@
       "productId": "sprint",
       "productName": "求职冲刺包",
       "created": 2,
-      "redeemed": 1
+      "redeemed": 1,
+      "configured": true
     }
   ]
 }

@@ -18,6 +18,12 @@ function redeemHref(code: string): string {
   return c ? `/redeem?code=${encodeURIComponent(c)}` : "/redeem";
 }
 
+/** 去登录:还没有账号的买家没有邀请码,登录页的邀请码一栏预填这个兑换码(第一次登录可以用兑换码代替邀请码)。 */
+function loginForRedeem(code: string): string {
+  const c = code.trim();
+  return c ? `${loginHref(redeemHref(c))}&invite=${encodeURIComponent(c)}` : loginHref(redeemHref(c));
+}
+
 export function RedeemClient() {
   const router = useRouter();
   const params = useSearchParams();
@@ -30,7 +36,7 @@ export function RedeemClient() {
 
   const needsLogin = me.status === "anon" || (me.status === "ok" && !me.user.consentAt);
   useEffect(() => {
-    if (needsLogin) router.replace(loginHref(redeemHref(prefill)));
+    if (needsLogin) router.replace(loginForRedeem(prefill));
   }, [needsLogin, prefill, router]);
 
   const titles = useScenarioTitles(done ? listsScenarios([done.entitlement]) : false);
@@ -48,7 +54,7 @@ export function RedeemClient() {
       setDone(await api.redeem({ code: c }));
     } catch (err) {
       if (isFailure(err, "unauthorized", "consent_required")) {
-        router.replace(loginHref(redeemHref(c)));
+        router.replace(loginForRedeem(c));
         return;
       }
       setError(failureMessage(err));

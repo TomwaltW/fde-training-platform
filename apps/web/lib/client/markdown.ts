@@ -16,7 +16,8 @@ function unescapeSource(s: string): string {
   return s.replace(/&lt;/g, "<").replace(/&amp;/g, "&");
 }
 
-const SAFE_HREF = /^(https?:\/\/|mailto:|\/(?!\/)|#)/i;
+// 站内链接只认 "/" 后面不是 "/" 也不是 "\\" 的:浏览器把 "/\\evil.com" 当成 "//evil.com"
+const SAFE_HREF = /^(https?:\/\/|mailto:|\/(?![\/\\])|#)/i;
 
 const md = new Marked({
   gfm: true,

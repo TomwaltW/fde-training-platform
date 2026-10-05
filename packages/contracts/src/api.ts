@@ -437,7 +437,7 @@ export interface Product {
   available: boolean;
 }
 
-/** GET /api/products —— 不需要登录。只返回 available 的商品。 */
+/** GET /api/products —— 不需要登录。只返回 available 的商品;humanReviewHowTo 在这里永远是 null(预约方式只给兑换了的人,见 /api/me/entitlements)。 */
 export interface ProductsResponse {
   products: Product[];
   /** 免费场景的 id。 */
@@ -469,7 +469,8 @@ export interface EntitlementsResponse {
 
 /**
  * POST /api/redeem —— 需要登录且已同意协议。兑换码不区分大小写,空格和短横线忽略。
- * 无效或已被使用 400 redeem_invalid;同一用户 1 小时内失败 10 次后 429 rate_limited。
+ * 无效或已被别人使用 400 redeem_invalid;同一用户 1 小时内失败 10 次后 429 rate_limited。
+ * 已经被自己兑换过的码(比如注册时用它代替了邀请码):照样 200,返回那条权益。
  */
 export interface RedeemBody {
   code: string;
@@ -501,5 +502,6 @@ export interface RedeemCodeRow {
 /** GET /api/admin/redeem-codes?productId=&limit= —— 新的在前。 */
 export interface AdminRedeemCodesResponse {
   rows: RedeemCodeRow[];
-  byProduct: { productId: string; productName: string; created: number; redeemed: number }[];
+  /** configured:还在 config/products.yaml 里(不在的只是库里有历史兑换码,不能再生成)。 */
+  byProduct: { productId: string; productName: string; created: number; redeemed: number; configured: boolean }[];
 }

@@ -123,10 +123,11 @@ test("候补名单 → 管理员发邀请码 → 凭邀请码注册 → 看板�
   await expect(done.getByTestId("redeem-daily-limit")).toHaveText("现在每天最多能开 25 局。");
   await page.goto("/me");
   await expect(page.getByTestId("entitlements").getByTestId("entitlement-list")).toContainText("求职冲刺包");
-  // 同一个码不能再兑一次
-  const again = await page.request.post("/api/redeem", { data: { code: redeemCode } });
-  expect(again.status()).toBe(400);
-  expect(((await again.json()) as { error: { message: string } }).error.message).toContain("已经被使用");
+  // 自己再兑一次照样成功(登录时用兑换码代替邀请码的人会走到这里);别人不能再兑
+  expect((await page.request.post("/api/redeem", { data: { code: redeemCode } })).status()).toBe(200);
+  const stolen = await admin.request.post("/api/redeem", { data: { code: redeemCode } });
+  expect(stolen.status()).toBe(400);
+  expect(((await stolen.json()) as { error: { message: string } }).error.message).toContain("已经被使用");
   // 管理页里这个码显示已兑换
   await expect(redeemPanel.getByTestId("redeem-codes").getByRole("row", { name: new RegExp(redeemCode) })).toBeVisible();
 

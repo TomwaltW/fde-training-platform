@@ -175,10 +175,10 @@ describe("管理员生成与查看兑换码", () => {
     const r = await admin.get<AdminRedeemCodesResponse>(adminRedeemCodes.GET, { path: "/api/admin/redeem-codes" });
     expect(r.status).toBe(200);
     expect(r.body.byProduct).toEqual([
-      { productId: "pack", productName: "场景包", created: 0, redeemed: 0 },
-      { productId: "sprint", productName: "求职冲刺包", created: 2, redeemed: 1 },
-      { productId: "empty", productName: "什么都不含", created: 0, redeemed: 0 },
-      { productId: "legacy", productName: "legacy", created: 1, redeemed: 0 },
+      { productId: "pack", productName: "场景包", created: 0, redeemed: 0, configured: true },
+      { productId: "sprint", productName: "求职冲刺包", created: 2, redeemed: 1, configured: true },
+      { productId: "empty", productName: "什么都不含", created: 0, redeemed: 0, configured: true },
+      { productId: "legacy", productName: "legacy", created: 1, redeemed: 0, configured: false },
     ]);
     expect(r.body.rows).toHaveLength(3);
     const times = r.body.rows.map((x) => x.createdAt);
@@ -233,7 +233,7 @@ describe("兑换", () => {
     expect(events[0]).toMatchObject({ userId: me!.id, props: { productId: "sprint" } });
   });
 
-  it("两种失败:兑换码不存在;已被使用(自己再兑一次、别人来兑都一样)", async () => {
+  it("两种失败:兑换码不存在;已被别人使用。自己再兑一次照样给出那条权益(注册时可能已经用它代替邀请码兑换过)", async () => {
     const admin = await loginAdmin();
     const user = await loginUser(admin, "player@example.com");
     const other = await loginUser(admin, "other@example.com");
@@ -245,12 +245,13 @@ describe("兑换", () => {
     expect(message(missing)).toBe("兑换码不存在");
 
     expect((await user.post(redeem.POST, { body: { code } })).status).toBe(200);
-    for (const c of [user, other]) {
-      const again = await c.post(redeem.POST, { body: { code } });
-      expect(again.status).toBe(400);
-      expect(errorCode(again)).toBe("redeem_invalid");
-      expect(message(again)).toBe("这个兑换码已经被使用");
-    }
+    const mine = await user.post<RedeemResponse>(redeem.POST, { body: { code } });
+    expect(mine.status).toBe(200);
+    expect(mine.body.entitlement.code).toBe(code);
+    const again = await other.post(redeem.POST, { body: { code } });
+    expect(again.status).toBe(400);
+    expect(errorCode(again)).toBe("redeem_invalid");
+    expect(message(again)).toBe("这个兑换码已经被使用");
     // 失败不记事件,别人的权益不受影响
     expect(await (await getStore()).listEvents({ types: ["code_redeemed"] })).toHaveLength(1);
     expect((await other.get<EntitlementsResponse>(entitlements.GET)).body.entitlements).toEqual([]);
@@ -355,11 +356,11 @@ describe("付费场景开局", () => {
     expect(ok.body.sessionId).toBeTruthy();
   });
 
-  it("只列了这个场景的商品(未上架)也能解锁;没有上架商品时提示里列未上架的那个", async () => {
+  it("只列了这个场景的商品(未上架)也能解锁;没有上架商品时提示不点名(未上架的可能是企业试点的定制商品)", async () => {
     useConfig(CONFIG.replace("available: true", "available: false"));
     const admin = await loginAdmin();
     const user = await loginUser(admin, "player@example.com");
-    expect(message(await start(user))).toBe("这个场景需要兑换「场景包」后才能玩");
+    expect(message(await start(user))).toBe("这个场景需要兑换相应的商品后才能玩");
     const [code] = await makeCodes(admin, "pack", 1);
     await user.post(redeem.POST, { body: { code } });
     expect((await start(user)).status).toBe(201);

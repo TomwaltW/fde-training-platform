@@ -10,7 +10,7 @@ test("登录:邀请码无效、验证码错误有提示;老用户不填邀请码
   await page.getByLabel("邮箱").fill("player@example.com");
   await page.getByLabel("邀请码").fill("WRONG");
   await page.getByRole("button", { name: "发送验证码" }).click();
-  await expect(page.getByRole("main").getByRole("alert")).toHaveText("邀请码无效或已经用完。第一次登录需要有效的邀请码。");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("邀请码无效或已经用完。第一次登录需要有效的邀请码(买了兑换码的话,填兑换码也行)。");
 
   // 老用户:不填邀请码,请求体里不带 inviteCode
   await page.getByLabel("邀请码").fill("");

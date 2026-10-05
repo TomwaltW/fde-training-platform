@@ -64,9 +64,9 @@ export function canPlay(ent: EntitlementsResponse, scenarioId: string): boolean 
   return ent.scenarios === "all" || ent.scenarios.includes(scenarioId);
 }
 
-/** 付费场景没有权益时的提示:列出第一个上架的、包含这个场景的商品(没有上架的就列第一个)。 */
+/** 付费场景没有权益时的提示:列出第一个上架的、包含这个场景的商品;没有上架的就不点名(未上架的可能是企业试点的定制商品)。 */
 export function entitlementRequiredMessage(scenarioId: string): string {
-  const product = productsIncluding(scenarioId)[0];
+  const product = productsIncluding(scenarioId).find((p) => p.available);
   return product ? `这个场景需要兑换「${product.name}」后才能玩` : "这个场景需要兑换相应的商品后才能玩";
 }
 
@@ -98,4 +98,21 @@ export function noteRedeemFailure(userId: string, now = Date.now()): void {
   const recent = failureTimes(userId, now);
   recent.push(now);
   runtime().rateLimits!.set(`redeem-failures\u0000${userId}`, recent);
+}
+
+/**
+ * 兑换前先同步占一次"失败"名额(超了返回 null),成功后再用 releaseRedeemAttempt 退掉:
+ * 并发的一批猜测在第一个失败被记下之前就都过了检查,先占后退才挡得住。
+ */
+export function reserveRedeemAttempt(userId: string, now = Date.now()): number | null {
+  if (redeemBlocked(userId, now)) return null;
+  noteRedeemFailure(userId, now);
+  return now;
+}
+
+export function releaseRedeemAttempt(userId: string, stamp: number): void {
+  const id = `redeem-failures\u0000${userId}`;
+  const ts = runtime().rateLimits?.get(id);
+  const i = ts?.indexOf(stamp) ?? -1;
+  if (ts && i >= 0) ts.splice(i, 1);
 }
