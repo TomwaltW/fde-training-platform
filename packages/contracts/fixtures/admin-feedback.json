@@ -1,0 +1,15 @@
+{
+  "feedback": [
+    {
+      "sessionId": "s-fixture-0001",
+      "userEmail": "player@example.com",
+      "rating": 8,
+      "text": "周总记账那段很真实",
+      "dispute": {
+        "dimension": "D3",
+        "reason": "我问了很多量化问题"
+      },
+      "createdAt": "2026-10-05T08:35:00.000Z"
+    }
+  ]
+}

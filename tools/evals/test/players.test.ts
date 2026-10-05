@@ -7,6 +7,7 @@ import {
   buildGatePrompt,
   createSession,
   gateCatalog,
+  publicView,
   levelRank,
   loadScenario,
   type ActorInput,
@@ -46,6 +47,18 @@ describe("scripted players (offline)", () => {
       expect(run.crashed).toBeUndefined();
       const all = [...run.checks, ...checkExpectations(run, { ...(p.expect ?? {}), ...(specs.get(p.id) ?? {}) })];
       expect(all.filter((c) => !c.ok)).toEqual([]);
+
+      // 不变量 3:给浏览器的视图(对话记录以外的部分)不含任何事实原文、印象、金丝雀词、压力时刻文字、授权名
+      const view = publicView(scn, run.state!);
+      const { transcript: _t, ...rest } = view;
+      const blob = JSON.stringify(rest);
+      for (const f of scn.data.facts) {
+        expect(blob.includes(f.statement), `view 含 ${f.id} 原文`).toBe(false);
+        for (const u of f.unlock) if ("say" in u && u.say) expect(blob.includes(u.say), `view 含 ${f.id} say`).toBe(false);
+      }
+      for (const tr of scn.data.traps) expect(blob.includes(tr.beat), `view 含 ${tr.id} beat`).toBe(false);
+      for (const flag of Object.keys(scn.data.flags)) expect(blob.includes(flag), `view 含 flag ${flag}`).toBe(false);
+      expect(blob).not.toMatch(/"trust"|"ledger"|"directive"|"guardFlags"|"facts"/);
 
       // 不变量 1:演员提示词里出现某条事实的原文(statement)或印象(say),那这个角色必须已经说到那一级
       for (const call of spy.calls) {
