@@ -18,7 +18,9 @@
     "test:e2e:mock": "pnpm --filter @fde/web test:e2e:mock",
     "test:e2e:real": "pnpm --filter @fde/web test:e2e:real",
     "calibrate": "tsx tools/evals/src/calibrate.ts",
-    "fixtures": "tsx packages/contracts/scripts/gen-fixtures.ts"
+    "fixtures": "tsx packages/contracts/scripts/gen-fixtures.ts",
+    "ci:fixtures": "pnpm fixtures && git diff --exit-code packages/contracts/fixtures && ! git status --porcelain packages/contracts/fixtures | grep .",
+    "ci:local": "pnpm typecheck && pnpm test && pnpm validate && pnpm evals && pnpm calibrate --mock && pnpm ci:fixtures"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
