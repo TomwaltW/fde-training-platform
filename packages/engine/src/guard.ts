@@ -3,9 +3,9 @@
 //   - 金丝雀词:未解锁事实的特征词,不在演员上下文或用户原话里却出现了,就是泄露或编造
 //   - 出戏词:模拟、提示词、评分……
 //   - 附和词:对对对、你说得对……(态度为 cooperative 时放行)
-import { extractNumbers, numberSet, round } from "./numbers.ts";
+import { extractNumbers, foldWidth, numberSet, round } from "./numbers.ts";
 import type { LoadedScenario } from "./scenario/load.ts";
-import type { SessionState, Stance } from "./types.ts";
+import type { Directive, SessionState, Stance } from "./types.ts";
 
 export interface GuardFlag {
   type: "number" | "canary" | "ooc" | "sycophancy" | "length" | "empty";
@@ -17,6 +17,8 @@ export interface GuardContext {
   actorContext: string[];
   /** 用户说过的全部话。 */
   userTexts: string[];
+  /** 用户已经看到过的文字(角色台词、旁白、资料标题)。只用于金丝雀词:用户见过的词不算泄露。 */
+  seenTexts?: string[];
   ledgerTexts: string[];
   /** 尚未被用户获得的事实的金丝雀词。 */
   canaries: string[];
@@ -28,7 +30,19 @@ const OOC_WORDS = [
   "语言模型", "大模型", "AI助手", "AI 助手", "人工智能助手", "作为AI", "作为一个AI", "我是AI", "玩家", "NPC", "游戏",
 ];
 
+// 附和式开头:只看每个分句的开头(先去掉括号里的动作),后面紧跟"不/吗/么"的不算("你说的对不上")
 const SYCOPHANCY = ["对对对", "你说得对", "你说的对", "您说得对", "您说的对", "说得太对了", "你们专业", "您真专业", "完全同意", "太对了"];
+
+function sycophancyHits(text: string): string[] {
+  const hits: string[] = [];
+  for (const raw of text.split(/[。!?;…,，\n]/)) {
+    const clause = raw.replace(/^\s*(?:\([^)]*\)\s*)*/, "").trim();
+    for (const w of SYCOPHANCY) {
+      if (clause.startsWith(w) && !/^[不吗么]/.test(clause.slice(w.length))) hits.push(w);
+    }
+  }
+  return hits;
+}
 
 const MAX_CHARS = 200;
 
@@ -41,23 +55,23 @@ function exempt(n: ReturnType<typeof extractNumbers>[number]): boolean {
 
 export function checkReply(reply: string, ctx: GuardContext): GuardFlag[] {
   const flags: GuardFlag[] = [];
-  const text = reply.trim();
+  const text = foldWidth(reply.trim());
   if (!text) return [{ type: "empty", detail: "空回复" }];
   if ([...text].length > MAX_CHARS) flags.push({ type: "length", detail: `${[...text].length} 字` });
 
-  const allowedText = [...ctx.actorContext, ...ctx.userTexts, ...ctx.ledgerTexts];
+  const allowedText = [...ctx.actorContext, ...ctx.userTexts, ...ctx.ledgerTexts].map(foldWidth);
   const allowed = numberSet(allowedText);
   for (const n of extractNumbers(text)) {
     if (exempt(n)) continue;
     if (!allowed.has(round(n.value))) flags.push({ type: "number", detail: n.raw });
   }
 
-  const corpus = allowedText.join("\n");
+  const corpus = [...allowedText, ...(ctx.seenTexts ?? []).map(foldWidth)].join("\n");
   for (const w of ctx.canaries) {
     if (text.includes(w) && !corpus.includes(w)) flags.push({ type: "canary", detail: w });
   }
 
-  const userCorpus = ctx.userTexts.join("\n");
+  const userCorpus = ctx.userTexts.map(foldWidth).join("\n");
   for (const w of OOC_WORDS) {
     // 用户先说了"评分"之类,角色复述一下不算出戏;但"提示词""语言模型"永远拦
     const always = ["提示词", "系统提示", "语言模型", "AI助手", "AI 助手", "人工智能助手", "作为AI", "作为一个AI", "我是AI", "NPC"];
@@ -67,26 +81,30 @@ export function checkReply(reply: string, ctx: GuardContext): GuardFlag[] {
   }
 
   if (ctx.stance !== "cooperative") {
-    for (const w of SYCOPHANCY) if (text.includes(w)) flags.push({ type: "sycophancy", detail: w });
+    for (const w of sycophancyHits(text)) flags.push({ type: "sycophancy", detail: w });
   }
   return flags;
 }
 
-/** 尚未被用户获得的事实的金丝雀词(显式登记的)。 */
+/** 用户还没拿到具体情况(L2 及以上)的事实的金丝雀词。L1 只是印象,不含这些词,不能因此解除保护。 */
 export function activeCanaries(scn: LoadedScenario, st: SessionState): string[] {
   const out: string[] = [];
   for (const f of scn.data.facts) {
-    if (st.facts[f.id]) continue;
+    const lv = st.facts[f.id]?.level;
+    if (lv && lv !== "L1") continue;
     for (const w of f.canaries ?? []) out.push(w);
   }
   return out;
 }
 
-/** 守卫两次重试仍不通过时的兜底台词。不含任何事实,只按指令给一句安全的话。 */
-export function fallbackLine(scn: LoadedScenario, roleId: string, opts: { redirectTo?: string; stance: Stance }): string {
-  const to = opts.redirectTo ? scn.roles.get(opts.redirectTo)?.name : undefined;
+/** 守卫重试仍不通过(或模型出错)时的兜底台词。不含未披露的事实;必须说出的 beat 不丢。 */
+export function fallbackLine(scn: LoadedScenario, roleId: string, d: Pick<Directive, "stance" | "redirectTo" | "beat" | "fallback">): string {
+  if (d.fallback) return d.fallback;
+  const to = d.redirectTo && d.redirectTo !== roleId ? scn.roles.get(d.redirectTo)?.name : undefined;
   if (to) return `这个你得去问${to}。`;
-  switch (opts.stance) {
+  if (d.beat) return `(${d.beat})`;
+  const stance: Stance = d.stance;
+  switch (stance) {
     case "guarded":
       return "(打量了你一眼)你先说说,你来是想干什么的?";
     case "impatient":

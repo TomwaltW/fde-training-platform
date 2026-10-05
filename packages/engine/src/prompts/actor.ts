@@ -81,7 +81,8 @@ export function buildActorPrompt(
 
   const ledger = st.ledger
     .filter((e) => e.type !== "solution")
-    .map((e) => add(`- 第 ${e.turn} 轮:${e.valueText}${e.retractedTurn ? `(第 ${e.retractedTurn} 轮对方说要收回)` : ""}`));
+    // 只展示,不进守卫白名单:轮次号不是可以说的数字;承诺的值由引擎另行放行
+    .map((e) => `- 第 ${e.turn} 轮:${e.valueText}${e.retractedTurn ? `(第 ${e.retractedTurn} 轮对方说要收回)` : ""}`);
 
   const reveal = newReveals.length
     ? newReveals.map((r) => add(`- ${r.text}(${LEVEL_TEXT[r.level]})`)).join("\n")
@@ -89,7 +90,7 @@ export function buildActorPrompt(
 
   const hints: string[] = [];
   for (const h of plan.hints) {
-    const to = h.toRole ? scn.roles.get(h.toRole)?.name : undefined;
+    const to = h.toRole && h.toRole !== role.id ? scn.roles.get(h.toRole)?.name : undefined;
     if (h.kind === "redirect" && to) hints.push(add(`对方问的这件事归${to}管,指给对方去找${to}。`));
     if (h.kind === "blocked" && h.missingKind === "trust") hints.push("对方想要的东西你现在还不愿意给,先试探对方来意。");
   }

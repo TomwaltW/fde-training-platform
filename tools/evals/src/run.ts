@@ -41,8 +41,13 @@ let failed = 0;
 for (const p of players) {
   for (let r = 0; r < runs; r++) {
     const run = await runPlayer(scn, p, mode);
-    const expect = { ...(specs.get(p.id)?.expect ?? {}), ...(p.expect ?? {}) };
+    const specExpect = specs.get(p.id)?.expect ?? {};
+    const expect = { ...(p.expect ?? {}), ...specExpect };
     const expectChecks = checkExpectations(run, expect);
+    // 玩家文件只能追加断言,不能改写 scenario.yaml 里方案定下的门槛
+    for (const k of Object.keys(p.expect ?? {})) {
+      if (k in specExpect) expectChecks.push({ name: k, ok: false, detail: "玩家文件的 expect 和 scenario.yaml 的 evals 重名(只能追加,不能改写)" });
+    }
     const all = [...run.checks, ...expectChecks];
     const bad = all.filter((c) => !c.ok);
     if (bad.length || run.crashed) failed++;

@@ -105,12 +105,75 @@ function parseCnAt(s: string, start: number): { value: number; end: number } | n
 
 const ARABIC = /(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s*(万|亿|千)?\s*(%|％)?/y;
 const CN_CHARS = /[零〇一二两俩三四五六七八九十百千万亿]/;
+const CN_DIGIT_ONLY = /[零〇一二两俩三四五六七八九]/;
 
-export function extractNumbers(text: string): NumberMention[] {
+/** 全角数字和符号折成半角(保留中文逗号"，"),长度不变,下标仍对得上。 */
+export const foldWidth = (s: string) =>
+  s.replace(/[！-～]/g, (c) => (c === "，" ? c : String.fromCharCode(c.charCodeAt(0) - 0xfee0))).replace(/　/g, " ");
+
+/** 含数字的成语和惯用说法,不当数字。 */
+const IDIOMS = [
+  "三天两头", "三番五次", "三天打鱼", "七上八下", "一五一十", "三三两两", "四面八方", "乱七八糟", "十有八九",
+  "三心二意", "一清二楚", "一干二净", "五花八门", "千方百计", "七嘴八舌", "九牛一毛", "一模一样", "一来二去",
+  "一天到晚", "三言两语", "千千万万", "万无一失", "一五一十", "接二连三", "颠三倒四", "丢三落四",
+];
+
+const CN_D = "[零〇一二两三四五六七八九十]";
+const CLOCK = new RegExp(`(${CN_D}{1,3}|\\d{1,2})(点钟|点|:)(半|一刻|三刻|(${CN_D}{1,3}|\\d{1,2})(分)?)?`, "y");
+const NOT_CLOCK_AFTER = /^[万亿千百%倍个元块]/;
+
+/** 钟点:"三点""八点二十""十点半""8:30"。返回小时数和结束位置;不是钟点返回 null。 */
+function clockAt(text: string, i: number): { hour: number; end: number } | null {
+  CLOCK.lastIndex = i;
+  const m = CLOCK.exec(text);
+  if (!m) return null;
+  let h: number | undefined;
+  if (/^\d+$/.test(m[1]!)) h = Number(m[1]);
+  else {
+    const p = parseCnAt(m[1]!, 0);
+    if (p && p.end === m[1]!.length) h = p.value;
+  }
+  if (h === undefined || h > 24) return null;
+  const sep = m[2]!;
+  const end = CLOCK.lastIndex;
+  const rest = text.slice(end);
+  if (sep === ":") {
+    if (!m[4] || !/^\d+$/.test(m[4]) || Number(m[4]) >= 60) return null;
+    return { hour: h, end };
+  }
+  if (!m[3]) return { hour: h, end }; // "三点" "三点钟"
+  if (m[3] === "半" || m[3] === "一刻" || m[3] === "三刻") return { hour: h, end };
+  const mins = m[4]!;
+  if (m[5]) return { hour: h, end }; // 带"分"
+  if (/^\d+$/.test(mins)) return Number(mins) < 60 && !NOT_CLOCK_AFTER.test(rest) ? { hour: h, end } : null;
+  // 中文分钟要两个字以上("二十""十五""零五"),单字是小数("十二点五万")
+  if (mins.length >= 2 && !NOT_CLOCK_AFTER.test(rest)) return { hour: h, end };
+  return null;
+}
+
+export function extractNumbers(input: string): NumberMention[] {
+  const text = foldWidth(input);
   const out: NumberMention[] = [];
+  const covered = new Set<number>();
+  for (const w of IDIOMS) {
+    for (let k = text.indexOf(w); k >= 0; k = text.indexOf(w, k + 1)) for (let j = 0; j < w.length; j++) covered.add(k + j);
+  }
   let i = 0;
   while (i < text.length) {
     const c = text[i]!;
+    if (covered.has(i)) {
+      i++;
+      continue;
+    }
+    // 钟点按"点"计,守卫对 24 以内的钟点放行
+    if (/\d/.test(c) || CN_CHARS.test(c)) {
+      const clk = (i === 0 || !/[A-Za-z\d.]/.test(text[i - 1]!)) ? clockAt(text, i) : null;
+      if (clk) {
+        out.push({ value: clk.hour, raw: text.slice(i, clk.end), index: i, unit: "点", percent: false });
+        i = clk.end;
+        continue;
+      }
+    }
     // 百分之三十一
     if (text.startsWith("百分之", i)) {
       const r = parseCnAt(text, i + 3);
@@ -151,8 +214,15 @@ export function extractNumbers(text: string): NumberMention[] {
         const unit = matchMeasure(text, r.end);
         const raw = text.slice(i, r.end);
         const isWord = ["万一", "千万", "一一"].some((w) => text.startsWith(w, i));
-        if (!isWord && (consumed >= 2 || unit)) {
-          out.push({ value: r.value, raw, index: i, unit, percent: unit === "%" });
+        // 约数"五六个人""两三天":第一个数字后面紧跟另一个数字,用后一个数字的量词
+        let rangeUnit = "";
+        if (consumed === 1 && !unit && CN_DIGIT_ONLY.test(text[r.end] ?? "")) {
+          const r2 = parseCnAt(text, r.end);
+          if (r2) rangeUnit = matchMeasure(text, r2.end);
+        }
+        if (!isWord && (consumed >= 2 || unit || rangeUnit)) {
+          const u = unit || rangeUnit;
+          out.push({ value: r.value, raw, index: i, unit: u, percent: u === "%" });
         }
         i = r.end;
         continue;

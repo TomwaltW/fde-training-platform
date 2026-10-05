@@ -17,7 +17,9 @@ import {
   TemplateActor,
   TemplateDebrief,
   emptyJudge,
+  evalRequirement,
   loadScenario,
+  stateResolver,
   minutesLeft,
   type EngineDeps,
   type SessionState,
@@ -190,10 +192,19 @@ while (st.phase !== "debrief") {
         case "visit":
           show(await engine.act(st, { type: "action", action: "site_visit" }));
           break;
-        case "exp":
-          if (!arg) for (const x of d.experiments) console.log(`  ${x.id} ${x.title}${st.experiments[x.id] ? "(已做)" : ""}`);
-          else show(await engine.act(st, { type: "experiment", experiment: arg.toUpperCase() }));
+        case "exp": {
+          if (arg) {
+            show(await engine.act(st, { type: "experiment", experiment: arg.toUpperCase() }));
+            break;
+          }
+          // 只列出前提已满足的验证:标题里有资料名,提前列出来等于剧透
+          const ready = d.experiments.filter((x) => st.experiments[x.id] || evalRequirement(x.requires, stateResolver(st, scn)));
+          for (const x of ready) console.log(`  ${x.id} ${x.title}${st.experiments[x.id] ? "(已做)" : ""}`);
+          const locked = d.experiments.length - ready.length;
+          if (!ready.length) console.log("  现在还没有能做的验证。先拿到资料。");
+          if (locked) console.log(`  (还有 ${locked} 个验证需要先拿到相应的资料)`);
           break;
+        }
         case "judge": {
           const form: Record<string, string> = {};
           for (const f of d.judgment_form) form[f.id] = ((await ask(`${f.id} ${f.label}:\n> `)) ?? "").trim();

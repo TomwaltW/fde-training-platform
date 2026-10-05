@@ -1,7 +1,8 @@
 // 场景校验器(方案 4.3)。结构层面的"不允许未定义的键"由 schema 在加载时完成;
 // 这里做语义检查:引用、合计、可达性、证据来源、参考路径时长、泄露风险。
-import { evalExpr, exprIdentifiers, isExpression, requirementLeaves, type Resolver } from "../expr.ts";
+import { evalExpr, evalRequirement, exprIdentifiers, isExpression, requirementLeaves, type Resolver } from "../expr.ts";
 import { extractNumbers } from "../numbers.ts";
+import { IMPLEMENTED_DIMENSIONS, d2Ids, parseD2Key, parseD3Key, parseD5Key } from "../rubric-keys.ts";
 import { knownIdentifiers } from "../state.ts";
 import { triggers } from "../triggers.ts";
 import type { LoadedScenario } from "./load.ts";
@@ -64,6 +65,8 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
       } else {
         need(roleIds.has(u.role), `事实 ${f.id} 的解锁角色 ${u.role} 不存在`);
         if (!u.volunteered && !u.ask) errors.push(`事实 ${f.id}@${u.role}:${u.level} 既不是主动说的也没有 ask`);
+        if (u.volunteered && !d.traps.some((t) => t.reveal === f.id && t.by === u.role))
+          errors.push(`事实 ${f.id}@${u.role}:${u.level} 标了 volunteered,但没有任何 ${u.role} 的压力时刻 reveal 它,永远说不出来`);
         if (u.level === "L1" && !u.say) warnings.push(`事实 ${f.id}@${u.role}:L1 没有 say,L1 披露时会直接给 statement`);
         checkReq(u.requires, `事实 ${f.id}@${u.role}`);
       }
@@ -144,6 +147,12 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
   }
 
   const ru = d.rubric;
+  const dimIds = ru.dimensions.map((x) => x.id);
+  for (const id of dimIds) {
+    if (!(IMPLEMENTED_DIMENSIONS as readonly string[]).includes(id)) errors.push(`评分维度 ${id} 没有实现(只有 ${IMPLEMENTED_DIMENSIONS.join("、")})`);
+  }
+  for (const id of new Set(dimIds)) if (dimIds.filter((x) => x === id).length > 1) errors.push(`评分维度 ${id} 重复`);
+  for (const k of Object.keys(ru.d3_points)) if (!parseD3Key(k)) errors.push(`d3_points 的键 ${k} 看不懂`);
   const dimSum = ru.dimensions.reduce((s, x) => s + x.max, 0);
   need(dimSum === 100, `评分维度合计 ${dimSum} ≠ 100`);
   const dimMax = (id: string) => ru.dimensions.find((x) => x.id === id)?.max;
@@ -160,8 +169,7 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
   if (dimMax("D5") !== undefined) {
     let d5 = 0;
     for (const [k, v] of Object.entries(ru.d5_points)) {
-      const m = k.match(/^any_of_(.+)_each$/);
-      const ids = m ? m[1]!.split("_") : [k];
+      const { ids } = parseD5Key(k);
       for (const id of ids) need(scn.facts.has(id), `d5_points 引用了未知事实 ${id}`);
       d5 += v * ids.length;
     }
@@ -170,17 +178,7 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
   if (dimMax("D6") !== undefined && sum(ru.d6_penalties) < dimMax("D6")!)
     info.push(`D6 全部扣分项合计 ${sum(ru.d6_penalties)},小于满分 ${dimMax("D6")}`);
   for (const k of Object.keys(ru.d2_points)) {
-    const ids = /^[AX]\d+$/.test(k)
-      ? [k]
-      : k.startsWith("any_two_of_")
-        ? k.slice("any_two_of_".length).split("_")
-        : k.includes("_or_")
-          ? k.split("_or_")
-          : k === "two_claims_backed_by_data"
-            ? []
-            : null;
-    if (ids === null) errors.push(`d2_points 的键 ${k} 看不懂`);
-    else for (const id of ids) need(artifactIds.has(id) || expIds.has(id), `d2_points 的键 ${k} 引用了未知资料或验证 ${id}`);
+    for (const id of d2Ids(parseD2Key(k))) need(artifactIds.has(id) || expIds.has(id), `d2_points 的键 ${k} 引用了未知资料或验证 ${id}`);
   }
   for (const r of ru.premature_until) checkReq(r, "rubric.premature_until");
   for (const c of ru.caps) {
@@ -260,10 +258,19 @@ export interface Reachability {
   artifacts: Set<string>;
   experiments: Set<string>;
   actions: Set<string>;
+  traps: Set<string>;
 }
 
+/**
+ * 乐观可达性:假设玩家每一步都做对。和引擎的约束保持一致:
+ *   - 开场只能和开场人说话;调研阶段可以和任何已出现的人说话;汇报阶段只能和老板说话;判断、复盘阶段不能说话
+ *   - 去现场、做验证只能在开场和调研阶段
+ *   - 主动说出的事实(volunteered)只能由压力时刻的 reveal 说出来
+ *   - 一个前提要在同一个阶段里整体成立
+ */
 export function reachability(scn: LoadedScenario): Reachability {
   const d = scn.data;
+  const boss = d.briefing.opening.speaker;
   const R: Reachability = {
     roles: new Set(d.roles.filter((r) => r.discovered === "start").map((r) => r.id)),
     flags: new Set(),
@@ -271,44 +278,57 @@ export function reachability(scn: LoadedScenario): Reachability {
     artifacts: new Set(),
     experiments: new Set(),
     actions: new Set(),
+    traps: new Set(),
   };
+  const has = (p: string) => d.phases.includes(p as never);
+  const talkPhases = (role: string) => [
+    ...(has("kickoff") && role === boss ? ["kickoff"] : []),
+    ...(has("discovery") ? ["discovery"] : []),
+    ...(has("report") && role === boss ? ["report"] : []),
+  ];
+  const actionPhases = ["kickoff", "discovery"].filter(has);
 
-  const resolverFor = (phase: string): Resolver => ({
+  // reachable=true:按"能达到的最好状态"解析;false:按开局状态解析(给 not X 这类条件用)
+  const resolverFor = (phase: string, reachable: boolean, derived: boolean): Resolver => ({
     get(name) {
       if (name === "phase") return phase;
       const dot = name.indexOf(".");
       if (dot > 0) {
         const ns = name.slice(0, dot);
         const key = name.slice(dot + 1);
-        const reachable = R.roles.has(key);
-        if (ns === "trust") return reachable ? (scn.roles.get(key)?.trust?.max ?? 0) : 0;
-        if (ns === "exchanges") return reachable ? 999 : 0;
-        if (ns === "discovered") return reachable;
-        if (ns === "opened") return R.artifacts.has(key);
+        const ok = reachable && R.roles.has(key);
+        if (ns === "trust") return ok ? (scn.roles.get(key)?.trust?.max ?? 0) : (scn.roles.get(key)?.trust?.initial ?? 0);
+        if (ns === "exchanges") return ok ? 999 : 0;
+        if (ns === "discovered") return reachable ? R.roles.has(key) : d.roles.some((r) => r.id === key && r.discovered === "start");
+        if (ns === "opened") return reachable && R.artifacts.has(key);
         return undefined;
       }
-      if (name in d.flags) return name === "seen_any_artifact" ? R.artifacts.size > 0 : R.flags.has(name);
-      if (scn.facts.has(name)) return R.facts.has(name);
-      if (scn.artifacts.has(name)) return R.artifacts.has(name);
-      if (scn.experiments.has(name)) return R.experiments.has(name);
-      if (name in d.actions) return R.actions.has(name);
+      if (name === "no_artifact_opened" || name === "committed_before_any_artifact") return derived;
+      if (name in d.flags) return reachable && (name === "seen_any_artifact" ? R.artifacts.size > 0 : R.flags.has(name));
+      if (scn.facts.has(name)) return reachable && R.facts.has(name);
+      if (scn.artifacts.has(name)) return reachable && R.artifacts.has(name);
+      if (scn.experiments.has(name)) return reachable && R.experiments.has(name);
+      if (name in d.actions) return reachable && R.actions.has(name);
+      if (scn.traps.has(name)) return reachable && R.traps.has(name);
       return undefined;
     },
     call: () => true,
   });
-  const can = (req: Requirement | undefined): boolean => {
+  const canIn = (req: Requirement | string | undefined, phase: string): boolean => {
     if (req === undefined) return true;
-    if (typeof req === "string") {
-      try {
-        return d.phases.some((p) => evalExpr(req, resolverFor(p)));
-      } catch {
-        return false;
+    for (const reachable of [true, false]) {
+      for (const derived of [true, false]) {
+        try {
+          if (evalRequirement(req, resolverFor(phase, reachable, derived))) return true;
+        } catch {
+          /* 未知标识符:由引用检查报错,这里当作不可达 */
+        }
       }
     }
-    if (Array.isArray(req)) return req.every(can);
-    if ("any" in req) return req.any.some(can);
-    return req.all.every(can);
+    return false;
   };
+  const canTalk = (req: Requirement | undefined, role: string) => talkPhases(role).some((p) => canIn(req, p));
+  const canAct = (req: Requirement | undefined) => actionPhases.some((p) => canIn(req, p));
   const addFact = (id: string, l: Level) => {
     const cur = R.facts.get(id);
     if (!cur || levelRank(l) > levelRank(cur)) {
@@ -336,9 +356,23 @@ export function reachability(scn: LoadedScenario): Reachability {
       if (byRole || byAction || byAsk || byRedirect) mark(R.roles, r.id);
     }
     for (const [f, def] of Object.entries(d.flags)) if (def.granted_by && R.roles.has(def.granted_by)) mark(R.flags, f);
-    for (const t of d.traps) if (R.roles.has(t.by)) for (const f of t.sets ?? []) mark(R.flags, f);
+    for (const t of d.traps) {
+      if (R.traps.has(t.id) || !R.roles.has(t.by)) continue;
+      if ((t.after ?? []).some((a) => !R.traps.has(a))) continue;
+      if (isExpression(t.when) && !talkPhases(t.by).some((p) => canIn(t.when, p))) continue;
+      mark(R.traps, t.id);
+      for (const f of t.sets ?? []) mark(R.flags, f);
+      for (const r of t.discover ?? []) mark(R.roles, r);
+      if (t.reveal) {
+        const rule = scn.facts.get(t.reveal)?.unlock.find((u) => !isViaUnlock(u) && u.role === t.by);
+        if (rule) {
+          if (addFact(t.reveal, rule.level)) changed = true;
+          if (rule.gives) mark(R.artifacts, rule.gives);
+        }
+      }
+    }
     for (const [id, a] of Object.entries(d.actions)) {
-      if (!can(a.requires)) continue;
+      if (!canAct(a.requires)) continue;
       mark(R.actions, id);
       for (const eff of a.effects) {
         const m = eff.match(/^discover\s+(\w+)$/);
@@ -347,13 +381,13 @@ export function reachability(scn: LoadedScenario): Reachability {
         if (s) mark(R.flags, s[1]!);
       }
     }
-    for (const a of d.artifacts) if (a.unlock && R.roles.has(a.holder) && can(a.unlock.requires)) mark(R.artifacts, a.id);
-    for (const x of d.experiments) if (can(x.requires)) mark(R.experiments, x.id);
+    for (const a of d.artifacts) if (a.unlock && R.roles.has(a.holder) && canTalk(a.unlock.requires, a.holder)) mark(R.artifacts, a.id);
+    for (const x of d.experiments) if (canAct(x.requires)) mark(R.experiments, x.id);
     for (const f of d.facts) {
       for (const u of f.unlock) {
         let ok: boolean;
         if (isViaUnlock(u)) ok = R.artifacts.has(u.via) || R.actions.has(u.via) || R.experiments.has(u.via);
-        else ok = R.roles.has(u.role) && can(u.requires);
+        else ok = !u.volunteered && Boolean(u.ask) && R.roles.has(u.role) && canTalk(u.requires, u.role);
         if (!ok) continue;
         if (addFact(f.id, u.level)) changed = true;
         if (u.gives) mark(R.artifacts, u.gives);

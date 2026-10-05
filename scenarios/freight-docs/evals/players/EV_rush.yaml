@@ -34,9 +34,9 @@ steps:
 
 judge:
   claims:
-    - {text: 问题是人工录入,需要识别系统, source: J1}
+    - {text: 问题是人工录入，需要识别系统, source: J1}
   T:
-    - {id: T1, verdict: contradict, evidence: [J1], note: 认定识别是主要问题,与 T1 相反}
+    - {id: T1, verdict: contradict, evidence: [J1], note: 认定识别是主要问题，与 T1 相反}
   S:
     - {id: S1, mentioned_in_judgment: true, evidence: [J3]}
   W: []

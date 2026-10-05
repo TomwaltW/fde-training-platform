@@ -3,6 +3,7 @@
 import { evalExpr } from "./expr.ts";
 import type { JudgeOutput } from "./judge.ts";
 import type { LoadedScenario } from "./scenario/load.ts";
+import { parseD2Key, parseD3Key, parseD5Key } from "./rubric-keys.ts";
 import { hasFactAtLeast, stateResolver } from "./state.ts";
 import type { SessionState } from "./types.ts";
 
@@ -33,8 +34,12 @@ export const BANDS: [number, string][] = [
   [0, "接了一个会翻车的单"],
 ];
 
-const opened = (st: SessionState, id: string) =>
-  id.startsWith("X") ? st.experiments[id] !== undefined : st.artifacts[id]?.openedTurn !== undefined;
+/** 资料算"打开过",验证算"做过";按场景里的 id 归属判断,不靠前缀。 */
+const opened = (scn: LoadedScenario, st: SessionState, id: string) =>
+  scn.experiments.has(id) ? st.experiments[id] !== undefined : st.artifacts[id]?.openedTurn !== undefined;
+
+/** 对一线甩锅(D3 rapport_no_blame 只看这一类减分行为)。 */
+const BLAME = /归咎|甩锅/;
 
 function d1(scn: LoadedScenario, st: SessionState, max: number): DimensionScore {
   const ru = scn.data.rubric;
@@ -55,14 +60,15 @@ function d2(scn: LoadedScenario, st: SessionState, judge: JudgeOutput, max: numb
   let score = 0;
   const details: string[] = [];
   for (const [key, pts] of Object.entries(scn.data.rubric.d2_points)) {
-    let ok = false;
-    let m: RegExpMatchArray | null;
-    if (/^[AX]\d+$/.test(key)) ok = opened(st, key);
-    else if ((m = key.match(/^any_two_of_(.+)$/))) ok = m[1]!.split("_").filter((id) => opened(st, id)).length >= 2;
-    else if (key.includes("_or_")) ok = key.split("_or_").some((id) => opened(st, id));
-    else if (key === "two_claims_backed_by_data")
-      ok = judge.T.filter((t) => (t.verdict === "hit" || t.verdict === "partial") && t.grade === "A").length >= 2;
-    else throw new Error(`d2_points 里有不认识的键: ${key}`);
+    const k = parseD2Key(key);
+    const ok =
+      k.kind === "one"
+        ? opened(scn, st, k.id)
+        : k.kind === "any_two"
+          ? k.ids.filter((id) => opened(scn, st, id)).length >= 2
+          : k.kind === "or"
+            ? k.ids.some((id) => opened(scn, st, id))
+            : judge.T.filter((t) => (t.verdict === "hit" || t.verdict === "partial") && t.grade === "A").length >= 2;
     if (ok) {
       score += pts;
       details.push(`${key} +${pts}`);
@@ -72,37 +78,38 @@ function d2(scn: LoadedScenario, st: SessionState, judge: JudgeOutput, max: numb
 }
 
 function d3(scn: LoadedScenario, st: SessionState, max: number): DimensionScore {
-  const qs = st.turns.filter((t) => t.gate && t.gate.acts.includes("ask") && !t.gate.meta_or_injection).map((t) => t.gate!);
+  const gates = st.turns.map((t) => t.gate).filter((g) => g !== undefined && !g.meta_or_injection);
+  // 提问:开放式、量化、追问、一次一件事都按"问"算;要证据还包括直接要资料、要做验证、要授权这类请求
+  const qs = gates.filter((g) => g!.acts.includes("ask")).map((g) => g!);
+  const asksOrRequests = gates.filter((g) => g!.acts.some((a) => a === "ask" || a.startsWith("request_"))).map((g) => g!);
   const details: string[] = [];
   let score = 0;
   for (const [key, pts] of Object.entries(scn.data.rubric.d3_points)) {
+    const k = parseD3Key(key);
+    if (!k) throw new Error(`d3_points 里有不认识的键: ${key}`);
     let frac = 0;
-    let m: RegExpMatchArray | null;
-    if ((m = key.match(/^open_ratio_first(\d+)$/))) {
-      const first = qs.slice(0, Number(m[1]));
+    if (k.kind === "open_ratio") {
+      const first = qs.slice(0, k.first);
       const ratio = first.length ? first.filter((g) => g.question_tags.open).length / first.length : 0;
       frac = Math.min(1, ratio / 0.5);
       details.push(`前 ${first.length} 问开放式占 ${Math.round(ratio * 100)}%`);
-    } else if ((m = key.match(/^(quantifying|followup|evidence_asks)_ge(\d+)$/))) {
-      const tag = { quantifying: "quantifying", followup: "follow_up", evidence_asks: "evidence_ask" }[m[1]!] as
-        | "quantifying"
-        | "follow_up"
-        | "evidence_ask";
-      const n = qs.filter((g) => g.question_tags[tag]).length;
-      frac = Math.min(1, n / Number(m[2]));
-      details.push(`${m[1]} ${n} 次`);
-    } else if ((m = key.match(/^single_focus_ge(\d+)pct$/))) {
+    } else if (k.kind === "count") {
+      const pool = k.metric === "evidence_ask" ? asksOrRequests : qs;
+      const n = pool.filter((g) => g.question_tags[k.metric]).length;
+      frac = Math.min(1, n / k.atLeast);
+      details.push(`${key.replace(/_ge\d+$/, "")} ${n} 次`);
+    } else if (k.kind === "single_focus") {
       const share = qs.length ? qs.filter((g) => g.question_tags.bundled_count <= 1).length / qs.length : 0;
-      frac = Math.min(1, share / (Number(m[1]) / 100));
+      frac = Math.min(1, share / (k.pct / 100));
       details.push(`一次只问一件事 ${Math.round(share * 100)}%`);
-    } else if (key === "rapport_no_blame") {
-      const minus = st.turns.flatMap((t) => t.gate?.trust_moves ?? []).filter((m) => m.dir === "minus");
-      frac = minus.length === 0 ? 1 : 0;
-      if (minus.length) details.push(`减分行为:${minus.map((m) => m.what).join("、")}`);
-    } else throw new Error(`d3_points 里有不认识的键: ${key}`);
+    } else {
+      const blame = st.turns.flatMap((t) => t.gate?.trust_moves ?? []).filter((m) => m.dir === "minus" && BLAME.test(m.what));
+      frac = blame.length === 0 ? 1 : 0;
+      if (blame.length) details.push(`对一线甩锅 ${blame.length} 次`);
+    }
     score += pts * frac;
   }
-  if (qs.length === 0) details.push("没有提问");
+  if (asksOrRequests.length === 0) details.push("没有提问");
   return { id: "D3", name: "", max, score: r1(clamp(score, 0, max)), details };
 }
 
@@ -130,9 +137,7 @@ function d5(scn: LoadedScenario, st: SessionState, judge: JudgeOutput, max: numb
   let score = 0;
   const details: string[] = [];
   for (const [key, pts] of Object.entries(scn.data.rubric.d5_points)) {
-    const m = key.match(/^any_of_(.+)_each$/);
-    const ids = m ? m[1]!.split("_") : [key];
-    for (const id of ids) {
+    for (const id of parseD5Key(key).ids) {
       if (ok(id)) {
         score += pts;
         details.push(`${id} +${pts}`);
@@ -147,20 +152,30 @@ function d6(scn: LoadedScenario, st: SessionState, max: number): DimensionScore 
   const details: string[] = [];
   let score = max;
   const live = st.ledger.filter((e) => e.type !== "solution");
-  const hit = (cond: boolean, pts: number, label: string) => {
-    if (!cond) return;
-    score -= pts;
-    details.push(`${label} -${pts}`);
-  };
-  hit(live.some((e) => e.type === "time" && e.premature), p.premature_time, "过早承诺工期");
-  hit(live.some((e) => e.type === "price" && e.premature), p.premature_price, "过早报价");
-  hit(live.some((e) => e.type === "accuracy"), p.accuracy_guarantee, "保证准确率");
-  hit(st.events.some((e) => e.type === "premature_solution"), p.premature_solution, "过早给方案");
-  const recovered = live.filter((e) => e.retractedTurn !== undefined && (e.premature || e.type === "accuracy")).length;
-  if (recovered) {
-    score += recovered * scn.data.rubric.d6_recover_per_retraction;
-    details.push(`明确收回 ${recovered} 项 +${recovered * scn.data.rubric.d6_recover_per_retraction}`);
+  // 每一类扣一次;这一类里的承诺全部明确收回了,才加回一次(加回不超过这一类的扣分)。
+  // 收回后又重新给了坚决承诺,不加回。过早给方案收不回来。
+  const cats = [
+    { label: "过早承诺工期", pts: p.premature_time, rows: live.filter((e) => e.type === "time" && e.premature) },
+    { label: "过早报价", pts: p.premature_price, rows: live.filter((e) => e.type === "price" && e.premature) },
+    { label: "保证准确率", pts: p.accuracy_guarantee, rows: live.filter((e) => e.type === "accuracy") },
+  ];
+  let recovered = 0;
+  for (const c of cats) {
+    if (!c.rows.length) continue;
+    score -= c.pts;
+    details.push(`${c.label} -${c.pts}`);
+    if (c.rows.every((e) => e.retractedTurn !== undefined)) {
+      const back = Math.min(scn.data.rubric.d6_recover_per_retraction, c.pts);
+      score += back;
+      recovered++;
+      details.push(`明确收回「${c.label}」+${back}`);
+    }
   }
+  if (st.events.some((e) => e.type === "premature_solution")) {
+    score -= p.premature_solution;
+    details.push(`过早给方案 -${p.premature_solution}`);
+  }
+  if (recovered) details.push(`明确收回 ${recovered} 项`);
   return { id: "D6", name: "", max, score: r1(clamp(score, 0, max)), details };
 }
 

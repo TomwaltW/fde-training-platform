@@ -18,7 +18,7 @@ steps:
     gate: {trust: [-暗示要替代人]}
   - say: 改单是怎么处理的?
     gate: {t: [P4@chen:L2], tags: [open]}
-    check: {directive: guarded, reveals: [P4@L2]}
+    check: {directive: neutral, reveals: [P4@L2]}
   - switch: liu
   - say: 刘姐,你们部门的人素质不行,错误这么多,你这个主管怎么管的?
     gate: {t: [P2@liu:L1], trust: [-把错误归咎于一线]}

@@ -117,6 +117,9 @@ export class Engine {
       res.discovered.push(...discoverFromReply(this.scn, st, plan.role, spoken.text));
       this.maybeEndReport(st, res);
     }
+    // 同一句话里的去现场、做验证,发生在角色回话之后
+    for (const s of plan.after) addLine(st, "system", s);
+    res.system.push(...plan.after);
     st.turns.push({
       turn: st.turn,
       role: plan.role ?? st.currentRole,
@@ -149,6 +152,11 @@ export class Engine {
     const canaries = activeCanaries(this.scn, st);
     const userTexts = st.transcript.filter((l) => l.speaker === "user").map((l) => l.text);
     const ledgerTexts = st.ledger.map((e) => e.valueText);
+    // 用户已经看到过的文字(其他角色的话、旁白、拿到的资料标题):金丝雀词出现在这里就不算泄露
+    const seenTexts = [
+      ...st.transcript.filter((l) => l.speaker !== "user").map((l) => l.text),
+      ...Object.keys(st.artifacts).map((id) => this.scn.artifacts.get(id)?.title ?? ""),
+    ];
     let previous: string[] = [];
     for (let attempt = 0; attempt <= retries; attempt++) {
       const prompt = buildActorPrompt(this.scn, st, plan, userText);
@@ -156,10 +164,19 @@ export class Engine {
         const sys = prompt.messages[0]!;
         sys.content += `\n\n【注意】你上一次的回复不合格(${previous.join("、")})。这次严格只说上面写明的事实,不说任何上面没有的数字、名字或说法,不附和对方。`;
       }
-      const text = await this.deps.actor.speak({ scn: this.scn, st, plan, userText, attempt, previousFlags: previous, prompt });
+      let text: string;
+      try {
+        text = await this.deps.actor.speak({ scn: this.scn, st, plan, userText, attempt, previousFlags: previous, prompt });
+      } catch (e) {
+        // 模型出错时状态已经改过了(时间、解锁、压力时刻),不能把异常抛出去留下半截状态:重试,最后用兜底台词
+        previous = [`actor_error:${(e as Error).message.slice(0, 80)}`];
+        addEvent(st, "actor_error", { attempt, error: (e as Error).message });
+        continue;
+      }
       const flags = checkReply(text, {
         actorContext: prompt.context,
         userTexts,
+        seenTexts,
         ledgerTexts,
         canaries,
         stance: plan.directive!.stance,
@@ -169,10 +186,7 @@ export class Engine {
       addEvent(st, "guard_block", { attempt, flags: previous, text });
     }
     addEvent(st, "guard_fallback", { flags: previous });
-    const text = fallbackLine(this.scn, plan.role!, {
-      stance: plan.directive!.stance,
-      ...(plan.directive!.redirectTo && { redirectTo: plan.directive!.redirectTo }),
-    });
+    const text = fallbackLine(this.scn, plan.role!, plan.directive!);
     return { text, flags: [...previous, "fallback"], attempts: retries + 1 };
   }
 
@@ -200,6 +214,7 @@ export class Engine {
         const spoken = await this.speak(st, plan, undefined);
         const line = addLine(st, "npc", spoken.text, plan.role);
         return this.result(st, {
+          ok: true,
           system: r.system,
           reply: { roleId: plan.role!, text: spoken.text, ref: line.ref },
           ...(plan.directive && { directive: plan.directive }),
@@ -212,7 +227,7 @@ export class Engine {
         break;
     }
     if (r.ok) for (const s of r.system) addLine(st, "system", s);
-    return this.result(st, { system: r.system, unlockedArtifacts: r.obtained, discovered: r.discovered });
+    return this.result(st, { ok: r.ok, system: r.system, unlockedArtifacts: r.obtained, discovered: r.discovered });
   }
 
   /** 收工:裁判抽证据 → 代码算分 → 复盘。 */

@@ -10,6 +10,7 @@ export * from "./director.ts";
 export * from "./guard.ts";
 export * from "./judge.ts";
 export * from "./scoring.ts";
+export * from "./rubric-keys.ts";
 export * from "./debrief.ts";
 export * from "./moderation.ts";
 export * from "./ports.ts";

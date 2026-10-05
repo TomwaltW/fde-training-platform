@@ -56,6 +56,8 @@ export interface Directive {
   beat?: string;
   trapId?: string;
   redirectTo?: string;
+  /** 演员和守卫都失败时用的兜底台词(必须说出的 beat 不能因为兜底而丢掉)。 */
+  fallback?: string;
 }
 
 /** 本轮可以新说出的事实。 */
@@ -111,6 +113,7 @@ export type EventType =
   | "phase_change"
   | "guard_block"
   | "guard_fallback"
+  | "actor_error"
   | "meta_injection"
   | "moderation_block"
   | "judgment_submit"
@@ -193,4 +196,6 @@ export interface TurnResult {
   directive?: Directive;
   guardFlags: string[];
   ended: boolean;
+  /** 按钮动作是否成功(换人、看资料、去现场、做验证、提交判断)。 */
+  ok?: boolean;
 }

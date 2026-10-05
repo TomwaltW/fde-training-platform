@@ -1,5 +1,6 @@
 // 裁判(附录 B):只抽证据,不打分。程序拿到 JSON 后先校验再算分。
 import { z } from "zod";
+import { parseD5Key } from "./rubric-keys.ts";
 import type { LoadedScenario } from "./scenario/load.ts";
 import type { ChatMessage } from "./ports.ts";
 import type { SessionState } from "./types.ts";
@@ -41,13 +42,9 @@ export type JudgeOutput = z.infer<typeof JudgeOutputSchema>;
 
 /** D5 用到的成功定义类事实(d5_points 里点名的,以及 any_of_X_Y_each 里的)。 */
 export function successFactIds(scn: LoadedScenario): string[] {
-  const ids: string[] = [];
-  for (const k of Object.keys(scn.data.rubric.d5_points)) {
-    const m = k.match(/^any_of_(.+)_each$/);
-    if (m) ids.push(...m[1]!.split("_"));
-    else ids.push(k);
-  }
-  return ids.filter((id) => scn.facts.has(id));
+  return Object.keys(scn.data.rubric.d5_points)
+    .flatMap((k) => parseD5Key(k).ids)
+    .filter((id) => scn.facts.has(id));
 }
 
 export function transcriptForJudge(scn: LoadedScenario, st: SessionState): string {
@@ -208,12 +205,18 @@ export function checkJudgeOutput(scn: LoadedScenario, st: SessionState, raw: unk
         T.push({ ...got, verdict: "miss", evidence });
         continue;
       }
+      // 结论相反不需要证据等级;不能让一个多余的 A 级把扣分校验成 miss
+      if (got.verdict === "contradict") {
+        const { grade: _grade, ...rest } = got;
+        T.push({ ...rest, evidence });
+        continue;
+      }
       if (got.grade === "A" && !supported.has(item.id)) {
         issues.push(`${item.id}:标了 A 级,但事件日志里没有支持它的资料或验证,按 miss`);
         T.push({ ...got, verdict: "miss", evidence });
         continue;
       }
-      if (got.verdict !== "contradict" && !got.grade) {
+      if (!got.grade) {
         issues.push(`${item.id}:命中但没给证据等级,按 D`);
         T.push({ ...got, grade: "D", evidence });
         continue;

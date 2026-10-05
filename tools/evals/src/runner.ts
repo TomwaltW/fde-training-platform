@@ -12,7 +12,8 @@ import {
   type SessionState,
   type TurnResult,
 } from "@fde/engine";
-import { expandGate, type Check, type Player } from "./players.ts";
+import { triggers } from "@fde/engine";
+import { expandGate, lintPlayer, type Check, type Player } from "./players.ts";
 
 export interface CheckResult {
   name: string;
@@ -34,7 +35,9 @@ export interface PlayerRun {
   report?: SessionReport;
 }
 
-export type Mode = { kind: "offline" } | { kind: "live"; deps: Omit<EngineDeps, "judge" | "debrief"> & Partial<EngineDeps> };
+export type Mode =
+  | { kind: "offline"; /** 测试用:替换离线的某个端口(比如包一层记录提示词的演员) */ overrides?: Partial<EngineDeps> }
+  | { kind: "live"; deps: Omit<EngineDeps, "judge" | "debrief"> & Partial<EngineDeps> };
 
 function stepCheck(name: string, c: Check, res: TurnResult, st: SessionState, before: { traps: number }): CheckResult[] {
   const out: CheckResult[] = [];
@@ -65,7 +68,7 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
   const fixture = () => ({ ...emptyJudge(scn), ...(player.judge ?? {}) });
   const deps: EngineDeps =
     mode.kind === "offline"
-      ? { gate: queue, actor: new TemplateActor(), judge: new FixtureJudge(fixture), debrief: new TemplateDebrief() }
+      ? { gate: queue, actor: new TemplateActor(), judge: new FixtureJudge(fixture), debrief: new TemplateDebrief(), ...mode.overrides }
       : { judge: new FixtureJudge(fixture), debrief: new TemplateDebrief(), ...mode.deps };
   const engine = new Engine(scn, deps);
   const st = engine.start(`eval-${player.id}-${Date.now()}`);
@@ -73,6 +76,18 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
   const agree = { expected: 0, matched: 0, extra: 0 };
   const live = mode.kind === "live";
 
+  // 脚本写错了直接算失败
+  for (const e of lintPlayer(player, {
+    triggers: new Set(triggers(scn).keys()),
+    roles: new Set(scn.roles.keys()),
+    artifacts: new Set(scn.artifacts.keys()),
+    experiments: new Set(scn.experiments.keys()),
+    actions: new Set(Object.keys(scn.data.actions)),
+  })) {
+    checks.push({ name: "脚本", ok: false, detail: e });
+  }
+
+  let endedAt: number | undefined;
   try {
     for (const [i, step] of player.steps.entries()) {
       const label = `#${i + 1}`;
@@ -99,11 +114,29 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
         if (st.phase !== "debrief") res = await engine.act(st, { type: "end" });
         break;
       }
+      // 按钮动作被拒绝(前提不满足、阶段不对)说明脚本和引擎对不上,不能悄悄跳过
+      if (res && res.ok === false && !("say" in step)) {
+        checks.push({ name: `${label} 动作`, ok: false, detail: `被拒绝:${res.system.join(" | ")}` });
+      }
       if (res && "check" in step && step.check) {
         // 在线模式下依赖闸门的断言只作参考
         for (const c of stepCheck(label, step.check, res, st, before)) checks.push(live ? { ...c, ok: true, detail: `${c.ok ? "" : "[在线不一致] "}${c.detail}` } : c);
       }
-      if (st.phase === "debrief") break;
+      if (st.phase === "debrief") {
+        endedAt = i;
+        break;
+      }
+    }
+    // 会话提前结束、后面还有没执行的步骤:不能当作通过(在线模式也不放过)
+    if (endedAt !== undefined) {
+      const rest = player.steps.slice(endedAt + 1).filter((s) => !("end" in s));
+      if (rest.length) {
+        checks.push({
+          name: `#${endedAt + 1} 之后`,
+          ok: false,
+          detail: `会话在第 ${endedAt + 1} 步已结束(${st.endedReason ?? "?"}),后面 ${rest.length} 步没执行`,
+        });
+      }
     }
     const report = await engine.finish(st);
     return {

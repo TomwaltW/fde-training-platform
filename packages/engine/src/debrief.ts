@@ -17,6 +17,13 @@ export interface DebriefData {
   dimensions: { id: string; name: string; score: number; max: number; details: string[] }[];
   caps: string[];
   keyMoments: JudgeOutput["key_moments"];
+  /** 裁判抽出的主张与逐项判定(附带对照项原文),给复盘撰写用。 */
+  claims: JudgeOutput["claims"];
+  verdicts: {
+    T: (JudgeOutput["T"][number] & { statement: string })[];
+    S: (JudgeOutput["S"][number] & { statement: string })[];
+    W: (JudgeOutput["W"][number] & { item: string })[];
+  };
   ledger: (LedgerEntry & { recalled: boolean })[];
   unmetRoles: string[];
   undiscoveredRoles: string[];
@@ -61,7 +68,10 @@ export function buildDebriefData(
   const cats = d.truth.error_categories ?? [];
   const totalCount = cats.reduce((s, c) => s + c.count, 0) || 1;
   const totalLoss = cats.reduce((s, c) => s + c.loss, 0) || 1;
-  const recallTurn = st.events.find((e) => e.type === "trap" && e.payload.trap === "ledger_recall");
+  // 只有汇报开场时被原话拿出来的那几条才算"被记账",之后新给的承诺不算
+  const recallEvent = st.events.find((e) => e.type === "trap" && e.payload.trap === "ledger_recall");
+  const recalledIds = new Set((recallEvent?.payload.entries as string[] | undefined) ?? []);
+  const realWorld = d.debrief.real_world_note ? scn.readText(d.debrief.real_world_note) : undefined;
   return {
     title: d.meta.title,
     total: score.total,
@@ -70,7 +80,13 @@ export function buildDebriefData(
     dimensions: score.dimensions.map((x) => ({ id: x.id, name: x.name, score: x.score, max: x.max, details: x.details })),
     caps: score.caps.map((c) => c.label),
     keyMoments: judge.key_moments,
-    ledger: st.ledger.map((e) => ({ ...e, recalled: Boolean(recallTurn) })),
+    claims: judge.claims,
+    verdicts: {
+      T: judge.T.map((t) => ({ ...t, statement: d.truth.diagnosis_items.find((x) => x.id === t.id)?.statement ?? "" })),
+      S: judge.S.map((x) => ({ ...x, statement: scn.facts.get(x.id)?.statement ?? "" })),
+      W: judge.W.map((w) => ({ ...w, item: d.rubric.d7_checklist.find((x) => x.id === w.id)?.item ?? "" })),
+    },
+    ledger: st.ledger.map((e) => ({ ...e, recalled: recalledIds.has(e.id) })),
     unmetRoles: d.roles.filter((r) => st.discovered.includes(r.id) && !talked.has(r.id)).map((r) => r.name),
     undiscoveredRoles: d.roles.filter((r) => !st.discovered.includes(r.id)).map((r) => `${r.name}(${r.title})`),
     missedArtifacts: d.artifacts.filter((a) => !st.artifacts[a.id]).map((a) => a.title),
@@ -85,7 +101,8 @@ export function buildDebriefData(
       .map((c) => ({ name: c.name, loss: c.loss, share: c.loss / totalLoss })),
     successDefinition: d.truth.success_definition,
     expertPath: scn.readText(d.debrief.expert_path),
-    realWorld: d.debrief.real_world_note ? scn.readText(d.debrief.real_world_note) : undefined,
+    // 作者还没写的占位稿不给用户看
+    realWorld: realWorld && !realWorld.includes("待作者撰写") ? realWorld : undefined,
     actions: nextActions(scn, st, score),
     shareCard: {
       total: score.total,
@@ -190,7 +207,13 @@ export function buildDebriefPrompt(data: DebriefData, st: SessionState): ChatMes
 ## 下次直接照做`;
   const input = {
     scores: { total: data.total, band: data.band, dimensions: data.dimensions, caps: data.caps, badges: data.badges },
-    evidence: data.keyMoments.map((k) => ({ ...k, quote: quote(st, k.turn) })),
+    evidence: {
+      claims: data.claims,
+      T: data.verdicts.T,
+      S: data.verdicts.S,
+      W: data.verdicts.W,
+      key_moments: data.keyMoments.map((k) => ({ ...k, quote: quote(st, k.turn) })),
+    },
     ledger: data.ledger,
     fog: {
       unmet: data.unmetRoles,

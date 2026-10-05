@@ -23,12 +23,14 @@ export interface TurnPlan {
   hints: Hint[];
   directive?: Directive;
   system: string[];
+  /** 角色回话之后才发生的旁白(同一句话里还要去现场、做验证)。 */
+  after: string[];
   obtained: string[];
   discovered: string[];
   ended: boolean;
 }
 
-const emptyPlan = (): TurnPlan => ({ reveals: [], hints: [], system: [], obtained: [], discovered: [], ended: false });
+const emptyPlan = (): TurnPlan => ({ reveals: [], hints: [], system: [], after: [], obtained: [], discovered: [], ended: false });
 
 export const bossRole = (scn: LoadedScenario) => scn.data.briefing.opening.speaker;
 
@@ -192,14 +194,6 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
     .map((m) => trig.get(m.id))
     .filter((t): t is Trigger => t !== undefined);
 
-  // 0. 找人:问"谁管钱"之类,当前角色会说出这个人
-  for (const t of matched) {
-    if (t.kind !== "find") continue;
-    const via = redirectTarget(scn, st, st.currentRole, t.findRole) ?? t.findRole;
-    plan.hints.push({ kind: "redirect", ruleId: t.id, toRole: via });
-    discover(scn, st, via, `ask:${t.id}`, plan);
-  }
-
   // 1. 收工
   if (gate.acts.includes("end_session")) {
     endSession(st, "user");
@@ -208,26 +202,11 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
     return plan;
   }
 
-  // 2. 换人
+  // 2. 换人。换人失败时这句话没人接,但里面的承诺照样记账(听到承诺就锁定)
   if (gate.acts.includes("switch_role") && gate.target_role && gate.target_role !== st.currentRole) {
-    const r = switchRole(scn, st, gate.target_role, plan);
-    if (!r) return plan;
-  }
-
-  // 3. 动作与验证(自然语言等价于按钮)
-  if (st.phase !== "report") {
-    const act = matched.find((t) => t.kind === "act");
-    if (act && act.kind === "act" && gate.acts.includes("request_site_visit")) {
-      const r = doAction(scn, st, act.actionId);
-      plan.system.push(...r.system);
-      plan.obtained.push(...r.obtained);
-      plan.discovered.push(...r.discovered);
-      return plan;
-    }
-    const exp = matched.find((t) => t.kind === "exp");
-    if (exp && exp.kind === "exp" && gate.acts.includes("request_experiment")) {
-      const r = doExperiment(scn, st, exp.experimentId);
-      plan.system.push(...r.system);
+    const from = st.currentRole;
+    if (!switchRole(scn, st, gate.target_role, plan)) {
+      if (!gate.meta_or_injection) recordCommitments(scn, st, gate, from);
       return plan;
     }
   }
@@ -235,11 +214,22 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   const role = st.currentRole;
   const roleDef = scn.role(role);
 
+  // 3. 只是去现场或做验证(自然语言等价于按钮):直接做,不需要角色回话
+  const actReq = st.phase === "report" ? undefined : actionRequest(gate, matched);
+  if (actReq && isActionOnly(gate, matched)) {
+    const r = runActionRequest(scn, st, actReq);
+    plan.system.push(...r.system);
+    plan.obtained.push(...r.obtained);
+    plan.discovered.push(...r.discovered);
+    return plan;
+  }
+
   // 4. 每个阶段的轮数上限
   const cap = st.phase === "report" ? roleDef.caps?.report_exchanges : roleDef.caps?.kickoff_exchanges;
   const capApplies = st.phase === "report" || st.phase === "kickoff";
   if (cap !== undefined && capApplies && (st.phaseExchanges[role] ?? 0) >= cap) {
     addEvent(st, "cap", { role, phase: st.phase, cap });
+    if (!gate.meta_or_injection) recordCommitments(scn, st, gate, role);
     if (st.phase === "report") {
       endSession(st, "report_cap");
       plan.system.push(`${roleDef.name}看了看表:"就这样吧。"汇报结束,正在生成复盘……`);
@@ -247,11 +237,12 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
     } else {
       leaveKickoff(st);
       plan.system.push(`${roleDef.name}起身去开会了。你可以先去找别人。`);
+      if (actReq) appendAction(plan, runActionRequest(scn, st, actReq), "system");
     }
     return plan;
   }
 
-  // 5. 时间与轮数
+  // 5. 轮数
   st.exchanges[role] = (st.exchanges[role] ?? 0) + 1;
   st.phaseExchanges[role] = (st.phaseExchanges[role] ?? 0) + 1;
   plan.role = role;
@@ -265,49 +256,16 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   }
 
   // 7. 承诺账本(用本轮披露之前的状态判断是否过早)
-  const premature = !evalRequirement(d.rubric.premature_until, stateResolver(st, scn));
-  const commitsNow: LedgerEntry[] = [];
-  for (const c of gate.commitments) {
-    if (!c.firm) continue;
-    const entry: LedgerEntry = {
-      id: `L${st.ledger.length + 1}`,
-      type: c.type,
-      valueText: c.value_text,
-      turn: st.turn,
-      role,
-      premature,
-      knownAtThatTime: knownSnapshot(st),
-    };
-    st.ledger.push(entry);
-    commitsNow.push(entry);
-    addEvent(st, "commitment", { ...entry });
-  }
-  if (gate.acts.includes("retract_commitment")) {
-    const types = gate.retracts?.length ? gate.retracts : undefined;
-    for (const e of st.ledger) {
-      if (e.retractedTurn !== undefined || e.type === "solution") continue;
-      if (types && !types.includes(e.type as never)) continue;
-      e.retractedTurn = st.turn;
-      addEvent(st, "retraction", { ledger: e.id, type: e.type });
-    }
-  }
-  if (gate.acts.includes("propose_solution") && premature) {
-    addEvent(st, "premature_solution", { summary: gate.summary });
-  }
+  const commitsNow = recordCommitments(scn, st, gate, role);
 
-  // 8. 信任:加分行为每种只算一次,每轮最多 +1;减分行为照扣
+  // 8. 信任:每轮最多 +1(每种加分行为只算一次),减分行为每条 -1;与数组顺序无关
   if (roleDef.trust) {
     const before = st.trust[role] ?? 0;
-    let delta = 0;
     const used = (st.trustPlusUsed[role] ??= []);
-    for (const m of gate.trust_moves) {
-      if (m.dir === "minus") delta -= 1;
-      else if (!used.includes(m.what) && delta < 1) {
-        used.push(m.what);
-        delta += 1;
-      }
-    }
-    const after = Math.max(0, Math.min(roleDef.trust.max, before + delta));
+    const fresh = gate.trust_moves.find((m) => m.dir === "plus" && !used.includes(m.what));
+    if (fresh) used.push(fresh.what);
+    const minus = gate.trust_moves.filter((m) => m.dir === "minus").length;
+    const after = Math.max(0, Math.min(roleDef.trust.max, before + (fresh ? 1 : 0) - minus));
     if (after !== before) {
       st.trust[role] = after;
       addEvent(st, "trust_change", { role, from: before, to: after, moves: gate.trust_moves.map((m) => `${m.dir}:${m.what}`) });
@@ -321,7 +279,16 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
     else plan.hints.push({ kind: "blocked", ruleId: t.id, missing: t.flag, missingKind: "auth", toRole: t.role });
   }
 
-  // 10. 解锁:角色对、意图对、前提满足
+  // 10. 找人:问"谁管钱"之类,当前角色会说出这个人(问的就是自己则跳过)
+  for (const t of matched) {
+    if (t.kind !== "find" || t.findRole === role) continue;
+    const via = redirectTarget(scn, st, role, t.findRole) ?? t.findRole;
+    if (via === role) continue;
+    plan.hints.push({ kind: "redirect", ruleId: t.id, toRole: via });
+    discover(scn, st, via, `ask:${t.id}`, plan);
+  }
+
+  // 11. 解锁:角色对、意图对、前提满足
   const resolver = () => stateResolver(st, scn);
   const byFact = new Map<string, Extract<Trigger, { kind: "fact" }>[]>();
   for (const t of matched) {
@@ -377,7 +344,7 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
     plan.reveals.push({ factId: "", level: "L3", text: `把「${art.title}」交给对方`, gives: art.id, ruleId: t.id });
   }
 
-  // 11. 压力时刻:每轮最多一个
+  // 12. 压力时刻:每轮最多一个
   const semantic = new Set(matched.filter((t) => t.kind === "trap").map((t) => (t as { trapId: string }).trapId));
   let beat: string | undefined;
   let trapId: string | undefined;
@@ -389,12 +356,81 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
     }
   }
 
-  // 12. 态度
+  // 13. 态度
   plan.directive = pickDirective(scn, st, { role: roleDef, gate, plan, commitsNow, beat, trapId });
 
-  // 13. 时间(放在最后:本轮仍然有回复,用完后强制进入判断阶段)
+  // 14. 时间(放在最后:本轮仍然有回复,用完后强制进入判断阶段)
   spend(scn, st, roleDef.time_cost_min, plan);
+
+  // 15. 同一句话里还要去现场或做验证:等角色回完话再做,这样本轮刚拿到的授权、刚认识的人都算数
+  if (actReq) appendAction(plan, runActionRequest(scn, st, actReq), "after");
   return plan;
+}
+
+type ActionRequest = { kind: "act"; id: string } | { kind: "exp"; id: string };
+
+function actionRequest(gate: GateOutput, matched: Trigger[]): ActionRequest | undefined {
+  const act = matched.find((t) => t.kind === "act");
+  if (act?.kind === "act" && gate.acts.includes("request_site_visit")) return { kind: "act", id: act.actionId };
+  const exp = matched.find((t) => t.kind === "exp");
+  if (exp?.kind === "exp" && gate.acts.includes("request_experiment")) return { kind: "exp", id: exp.experimentId };
+  return undefined;
+}
+
+/** 这句话除了去现场/做验证之外,没有任何别的内容(没问事、没要授权、没承诺、没有信任行为)。 */
+function isActionOnly(gate: GateOutput, matched: Trigger[]): boolean {
+  const allowed = new Set(["request_site_visit", "request_experiment", "smalltalk", "ask"]);
+  return (
+    gate.acts.every((a) => allowed.has(a)) &&
+    matched.every((t) => t.kind === "act" || t.kind === "exp") &&
+    !gate.commitments.some((c) => c.firm) &&
+    gate.trust_moves.length === 0 &&
+    !gate.meta_or_injection
+  );
+}
+
+function runActionRequest(scn: LoadedScenario, st: SessionState, req: ActionRequest): ActionResult {
+  return req.kind === "act" ? doAction(scn, st, req.id) : doExperiment(scn, st, req.id);
+}
+
+function appendAction(plan: TurnPlan, r: ActionResult, where: "system" | "after") {
+  plan[where].push(...r.system);
+  plan.obtained.push(...r.obtained);
+  plan.discovered.push(...r.discovered);
+}
+
+/** 承诺账本:先处理收回(只收回之前的承诺),再记本轮的坚决承诺。premature 用本轮任何解锁之前的状态。 */
+function recordCommitments(scn: LoadedScenario, st: SessionState, gate: GateOutput, role: string): LedgerEntry[] {
+  const premature = !evalRequirement(scn.data.rubric.premature_until, stateResolver(st, scn));
+  if (gate.acts.includes("retract_commitment")) {
+    const types = gate.retracts?.length ? gate.retracts : undefined;
+    for (const e of st.ledger) {
+      if (e.retractedTurn !== undefined || e.type === "solution") continue;
+      if (types && !types.includes(e.type as never)) continue;
+      e.retractedTurn = st.turn;
+      addEvent(st, "retraction", { ledger: e.id, type: e.type });
+    }
+  }
+  const commitsNow: LedgerEntry[] = [];
+  for (const c of gate.commitments) {
+    if (!c.firm) continue;
+    const entry: LedgerEntry = {
+      id: `L${st.ledger.length + 1}`,
+      type: c.type,
+      valueText: c.value_text,
+      turn: st.turn,
+      role,
+      premature,
+      knownAtThatTime: knownSnapshot(st),
+    };
+    st.ledger.push(entry);
+    commitsNow.push(entry);
+    addEvent(st, "commitment", { ...entry });
+  }
+  if (gate.acts.includes("propose_solution") && premature) {
+    addEvent(st, "premature_solution", { summary: gate.summary });
+  }
+  return commitsNow;
 }
 
 interface DirectiveCtx {
@@ -411,7 +447,7 @@ export function pickDirective(scn: LoadedScenario, st: SessionState, c: Directiv
   const extra: Partial<Directive> = {};
   if (c.beat) extra.beat = c.beat;
   if (c.trapId) extra.trapId = c.trapId;
-  const redirect = plan.hints.find((h) => h.kind === "redirect");
+  const redirect = plan.hints.find((h) => h.kind === "redirect" && h.toRole !== role.id);
   if (redirect?.toRole) extra.redirectTo = redirect.toRole;
 
   const stance = ((): Directive["stance"] => {
@@ -428,8 +464,10 @@ export function pickDirective(scn: LoadedScenario, st: SessionState, c: Directiv
     if (cap && (st.phaseExchanges[role.id] ?? 0) >= Math.ceil(cap * 0.75)) return "impatient";
     if (role.trust && (st.exchanges[role.id] ?? 0) === 1) return "test_user";
     const trustOk = !role.trust || (st.trust[role.id] ?? 0) >= 1;
-    if (plan.reveals.some((r) => r.level !== "L1") && trustOk) return "cooperative";
-    if (role.trust && !trustOk) return "guarded";
+    const disclosing = plan.reveals.some((r) => r.level !== "L1");
+    if (disclosing && trustOk) return "cooperative";
+    // 规则已经允许说出来的事(L2 不要求信任),不能再下"只给模糊印象"的指令,否则这条事实被记为已说、实际却没说
+    if (role.trust && !trustOk && !disclosing) return "guarded";
     return "neutral";
   })();
 
@@ -596,6 +634,7 @@ export function planReportOpening(scn: LoadedScenario, st: SessionState): TurnPl
     addEvent(st, "trap", { trap: "ledger_recall", by: boss, entries: firm.map((e) => e.id) });
     plan.directive = makeDirective("push_back", {
       beat: `开口第一句就把对方上午的原话拿出来:"你上午说${said}",问现在是不是还算数、怎么又变了`,
+      fallback: `你上午说${said},现在还算数吗?`,
     });
   } else {
     plan.directive = makeDirective("push_back", { beat: "让对方直接说结论:到底怎么回事、要多少钱、多久能在大会上演示" });

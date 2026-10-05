@@ -7,7 +7,7 @@ steps:
     gate: {t: [P4@chen:L2], tags: [leading]}
     check: {directive: deflect, discovered: [liu]}
   - say: 我猜主要是识别准确率不够,对吧?
-    gate: {tags: [leading]}
+    gate: {t: [P2@liu:L1], tags: [leading]}
     check: {trap: TR1}
   - say: 你们之前是不是也买过类似的工具?
     gate: {t: [K1@zhou:L1], tags: [leading]}
