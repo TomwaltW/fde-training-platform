@@ -1,0 +1,34 @@
+# Caddy:对外 80/443,自动申请并续期 HTTPS 证书(Let's Encrypt),HTTP 自动跳转 HTTPS。
+# {$DOMAIN} 来自 .env 的 DOMAIN(compose 传进容器);没填时是 localhost,Caddy 用自签证书。
+# 证书申请的前提:域名已完成 ICP 备案、A 记录指向本机、安全组放行 80 和 443。
+# 改完本文件:./infra/compose.sh exec caddy caddy reload --config /etc/caddy/Caddyfile
+
+{$DOMAIN:localhost} {
+	# 压缩:接口 JSON 和页面都能省不少流量(资料图片本身已压缩,Caddy 会按类型跳过)
+	encode zstd gzip
+
+	# 常见安全头。不加 CSP:Next.js 有内联脚本,需要 nonce 方案,等页面稳定后再加。
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		# 不暴露服务端软件名
+		-Server
+	}
+
+	# 访问日志(含来访 IP、时间、请求路径),供安全审计。
+	# 《网络安全法》要求网络日志留存不少于六个月,这里按 200 天滚动删除;单文件 50 MiB,最多 100 个。
+	log {
+		output file /data/logs/access.log {
+			roll_size 50MiB
+			roll_keep 100
+			roll_keep_for 200d
+		}
+		format json
+	}
+
+	reverse_proxy app:3000
+}

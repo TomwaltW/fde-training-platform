@@ -1,0 +1,88 @@
+# FDE 训练平台:一台服务器上的全部服务(方案 2.2)。
+#   app       Next.js 页面与接口(infra/Dockerfile 构建),只在内部网络监听 3000
+#   postgres  PostgreSQL 16,数据在 pgdata 卷里;不对外开放端口
+#   caddy     对外 80/443,自动申请 HTTPS 证书,反代到 app:3000
+#
+# 请用 infra/compose.sh 运行(它会带上仓库根目录的 .env 做变量替换),例如:
+#   ./infra/compose.sh up -d --build
+# 等价于在仓库根目录执行:
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d --build
+# 本文件里的相对路径都相对于 infra/ 目录。
+
+name: fde
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    # 固定镜像名,升级前可以 docker tag 留一份旧版本用来回滚(见 docs/deploy.md)
+    image: fde-app:latest
+    restart: unless-stopped
+    # 应用读的变量都在仓库根目录的 .env 里(模板见 .env.example)
+    env_file:
+      - path: ../.env
+        required: false
+    # 下面这几个由 compose 决定,会覆盖 .env 里的同名变量
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-fde}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-fde}
+      FDE_ROOT: /app
+      # Caddy 固定反代到 app:3000,这里不要改
+      PORT: "3000"
+    expose:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fde}
+      # 没填密码时官方镜像会拒绝初始化,不会带着空密码跑起来
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-fde}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # $$ 是 compose 的转义:变量在容器里展开,不在宿主机上替换
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    shm_size: 128mb
+    logging: *default-logging
+
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Caddyfile 里的 {$DOMAIN};没填时用 localhost(Caddy 自签证书,只适合本机或 SSH 隧道自测)
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # 证书、ACME 账号和访问日志(/data/logs)都在这个卷里,删掉会重新申请证书
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    logging: *default-logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
