@@ -125,6 +125,8 @@ describe("公开接口", () => {
       icpNumber: null,
       publicSecurityNumber: null,
       inviteOnly: true,
+      smsLogin: false,
+      presaleOpen: false,
     });
   });
 

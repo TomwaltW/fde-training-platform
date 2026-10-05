@@ -71,3 +71,71 @@ export function optionalEnv(name: string): string | null {
   const v = process.env[name]?.trim();
   return v ? v : null;
 }
+
+// ================================================================ 第三轮
+
+/** 站点对外地址(邀请邮件里的链接用):SITE_URL,没有就用 https://<DOMAIN>,都没有是本地开发地址。 */
+export function siteUrl(): string {
+  const v = optionalEnv("SITE_URL");
+  if (v) return v.replace(/\/+$/, "");
+  const domain = optionalEnv("DOMAIN");
+  return domain ? `https://${domain}` : "http://localhost:3000";
+}
+
+/** 候补名单是否开放登记(WAITLIST_OPEN=0 关闭)。 */
+export function waitlistOpen(): boolean {
+  return process.env.WAITLIST_OPEN !== "0";
+}
+
+export interface SmsConfig {
+  accessKeyId: string;
+  accessKeySecret: string;
+  /** 短信签名(审核通过的)。 */
+  signName: string;
+  /** 验证码模板,内容里用 ${code}。 */
+  templateCode: string;
+  endpoint: string;
+}
+
+/** 阿里云短信:四个变量都填了才算配置好。 */
+export function smsConfig(): SmsConfig | null {
+  const accessKeyId = optionalEnv("ALIYUN_SMS_ACCESS_KEY_ID");
+  const accessKeySecret = optionalEnv("ALIYUN_SMS_ACCESS_KEY_SECRET");
+  const signName = optionalEnv("ALIYUN_SMS_SIGN_NAME");
+  const templateCode = optionalEnv("ALIYUN_SMS_TEMPLATE_CODE");
+  if (!accessKeyId || !accessKeySecret || !signName || !templateCode) return null;
+  return { accessKeyId, accessKeySecret, signName, templateCode, endpoint: optionalEnv("ALIYUN_SMS_ENDPOINT") ?? "https://dysmsapi.aliyuncs.com" };
+}
+
+/**
+ * 是否开放手机号登录:配置了短信;或者开发模式(FDE_DEV_LOGIN_CODES=1)下打开了 FDE_DEV_SMS_LOGIN=1
+ * (不真发短信,验证码在响应里回显,用来本地调试和测试)。
+ */
+export function smsLoginEnabled(): boolean {
+  return smsConfig() !== null || (devLoginCodes() && process.env.FDE_DEV_SMS_LOGIN === "1");
+}
+
+function intEnv(name: string, fallback: number): number {
+  const v = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
+/** 全站每小时最多发多少条短信(防刷,超了 429)。 */
+export function smsHourlyLimit(): number {
+  return intEnv("SMS_HOURLY_LIMIT", 100);
+}
+
+/** 同一手机号每天(UTC+8)最多发多少条。 */
+export function smsDailyPerPhone(): number {
+  return intEnv("SMS_DAILY_PER_PHONE", 10);
+}
+
+/** 商品与免费场景配置(预售页、兑换码)。 */
+export function productsConfigPath(): string {
+  return process.env.FDE_PRODUCTS_CONFIG ? resolve(process.env.FDE_PRODUCTS_CONFIG) : resolve(fdeRoot(), "config/products.yaml");
+}
+
+/** 方案 6.3 的门槛配置。 */
+export function gatesConfigPath(): string {
+  return process.env.FDE_GATES_CONFIG ? resolve(process.env.FDE_GATES_CONFIG) : resolve(fdeRoot(), "config/gates.yaml");
+}

@@ -11,6 +11,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const { id } = await ctx.params;
     const action = await readJson(req, ActionSchema);
     const store = await getStore();
-    return json(await playStep(store, auth, id, (engine, state) => engine.act(state, action)));
+    return json(await playStep(store, auth, id, (engine, state) => engine.act(state, action), { type: "action", actionType: action.type }));
   });
 }

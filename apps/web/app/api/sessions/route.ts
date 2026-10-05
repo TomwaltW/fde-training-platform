@@ -4,6 +4,7 @@ import type { CreateSessionResponse, SessionsResponse } from "@fde/contracts";
 import { publicView } from "@fde/engine";
 import { requireUser } from "../../../lib/server/auth.ts";
 import { dailySessionLimit } from "../../../lib/server/env.ts";
+import { recordEvent, visitorIdFrom } from "../../../lib/server/events.ts";
 import { HttpError, MESSAGES, handle, json, nowIso, readJson } from "../../../lib/server/http.ts";
 import { getScenario } from "../../../lib/server/scenarios.ts";
 import { CreateSessionSchema } from "../../../lib/server/schemas.ts";
@@ -34,6 +35,13 @@ export async function POST(req: Request) {
       },
       10_000,
     );
+    await recordEvent({
+      type: "session_created",
+      userId: user.id,
+      sessionId: created.id,
+      visitorId: visitorIdFrom(req),
+      props: { scenarioId: entry.scn.data.meta.id },
+    });
     const res: CreateSessionResponse = { sessionId: created.id, view: publicView(entry.scn, created.state) };
     return json(res, 201);
   });

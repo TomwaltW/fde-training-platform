@@ -1,0 +1,47 @@
+{
+  "total": 3,
+  "invited": 1,
+  "registered": 1,
+  "bySource": [
+    {
+      "source": "xhs",
+      "count": 2
+    },
+    {
+      "source": "(直接访问)",
+      "count": 1
+    }
+  ],
+  "rows": [
+    {
+      "email": "early@example.com",
+      "role": "career_switch",
+      "note": "想转 FDE,练练访谈",
+      "source": "xhs",
+      "createdAt": "2026-10-05T07:00:00.000Z",
+      "invitedAt": "2026-10-05T07:30:00.000Z",
+      "inviteCode": "QWER2345",
+      "registered": true
+    },
+    {
+      "email": "second@example.com",
+      "role": "fde",
+      "note": null,
+      "source": "xhs",
+      "createdAt": "2026-10-05T07:10:00.000Z",
+      "invitedAt": null,
+      "inviteCode": null,
+      "registered": false
+    },
+    {
+      "email": "third@example.com",
+      "role": null,
+      "note": null,
+      "source": null,
+      "createdAt": "2026-10-05T07:20:00.000Z",
+      "invitedAt": null,
+      "inviteCode": null,
+      "registered": false
+    }
+  ]
+}

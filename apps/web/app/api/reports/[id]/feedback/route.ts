@@ -1,4 +1,4 @@
-// POST /api/reports/:id/feedback —— 推荐意愿(0–10)、文字反馈、对某个维度的申诉,至少填一项(本人)。
+// POST /api/reports/:id/feedback —— 推荐意愿(0–10)、文字反馈、对某个维度的申诉、想不想玩下一个场景,至少填一项(本人)。
 import { requireUser } from "../../../../../lib/server/auth.ts";
 import { HttpError, handle, json, nowIso, readJson } from "../../../../../lib/server/http.ts";
 import { FeedbackSchema } from "../../../../../lib/server/schemas.ts";
@@ -20,6 +20,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       rating: body.rating ?? null,
       text: body.text ? body.text : null,
       dispute: body.dispute ?? null,
+      wantNext: body.wantNext ?? null,
       createdAt: nowIso(),
     });
     return json({ ok: true }, 201);

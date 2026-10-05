@@ -11,6 +11,13 @@ export function randomInviteCode(): string {
   return s;
 }
 
+/** 兑换码:12 位(字符集同邀请码),每 4 位一组。 */
+export function randomRedeemCode(): string {
+  let s = "";
+  for (let i = 0; i < 12; i++) s += INVITE_ALPHABET[randomInt(INVITE_ALPHABET.length)];
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}`;
+}
+
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }

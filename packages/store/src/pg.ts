@@ -1,10 +1,15 @@
 // PgStore:线上 PostgreSQL 16。只依赖 SqlClient(线上传 pg.Pool,测试传 PGlite)。
-// 表结构见 infra/db/001_init.sql。时间一律以 ISO 字符串传入、用 ::timestamptz 转换,读回来再转成 ISO。
+// 表结构见 infra/db/001_init.sql 与 002_round3.sql。时间一律以 ISO 字符串传入、用 ::timestamptz 转换,读回来再转成 ISO。
 import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   VersionConflictError,
+  normalizeRedeemCode,
+  type EventQuery,
+  type RedeemCode,
+  type StoredEvent,
+  type WaitlistEntry,
   type SqlClient,
   type StoredFeedback,
   type StoredLlmCall,
@@ -15,7 +20,7 @@ import {
 } from "@fde/contracts";
 import type { SessionReport, SessionState } from "@fde/engine";
 import { withProcessLock } from "./lock.ts";
-import { normalizeEmail, randomInviteCode, toIso, toIsoOrNull } from "./util.ts";
+import { normalizeEmail, randomInviteCode, randomRedeemCode, toIso, toIsoOrNull } from "./util.ts";
 
 export interface PgStoreOptions {
   /** 迁移脚本目录(infra/db),按文件名排序执行 *.sql,已执行的记在 schema_migrations。 */
@@ -38,9 +43,21 @@ function numOrNull(v: unknown): number | null {
   return v === null || v === undefined ? null : num(v);
 }
 
-function toUser(r: Row): User {
-  return { id: String(r.id), email: String(r.email), createdAt: toIso(r.created_at), consentAt: toIsoOrNull(r.consent_at) };
+function strOrNull(v: unknown): string | null {
+  return v === null || v === undefined ? null : String(v);
 }
+
+function toUser(r: Row): User {
+  return {
+    id: String(r.id),
+    email: strOrNull(r.email),
+    phone: strOrNull(r.phone),
+    createdAt: toIso(r.created_at),
+    consentAt: toIsoOrNull(r.consent_at),
+  };
+}
+
+const USER_COLS = "id, email, phone, created_at, consent_at";
 
 function toSession(r: Row): StoredSession {
   return {
@@ -62,9 +79,46 @@ function toFeedback(r: Row): StoredFeedback {
     rating: numOrNull(r.rating),
     text: r.text === null || r.text === undefined ? null : String(r.text),
     dispute: r.dispute === null || r.dispute === undefined ? null : json<{ dimension: string; reason: string }>(r.dispute),
+    wantNext: r.want_next === null || r.want_next === undefined ? null : Boolean(r.want_next),
     createdAt: toIso(r.created_at),
   };
 }
+
+function toWaitlist(r: Row): WaitlistEntry {
+  return {
+    email: String(r.email),
+    role: strOrNull(r.role),
+    note: strOrNull(r.note),
+    source: strOrNull(r.source),
+    createdAt: toIso(r.created_at),
+    invitedAt: toIsoOrNull(r.invited_at),
+    inviteCode: strOrNull(r.invite_code),
+  };
+}
+
+function toEvent(r: Row): StoredEvent {
+  return {
+    at: toIso(r.at),
+    type: String(r.type),
+    userId: strOrNull(r.user_id),
+    sessionId: strOrNull(r.session_id),
+    visitorId: strOrNull(r.visitor_id),
+    props: json<Record<string, unknown>>(r.props ?? {}),
+  };
+}
+
+function toRedeemCode(r: Row): RedeemCode {
+  return {
+    code: String(r.code),
+    productId: String(r.product_id),
+    note: strOrNull(r.note),
+    createdAt: toIso(r.created_at),
+    redeemedBy: strOrNull(r.redeemed_by),
+    redeemedAt: toIsoOrNull(r.redeemed_at),
+  };
+}
+
+const REDEEM_COLS = "code, product_id, note, created_at, redeemed_by, redeemed_at";
 
 function toLlmCall(r: Row): StoredLlmCall {
   return {
@@ -149,19 +203,32 @@ class PgStore implements Store {
 
   async createUser(email: string): Promise<User> {
     const r = await this.rows(
-      "insert into users (id, email, created_at, consent_at) values ($1, $2, $3::timestamptz, null) returning id, email, created_at, consent_at",
+      `insert into users (id, email, phone, created_at, consent_at) values ($1, $2, null, $3::timestamptz, null) returning ${USER_COLS}`,
       [randomUUID(), normalizeEmail(email), new Date().toISOString()],
     );
     return toUser(r[0]!);
   }
 
+  async createUserByPhone(phone: string): Promise<User> {
+    const r = await this.rows(
+      `insert into users (id, email, phone, created_at, consent_at) values ($1, null, $2, $3::timestamptz, null) returning ${USER_COLS}`,
+      [randomUUID(), phone, new Date().toISOString()],
+    );
+    return toUser(r[0]!);
+  }
+
   async getUser(id: string): Promise<User | null> {
-    const r = await this.rows("select id, email, created_at, consent_at from users where id = $1", [id]);
+    const r = await this.rows(`select ${USER_COLS} from users where id = $1`, [id]);
     return r[0] ? toUser(r[0]) : null;
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
-    const r = await this.rows("select id, email, created_at, consent_at from users where email = $1", [normalizeEmail(email)]);
+    const r = await this.rows(`select ${USER_COLS} from users where email = $1`, [normalizeEmail(email)]);
+    return r[0] ? toUser(r[0]) : null;
+  }
+
+  async getUserByPhone(phone: string): Promise<User | null> {
+    const r = await this.rows(`select ${USER_COLS} from users where phone = $1`, [phone]);
     return r[0] ? toUser(r[0]) : null;
   }
 
@@ -176,23 +243,23 @@ class PgStore implements Store {
 
   // ---------------------------------------------------------------- 登录验证码
 
-  async saveLoginCode(email: string, codeHash: string, expiresAt: string): Promise<void> {
+  async saveLoginCode(address: string, codeHash: string, expiresAt: string): Promise<void> {
     await this.rows(
-      `insert into login_codes (email, code_hash, expires_at, attempts) values ($1, $2, $3::timestamptz, 0)
-       on conflict (email) do update set code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0`,
-      [normalizeEmail(email), codeHash, expiresAt],
+      `insert into login_codes (address, code_hash, expires_at, attempts) values ($1, $2, $3::timestamptz, 0)
+       on conflict (address) do update set code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0`,
+      [normalizeEmail(address), codeHash, expiresAt],
     );
   }
 
-  async verifyLoginCode(email: string, codeHash: string, now: string): Promise<boolean> {
-    const e = normalizeEmail(email);
+  async verifyLoginCode(address: string, codeHash: string, now: string): Promise<boolean> {
+    const e = normalizeEmail(address);
     // 对了就删:一条 DELETE 带全部条件,并发的两次正确提交只有一次成功
     const ok = await this.rows(
-      "delete from login_codes where email = $1 and code_hash = $2 and expires_at > $3::timestamptz and attempts < $4 returning email",
+      "delete from login_codes where address = $1 and code_hash = $2 and expires_at > $3::timestamptz and attempts < $4 returning address",
       [e, codeHash, now, MAX_LOGIN_ATTEMPTS],
     );
     if (ok.length) return true;
-    await this.rows("update login_codes set attempts = attempts + 1 where email = $1", [e]);
+    await this.rows("update login_codes set attempts = attempts + 1 where address = $1", [e]);
     return false;
   }
 
@@ -204,7 +271,7 @@ class PgStore implements Store {
 
   async getUserByAuthToken(tokenHash: string, now: string): Promise<User | null> {
     const r = await this.rows(
-      `select u.id, u.email, u.created_at, u.consent_at from auth_tokens t join users u on u.id = t.user_id
+      `select u.id, u.email, u.phone, u.created_at, u.consent_at from auth_tokens t join users u on u.id = t.user_id
        where t.token_hash = $1 and t.expires_at > $2::timestamptz`,
       [tokenHash, now],
     );
@@ -271,7 +338,7 @@ class PgStore implements Store {
   }
 
   async deleteUserSessions(userId: string): Promise<number> {
-    // reports、feedback、llm_calls 都是 on delete cascade
+    // reports、feedback、llm_calls、events(带 session_id 的)都是 on delete cascade
     const r = await this.rows("delete from sessions where user_id = $1 returning id", [userId]);
     return r.length;
   }
@@ -296,14 +363,14 @@ class PgStore implements Store {
 
   async addFeedback(f: StoredFeedback): Promise<void> {
     await this.rows(
-      "insert into feedback (session_id, user_id, rating, text, dispute, created_at) values ($1, $2, $3, $4, $5::jsonb, $6::timestamptz)",
-      [f.sessionId, f.userId, f.rating, f.text, f.dispute === null ? null : JSON.stringify(f.dispute), f.createdAt],
+      "insert into feedback (session_id, user_id, rating, text, dispute, want_next, created_at) values ($1, $2, $3, $4, $5::jsonb, $6, $7::timestamptz)",
+      [f.sessionId, f.userId, f.rating, f.text, f.dispute === null ? null : JSON.stringify(f.dispute), f.wantNext ?? null, f.createdAt],
     );
   }
 
   async listFeedback(opts: { sessionId?: string; limit?: number } = {}): Promise<StoredFeedback[]> {
     const r = await this.rows(
-      `select session_id, user_id, rating, text, dispute, created_at from feedback
+      `select session_id, user_id, rating, text, dispute, want_next, created_at from feedback
        where ($1::text is null or session_id = $1) order by created_at desc, id desc limit $2`,
       [opts.sessionId ?? null, opts.limit === undefined ? null : Math.max(0, opts.limit)],
     );
@@ -332,6 +399,98 @@ class PgStore implements Store {
   async totalCostYuan(): Promise<number> {
     const r = await this.rows<{ total: unknown }>("select coalesce(sum(cost_yuan), 0) as total from llm_calls");
     return num(r[0]?.total ?? 0);
+  }
+
+  // ================================================================ 第三轮
+
+  // ---------------------------------------------------------------- 候补名单
+
+  async addToWaitlist(e: { email: string; role: string | null; note: string | null; source: string | null; createdAt: string }): Promise<{ created: boolean }> {
+    const r = await this.rows(
+      `insert into waitlist (email, role, note, source, created_at) values ($1, $2, $3, $4, $5::timestamptz)
+       on conflict (email) do nothing returning email`,
+      [normalizeEmail(e.email), e.role, e.note, e.source, e.createdAt],
+    );
+    return { created: r.length > 0 };
+  }
+
+  async listWaitlist(opts: { invited?: boolean; limit?: number } = {}): Promise<WaitlistEntry[]> {
+    const r = await this.rows(
+      `select email, role, note, source, created_at, invited_at, invite_code from waitlist
+       where ($1::boolean is null or (invited_at is not null) = $1::boolean)
+       order by created_at, email limit $2`,
+      [opts.invited ?? null, opts.limit === undefined ? null : Math.max(0, opts.limit)],
+    );
+    return r.map(toWaitlist);
+  }
+
+  async markWaitlistInvited(email: string, inviteCode: string, at: string): Promise<void> {
+    await this.rows("update waitlist set invite_code = $2, invited_at = $3::timestamptz where email = $1", [normalizeEmail(email), inviteCode, at]);
+  }
+
+  // ---------------------------------------------------------------- 事件
+
+  async logEvent(e: StoredEvent): Promise<void> {
+    await this.rows(
+      "insert into events (at, type, user_id, session_id, visitor_id, props) values ($1::timestamptz, $2, $3, $4, $5, $6::jsonb)",
+      [e.at, e.type, e.userId, e.sessionId, e.visitorId, JSON.stringify(e.props ?? {})],
+    );
+  }
+
+  async listEvents(q: EventQuery = {}): Promise<StoredEvent[]> {
+    const r = await this.rows(
+      `select at, type, user_id, session_id, visitor_id, props from events
+       where ($1::timestamptz is null or at >= $1::timestamptz)
+         and ($2::timestamptz is null or at < $2::timestamptz)
+         and ($3::text[] is null or type = any($3::text[]))
+         and ($4::text is null or session_id = $4)
+         and ($5::text is null or user_id = $5)
+         and ($6::text is null or visitor_id = $6)
+       order by at, id limit $7`,
+      [q.since ?? null, q.until ?? null, q.types ?? null, q.sessionId ?? null, q.userId ?? null, q.visitorId ?? null, q.limit === undefined ? null : Math.max(0, q.limit)],
+    );
+    return r.map(toEvent);
+  }
+
+  // ---------------------------------------------------------------- 兑换码
+
+  async createRedeemCodes(productId: string, count: number, note?: string): Promise<string[]> {
+    const codes: string[] = [];
+    const now = new Date().toISOString();
+    while (codes.length < count) {
+      const code = randomRedeemCode();
+      const r = await this.rows(
+        "insert into redeem_codes (code, product_id, note, created_at) values ($1, $2, $3, $4::timestamptz) on conflict (code) do nothing returning code",
+        [code, productId, note ?? null, now],
+      );
+      if (r.length) codes.push(code);
+    }
+    return codes;
+  }
+
+  async getRedeemCode(code: string): Promise<RedeemCode | null> {
+    const r = await this.rows(`select ${REDEEM_COLS} from redeem_codes where code = $1`, [normalizeRedeemCode(code)]);
+    return r[0] ? toRedeemCode(r[0]) : null;
+  }
+
+  async redeemCode(code: string, userId: string, at: string): Promise<RedeemCode | null> {
+    // 条件写在同一条 UPDATE 里:并发兑换同一个码只有一个成功
+    const r = await this.rows(
+      `update redeem_codes set redeemed_by = $2, redeemed_at = $3::timestamptz
+       where code = $1 and redeemed_at is null returning ${REDEEM_COLS}`,
+      [normalizeRedeemCode(code), userId, at],
+    );
+    return r[0] ? toRedeemCode(r[0]) : null;
+  }
+
+  async listRedeemCodes(opts: { productId?: string; redeemedBy?: string; limit?: number } = {}): Promise<RedeemCode[]> {
+    const r = await this.rows(
+      `select ${REDEEM_COLS} from redeem_codes
+       where ($1::text is null or product_id = $1) and ($2::text is null or redeemed_by = $2)
+       order by created_at desc, code limit $3`,
+      [opts.productId ?? null, opts.redeemedBy ?? null, opts.limit === undefined ? null : Math.max(0, opts.limit)],
+    );
+    return r.map(toRedeemCode);
   }
 }
 

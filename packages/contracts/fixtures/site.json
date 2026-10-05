@@ -3,5 +3,7 @@
   "modelDisclosure": "通义千问 qwen-plus(备案号:待填写);DeepSeek(备案号:待填写)",
   "icpNumber": null,
   "publicSecurityNumber": null,
-  "inviteOnly": true
+  "inviteOnly": true,
+  "smsLogin": false,
+  "presaleOpen": false
 }

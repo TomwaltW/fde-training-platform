@@ -8,6 +8,9 @@ import { api, failureMessage } from "@/lib/client/api";
 import { cx, formatDateTime, formatPercent, formatScore, formatYuan, phaseLabel } from "@/lib/client/format";
 import { alert, btn, card, field } from "@/lib/client/ui";
 import { AdminGate, adminWrap } from "./AdminGate";
+import { GatesPanel } from "./GatesPanel";
+import { RedeemPanel } from "./RedeemPanel";
+import { WaitlistPanel } from "./WaitlistPanel";
 
 const PAGE = 50;
 
@@ -193,6 +196,11 @@ function AdminDashboard() {
           )}
         </section>
       </div>
+
+      {/* 第三轮:各自展开后才加载 */}
+      <GatesPanel />
+      <WaitlistPanel />
+      <RedeemPanel />
     </main>
   );
 }

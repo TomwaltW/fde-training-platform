@@ -1,0 +1,19 @@
+{
+  "entitlements": [
+    {
+      "productId": "sprint",
+      "productName": "求职冲刺包",
+      "code": "ABCD-EFGH-JKLM",
+      "redeemedAt": "2026-10-05T09:10:00.000Z",
+      "includes": {
+        "scenarios": "all",
+        "extraDailySessions": 5,
+        "humanReview": true
+      }
+    }
+  ],
+  "dailySessionLimit": 8,
+  "scenarios": "all",
+  "humanReview": true,
+  "humanReviewHowTo": "兑换后加微信 fde-sim,发送兑换码预约时间。"
+}

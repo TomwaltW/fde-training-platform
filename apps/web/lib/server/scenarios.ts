@@ -21,6 +21,7 @@ import {
 } from "@fde/engine";
 import { createGateway, loadModelsConfig, type LlmCallLog } from "@fde/llm";
 import { engineMode, fdeRoot } from "./env.ts";
+import { scenarioAccess } from "./products.ts";
 import { runtime, type ScenarioEntry } from "./runtime.ts";
 import { getStore } from "./store.ts";
 
@@ -112,6 +113,7 @@ export function scenarioSummary(scn: LoadedScenario): ScenarioSummary {
   return {
     id: d.meta.id,
     title: d.meta.title,
+    access: scenarioAccess(d.meta.id),
     difficulty: d.meta.difficulty,
     estMinutes: d.meta.est_minutes,
     skillFocus: d.meta.skill_focus,

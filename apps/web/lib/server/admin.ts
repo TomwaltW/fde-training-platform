@@ -1,5 +1,6 @@
 // 管理接口的计算:统计、对局列表、反馈行。
 import type { AdminSessionRow, AdminStats, FeedbackRow, Store, StoredFeedback, StoredSession } from "@fde/contracts";
+import { userLabel } from "./auth.ts";
 import { sessionSummaries } from "./sessions.ts";
 
 /** 统计时一页取多少局(按开始时间倒序翻页)。 */
@@ -80,7 +81,7 @@ export function emailLookup(store: Store) {
   return (userId: string): Promise<string> => {
     let p = cache.get(userId);
     if (!p) {
-      p = store.getUser(userId).then((u) => u?.email ?? "(已删除的用户)");
+      p = store.getUser(userId).then((u) => (u ? userLabel(u) : "(已删除的用户)"));
       cache.set(userId, p);
     }
     return p;
@@ -115,6 +116,7 @@ export async function feedbackRows(store: Store, rows: StoredFeedback[]): Promis
       rating: f.rating,
       text: f.text,
       dispute: f.dispute,
+      wantNext: f.wantNext,
       createdAt: f.createdAt,
     })),
   );

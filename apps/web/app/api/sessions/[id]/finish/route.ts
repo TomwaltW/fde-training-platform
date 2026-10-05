@@ -2,6 +2,7 @@
 import type { FinishResponse } from "@fde/contracts";
 import { publicReport } from "@fde/engine";
 import { requireUser } from "../../../../../lib/server/auth.ts";
+import { recordEvent } from "../../../../../lib/server/events.ts";
 import { handle, json, nowIso } from "../../../../../lib/server/http.ts";
 import { FINISH_LOCK_WAIT_MS, assertOwner, loadSession, scenarioOf } from "../../../../../lib/server/sessions.ts";
 import { getStore } from "../../../../../lib/server/store.ts";
@@ -33,6 +34,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         const now = nowIso();
         await store.saveSession(id, s.state, s.version, { endedAt: s.endedAt ?? now });
         await store.saveReport(id, report, now);
+        await recordEvent({
+          type: "session_finished",
+          userId: auth.user.id,
+          sessionId: id,
+          props: { total: report.score.total, minutesUsed: s.state.minutesUsed, turns: s.state.turn },
+        });
         return respond(report);
       },
       FINISH_LOCK_WAIT_MS,

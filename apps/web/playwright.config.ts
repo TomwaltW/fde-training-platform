@@ -2,7 +2,8 @@
 // 两个视口:手机 390×844(isMobile、hasTouch)和电脑 1280×800。浏览器用镜像里预装的 chromium。
 import { defineConfig } from "@playwright/test";
 
-const PORT = 3312;
+// 多个 worktree 同时跑时用 E2E_MOCK_PORT 错开端口(否则会复用到别人的 next dev)
+const PORT = Number(process.env.E2E_MOCK_PORT ?? 3312);
 
 export default defineConfig({
   testDir: "e2e/mock",

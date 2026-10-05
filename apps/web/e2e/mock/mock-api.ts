@@ -7,6 +7,7 @@ import type {
   ActionBody,
   ActionResponse,
   ArtifactResponse,
+  EntitlementsResponse,
   FeedbackBody,
   FinishResponse,
   Me,
@@ -26,6 +27,8 @@ export function fixture<T>(name: string): T {
 
 export const SESSION_ID = "s-fixture-0001";
 export const DEV_CODE = "246810";
+/** 第三轮:mock 里唯一能兑换成功的兑换码。 */
+export const MOCK_REDEEM_CODE = "ABCD-EFGH-JKLM";
 
 /** 1×1 的 PNG,资料图片请求用。 */
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
@@ -74,6 +77,11 @@ export class MockApi {
   unhandled: string[] = [];
   /** 可以替换资料响应(比如测试看图左右翻时多给几张图)。 */
   artifactOverride: ArtifactResponse | null = null;
+  // ---- 第三轮
+  /** 浏览器上报的事件(POST /api/events 的请求体)。 */
+  events: unknown[] = [];
+  /** GET /api/me/entitlements 的响应;兑换成功后换成 entitlements-sprint。 */
+  entitlements: EntitlementsResponse = fixture<EntitlementsResponse>("entitlements-empty");
 
   constructor(opts: MockOptions = {}) {
     this.auth = opts.auth ?? "user";
@@ -116,6 +124,13 @@ export class MockApi {
     // ---- 不需要登录
     if (method === "GET" && path === "/api/site") return json(route, 200, fixture("site"));
     if (method === "GET" && path === "/api/scenarios") return json(route, 200, fixture("scenarios"));
+    // 第三轮
+    if (method === "POST" && path === "/api/events") {
+      this.events.push(body);
+      return route.fulfill({ status: 204 });
+    }
+    if (method === "POST" && path === "/api/waitlist") return json(route, 201, { ok: true, alreadyJoined: false });
+    if (method === "GET" && path === "/api/products") return json(route, 200, fixture("products"));
     if (method === "POST" && path === "/api/auth/request-code") {
       const b = body as { email?: string; inviteCode?: string };
       if (!b?.email) return apiError(route, 400, "bad_request", "邮箱不能为空");
@@ -190,9 +205,33 @@ export class MockApi {
       return json(route, 200, { ok: true });
     }
 
+    // 第三轮:兑换(MOCK_REDEEM_CODE 能兑,其他都无效)
+    if (method === "GET" && path === "/api/me/entitlements") return json(route, 200, this.entitlements);
+    if (method === "POST" && path === "/api/redeem") {
+      const code = String((body as { code?: string })?.code ?? "")
+        .toUpperCase()
+        .replace(/[\s-]/g, "");
+      if (code !== MOCK_REDEEM_CODE.replace(/-/g, "")) return apiError(route, 400, "redeem_invalid", "兑换码无效或已经被使用");
+      this.entitlements = fixture<EntitlementsResponse>("entitlements-sprint");
+      return json(route, 200, { entitlement: this.entitlements.entitlements[0], entitlements: this.entitlements });
+    }
+
     // ---- 管理接口
     if (path.startsWith("/api/admin/")) {
       if (!me.isAdmin) return apiError(route, 403, "forbidden", "没有权限");
+      // 第三轮
+      if (method === "GET" && path === "/api/admin/waitlist") return json(route, 200, fixture("admin-waitlist"));
+      if (method === "POST" && path === "/api/admin/waitlist/invite") {
+        const b = body as { count?: number; emails?: string[] };
+        const emails = b?.emails ?? ["second@example.com", "third@example.com"].slice(0, Math.max(1, b?.count ?? 1));
+        return json(route, 200, { invited: emails.map((email, i) => ({ email, inviteCode: `WAIT${String(i + 2).padStart(4, "2")}`, mailed: false })) });
+      }
+      if (method === "GET" && path === "/api/admin/gates") return json(route, 200, fixture("admin-gates"));
+      if (method === "GET" && path === "/api/admin/redeem-codes") return json(route, 200, fixture("admin-redeem-codes"));
+      if (method === "POST" && path === "/api/admin/redeem-codes") {
+        const n = Math.max(1, Math.min(50, Number((body as { count?: number })?.count ?? 1)));
+        return json(route, 200, { codes: Array.from({ length: n }, (_, i) => `MOCK-CODE-${String(i + 1).padStart(4, "2")}`) });
+      }
       if (method === "GET" && path === "/api/admin/stats") return json(route, 200, fixture("admin-stats"));
       if (method === "GET" && path === "/api/admin/sessions") return json(route, 200, fixture("admin-sessions"));
       if (method === "GET" && path.match(/^\/api\/admin\/sessions\/[^/]+$/)) return json(route, 200, fixture("admin-session-detail"));

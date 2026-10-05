@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ScenarioSummary, SessionSummary } from "@fde/contracts";
-import { api, failureMessage, isFailure, loginHref } from "@/lib/client/api";
+import { api, failureMessage, isFailure, loginHref, track } from "@/lib/client/api";
 import { formatDateTime } from "@/lib/client/format";
 import { useSite } from "@/lib/client/hooks";
 import { alert, btn, card } from "@/lib/client/ui";
+import { WaitlistForm } from "./WaitlistForm";
 
 function Difficulty({ level }: { level: number }) {
   return (
@@ -27,6 +28,12 @@ export function LandingClient() {
   const [resume, setResume] = useState<SessionSummary | null>(null);
   const [starting, setStarting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 第三轮埋点:落地页打开(带上链接里的 ?from= 来源)
+    const from = new URLSearchParams(window.location.search).get("from");
+    track("landing_viewed", from && /^[A-Za-z0-9_-]{1,32}$/.test(from) ? { props: { from } } : {});
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -112,6 +119,7 @@ export function LandingClient() {
           )}
         </article>
       ))}
+      <WaitlistForm />
     </section>
   );
 }

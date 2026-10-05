@@ -9,6 +9,7 @@ import { api, failureMessage, loginHref } from "@/lib/client/api";
 import { cx, formatDateTime, formatScore, phaseLabel } from "@/lib/client/format";
 import { useMe } from "@/lib/client/hooks";
 import { alert, btn, card, pageWrap } from "@/lib/client/ui";
+import { EntitlementsCard } from "./EntitlementsCard";
 
 export function MeClient() {
   const router = useRouter();
@@ -104,13 +105,25 @@ export function MeClient() {
         )}
       </section>
 
+      <EntitlementsCard />
+
       <section aria-labelledby="account-title" className={cx(card, "p-5")}>
         <h2 id="account-title" className="text-lg font-semibold">
           账号
         </h2>
         <dl className="mt-3 grid grid-cols-[6rem_1fr] gap-y-2 text-[15px]">
-          <dt className="text-ink-3">邮箱</dt>
-          <dd className="break-all">{me.user.email}</dd>
+          {me.user.email !== null && (
+            <>
+              <dt className="text-ink-3">邮箱</dt>
+              <dd className="break-all">{me.user.email}</dd>
+            </>
+          )}
+          {me.user.phone !== null && (
+            <>
+              <dt className="text-ink-3">手机号</dt>
+              <dd>{me.user.phone.replace(/^\+86/, "")}</dd>
+            </>
+          )}
           <dt className="text-ink-3">同意协议</dt>
           <dd>{me.user.consentAt ? formatDateTime(me.user.consentAt) : "还没有同意"}</dd>
         </dl>

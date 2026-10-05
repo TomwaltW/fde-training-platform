@@ -6,7 +6,21 @@ import type {
   AdminSessionDetail,
   AdminSessionsResponse,
   AdminStats,
+  AdminRedeemCodesResponse,
+  AdminWaitlistResponse,
   ApiError,
+  ClientEventType,
+  CreateRedeemCodesBody,
+  CreateRedeemCodesResponse,
+  EntitlementsResponse,
+  GatesResponse,
+  InviteWaitlistBody,
+  InviteWaitlistResponse,
+  ProductsResponse,
+  RedeemBody,
+  RedeemResponse,
+  WaitlistBody,
+  WaitlistResponse,
   ArtifactResponse,
   CreateInvitesBody,
   CreateInvitesResponse,
@@ -57,6 +71,8 @@ const FALLBACK: Record<FailureCode, string> = {
   session_ended: "这一局已经结束了",
   rate_limited: "操作太频繁,稍后再试",
   internal: "服务器出错了,请稍后再试",
+  entitlement_required: "这个场景需要先兑换相应的商品",
+  redeem_invalid: "兑换码无效或已经被使用",
   network: "网络连接失败,请检查网络后重试",
   unknown: "出了点问题,请稍后再试",
 };
@@ -159,7 +175,53 @@ export const api = {
   adminSession: (id: string) => request<AdminSessionDetail>("GET", `/api/admin/sessions/${enc(id)}`),
   adminFeedback: () => request<AdminFeedbackResponse>("GET", "/api/admin/feedback"),
   createInvites: (b: CreateInvitesBody) => request<CreateInvitesResponse>("POST", "/api/admin/invites", b),
+
+  // ---------------------------------------------------------------- 第三轮
+  joinWaitlist: (b: WaitlistBody) => request<WaitlistResponse>("POST", "/api/waitlist", b),
+  adminWaitlist: (status: "all" | "pending" | "invited" = "all") => request<AdminWaitlistResponse>("GET", `/api/admin/waitlist?status=${status}`),
+  inviteWaitlist: (b: InviteWaitlistBody) => request<InviteWaitlistResponse>("POST", "/api/admin/waitlist/invite", b),
+
+  adminGates: (range: { since?: string; until?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (range.since) qs.set("since", range.since);
+    if (range.until) qs.set("until", range.until);
+    const s = qs.toString();
+    return request<GatesResponse>("GET", `/api/admin/gates${s ? `?${s}` : ""}`);
+  },
+
+  products: () => request<ProductsResponse>("GET", "/api/products"),
+  entitlements: () => request<EntitlementsResponse>("GET", "/api/me/entitlements"),
+  redeem: (b: RedeemBody) => request<RedeemResponse>("POST", "/api/redeem", b),
+  adminRedeemCodes: (q: { productId?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (q.productId) qs.set("productId", q.productId);
+    if (q.limit) qs.set("limit", String(q.limit));
+    const s = qs.toString();
+    return request<AdminRedeemCodesResponse>("GET", `/api/admin/redeem-codes${s ? `?${s}` : ""}`);
+  },
+  createRedeemCodes: (b: CreateRedeemCodesBody) => request<CreateRedeemCodesResponse>("POST", "/api/admin/redeem-codes", b),
 };
+
+/** 候补名单 CSV 的下载地址(对应契约里的 ADMIN_WAITLIST_CSV_ROUTE)。 */
+export const ADMIN_WAITLIST_CSV_URL = "/api/admin/waitlist.csv";
+
+/**
+ * 上报一条浏览器事件(第三轮,方案 6.3 的指标)。发出去就不管:不等响应、失败不报错、不影响页面。
+ * 用 keepalive,页面跳转或关闭时也能发出去。
+ */
+export function track(type: ClientEventType, extra: { sessionId?: string; props?: Record<string, string | number | boolean> } = {}): void {
+  try {
+    void fetch("/api/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type, ...extra }),
+      credentials: "same-origin",
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    // 埋点失败不影响页面
+  }
+}
 
 /** 资料文件本体的地址(对应契约里的 ARTIFACT_FILE_ROUTE)。 */
 export function artifactFileUrl(sessionId: string, artifactId: string, name: string): string {

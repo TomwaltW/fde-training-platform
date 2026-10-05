@@ -14,10 +14,15 @@ const read = (p: string) => readFileSync(resolve(ROOT, p), "utf8");
 // ---------------------------------------------------------------- 公共解析
 
 /** spec 3.2「环境变量」表第一列里的变量名(以 spec 为唯一来源)。 */
+/** 第一轮 spec 3.2 与第三轮 spec 第 5 节的「环境变量」表。 */
 function specEnvVars(): string[] {
-  const lines = read("docs/dev-spec-2026-10-05.md").split("\n");
+  return [...specEnvVarsOf("docs/dev-spec-2026-10-05.md"), ...specEnvVarsOf("docs/dev-spec-r3-2026-10-05.md")];
+}
+
+function specEnvVarsOf(file: string): string[] {
+  const lines = read(file).split("\n");
   const start = lines.findIndex((l) => l.startsWith("**环境变量**"));
-  if (start < 0) throw new Error("spec 里找不到「环境变量」表");
+  if (start < 0) throw new Error(`${file} 里找不到「环境变量」表`);
   const names: string[] = [];
   let inTable = false;
   for (const line of lines.slice(start + 1)) {
@@ -244,6 +249,10 @@ describe(".env.example", () => {
         "FDE_MODELS_CONFIG", "FDE_BANNED_WORDS", "FDE_AUTH_SECRET", "FDE_DEV_LOGIN_CODES", "SMTP_URL", "MAIL_FROM",
         "ADMIN_EMAILS", "FDE_DAILY_SESSION_LIMIT", "SITE_MODEL_DISCLOSURE", "SITE_ICP_NUMBER", "SITE_PUBLIC_SECURITY_NUMBER",
         "FDE_COOKIE_SECURE", "PORT", "DOMAIN", "OSS_BUCKET", "OSS_ENDPOINT", "OSS_ACCESS_KEY_ID", "OSS_ACCESS_KEY_SECRET",
+        // 第三轮
+        "ALIYUN_SMS_ACCESS_KEY_ID", "ALIYUN_SMS_ACCESS_KEY_SECRET", "ALIYUN_SMS_SIGN_NAME", "ALIYUN_SMS_TEMPLATE_CODE",
+        "ALIYUN_SMS_ENDPOINT", "SMS_HOURLY_LIMIT", "SMS_DAILY_PER_PHONE", "FDE_DEV_SMS_LOGIN", "SITE_URL", "WAITLIST_OPEN",
+        "FDE_PRODUCTS_CONFIG", "FDE_GATES_CONFIG",
       ]),
     );
   });
@@ -268,7 +277,7 @@ describe(".env.example", () => {
   });
 
   it("模板里不带真实密钥", () => {
-    for (const key of ["DASHSCOPE_API_KEY", "DEEPSEEK_API_KEY", "FDE_AUTH_SECRET", "SMTP_URL", "POSTGRES_PASSWORD", "OSS_ACCESS_KEY_ID", "OSS_ACCESS_KEY_SECRET"]) {
+    for (const key of ["DASHSCOPE_API_KEY", "DEEPSEEK_API_KEY", "FDE_AUTH_SECRET", "SMTP_URL", "POSTGRES_PASSWORD", "OSS_ACCESS_KEY_ID", "OSS_ACCESS_KEY_SECRET", "ALIYUN_SMS_ACCESS_KEY_ID", "ALIYUN_SMS_ACCESS_KEY_SECRET"]) {
       const e = entries.find((x) => x.name === key)!;
       expect(e.value, key).toBe("");
     }

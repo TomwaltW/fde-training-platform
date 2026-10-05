@@ -16,6 +16,16 @@ async function transport(url: string) {
   return t;
 }
 
+/** 发一封纯文本邮件(第三轮:邀请邮件等);没配置 SMTP 返回 false。发送失败抛错。 */
+export async function sendMail(msg: { to: string; subject: string; text: string }): Promise<boolean> {
+  const url = optionalEnv("SMTP_URL");
+  if (!url) return false;
+  const t = await transport(url);
+  const from = optionalEnv("MAIL_FROM") ?? "FDE 训练场 <no-reply@localhost>";
+  await t.sendMail({ from, to: msg.to, subject: msg.subject, text: msg.text });
+  return true;
+}
+
 /** 发出验证码;没配置 SMTP 返回 false。发送失败抛错。 */
 export async function sendLoginCodeMail(to: string, code: string): Promise<boolean> {
   const url = optionalEnv("SMTP_URL");

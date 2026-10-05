@@ -1,7 +1,7 @@
 "use client";
 // 普通页面的顶栏(对局页有自己的顶栏)。右侧按登录状态显示"登录"或"我的对局"。
 import Link from "next/link";
-import { useMe } from "@/lib/client/hooks";
+import { useMe, useSite } from "@/lib/client/hooks";
 
 export function Brand() {
   return (
@@ -16,11 +16,17 @@ export function Brand() {
 
 export function SiteHeader() {
   const [me] = useMe();
+  const { site } = useSite();
   return (
     <header className="border-b border-line bg-surface/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4">
         <Brand />
         <nav aria-label="主导航" className="flex items-center gap-1 text-[15px]">
+          {site.presaleOpen && (
+            <Link href="/presale" className="inline-flex min-h-11 items-center rounded-lg px-3 text-ink-2 hover:bg-surface-2 hover:text-ink">
+              预售
+            </Link>
+          )}
           {me.status === "ok" ? (
             <>
               {me.user.isAdmin && (

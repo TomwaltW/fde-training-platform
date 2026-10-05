@@ -1,0 +1,9 @@
+{
+  "entitlements": [],
+  "dailySessionLimit": 3,
+  "scenarios": [
+    "freight-docs"
+  ],
+  "humanReview": false,
+  "humanReviewHowTo": null
+}

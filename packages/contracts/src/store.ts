@@ -1,11 +1,14 @@
 // 持久化契约(本轮冻结)。两套实现:MemoryStore(本地开发、测试;可选落盘 JSON)和 PgStore(线上 PostgreSQL 16)。
 // 两套实现必须通过同一套一致性测试(packages/store/test/conformance.ts)。
-// 表结构见 infra/db/001_init.sql(同样冻结)。所有时间都是 ISO 8601 字符串(UTC)。
+// 表结构见 infra/db/001_init.sql(同样冻结)与第三轮的 002_round3.sql(只增不改)。所有时间都是 ISO 8601 字符串(UTC)。
 import type { SessionReport, SessionState } from "@fde/engine";
 
 export interface User {
   id: string;
-  email: string;
+  /** 统一小写。第三轮起手机号注册的用户为 null(email 与 phone 至少有一个)。 */
+  email: string | null;
+  /** 第三轮:"+86" 开头的 E.164 手机号;邮箱注册的用户为 null。 */
+  phone: string | null;
   createdAt: string;
   consentAt: string | null;
 }
@@ -36,6 +39,8 @@ export interface StoredFeedback {
   rating: number | null;
   text: string | null;
   dispute: { dimension: string; reason: string } | null;
+  /** 第三轮:想不想玩下一个场景;没回答为 null。 */
+  wantNext: boolean | null;
   createdAt: string;
 }
 
@@ -52,6 +57,52 @@ export interface StoredLlmCall {
   latencyMs: number;
   ok: boolean;
   error: string | null;
+}
+
+// ---------------------------------------------------------------- 第三轮
+
+export interface WaitlistEntry {
+  /** 统一小写。 */
+  email: string;
+  role: string | null;
+  note: string | null;
+  source: string | null;
+  createdAt: string;
+  invitedAt: string | null;
+  inviteCode: string | null;
+}
+
+export interface StoredEvent {
+  at: string;
+  type: string;
+  userId: string | null;
+  sessionId: string | null;
+  /** 匿名访客 id(cookie fde_vid);服务端事件里可以为 null。 */
+  visitorId: string | null;
+  props: Record<string, unknown>;
+}
+
+export interface EventQuery {
+  /** 含。 */
+  since?: string;
+  /** 不含。 */
+  until?: string;
+  types?: string[];
+  sessionId?: string;
+  userId?: string;
+  visitorId?: string;
+  /** 默认不限。 */
+  limit?: number;
+}
+
+export interface RedeemCode {
+  /** 规范格式 XXXX-XXXX-XXXX(字符集同邀请码)。 */
+  code: string;
+  productId: string;
+  note: string | null;
+  createdAt: string;
+  redeemedBy: string | null;
+  redeemedAt: string | null;
 }
 
 /** saveSession 的版本号对不上(别的请求先写了)。 */
@@ -82,21 +133,26 @@ export interface Store {
   redeemInvite(code: string): Promise<boolean>;
 
   // ---------- 用户
-  /** email 统一小写后存。已存在时抛错(调用方应先 getUserByEmail)。 */
+  /** email 统一小写后存(phone 为 null)。已存在时抛错(调用方应先 getUserByEmail)。 */
   createUser(email: string): Promise<User>;
+  /** 第三轮:手机号用户(email 为 null)。phone 由调用方规范成 "+86…" 后传入,原样存。已存在时抛错。 */
+  createUserByPhone(phone: string): Promise<User>;
   getUser(id: string): Promise<User | null>;
   getUserByEmail(email: string): Promise<User | null>;
+  /** 第三轮。按原样比较(调用方先规范化)。 */
+  getUserByPhone(phone: string): Promise<User | null>;
   setConsent(userId: string, at: string): Promise<void>;
   countUsers(): Promise<number>;
 
   // ---------- 登录验证码(只存哈希)
-  /** 覆盖该邮箱之前的验证码,尝试次数清零。 */
-  saveLoginCode(email: string, codeHash: string, expiresAt: string): Promise<void>;
+  // address 是统一小写的邮箱,或第三轮起的 "+86…" 手机号(两者不会重合:邮箱一定含 @)。
+  /** 覆盖该地址之前的验证码,尝试次数清零。 */
+  saveLoginCode(address: string, codeHash: string, expiresAt: string): Promise<void>;
   /**
    * 校验:哈希相同且未过期且尝试次数 < 5 → 删除这条验证码并返回 true;
    * 否则尝试次数 +1 并返回 false。没有验证码返回 false。
    */
-  verifyLoginCode(email: string, codeHash: string, now: string): Promise<boolean>;
+  verifyLoginCode(address: string, codeHash: string, now: string): Promise<boolean>;
 
   // ---------- 登录态(cookie 里放随机 token,库里只存哈希)
   createAuthToken(userId: string, tokenHash: string, expiresAt: string): Promise<void>;
@@ -122,7 +178,7 @@ export interface Store {
    * fn 抛错时锁也要释放。
    */
   withSessionLock<T>(id: string, fn: () => Promise<T>, timeoutMs?: number): Promise<T>;
-  /** 删除该用户的所有对局及其复盘、反馈、模型调用记录;返回删除的对局数。 */
+  /** 删除该用户的所有对局及其复盘、反馈、模型调用记录(第三轮起还有这些对局的事件);返回删除的对局数。 */
   deleteUserSessions(userId: string): Promise<number>;
 
   // ---------- 复盘
@@ -139,6 +195,37 @@ export interface Store {
   listLlmCalls(sessionId: string): Promise<StoredLlmCall[]>;
   /** 所有调用的总花费(元),costYuan 为 null 的按 0 计。 */
   totalCostYuan(): Promise<number>;
+
+  // ================================================================ 第三轮
+
+  // ---------- 候补名单
+  /**
+   * 登记。email 统一小写。已经在名单里时什么都不改,返回 created: false。
+   * role / note / source 原样存(调用方负责校验和截断)。
+   */
+  addToWaitlist(e: { email: string; role: string | null; note: string | null; source: string | null; createdAt: string }): Promise<{ created: boolean }>;
+  /** 按 createdAt 从早到晚(同一时间按 email)。invited:true 只要已邀请的,false 只要还没邀请的,省略为全部。 */
+  listWaitlist(opts?: { invited?: boolean; limit?: number }): Promise<WaitlistEntry[]>;
+  /** 记下发出的邀请码和时间;不在名单里的 email 什么都不做。 */
+  markWaitlistInvited(email: string, inviteCode: string, at: string): Promise<void>;
+
+  // ---------- 事件
+  logEvent(e: StoredEvent): Promise<void>;
+  /** 按 at 从早到晚(同一时间按写入顺序)。 */
+  listEvents(q?: EventQuery): Promise<StoredEvent[]>;
+
+  // ---------- 兑换码
+  /** 生成 count 个兑换码(规范格式 XXXX-XXXX-XXXX,随机,不重复),返回规范格式。 */
+  createRedeemCodes(productId: string, count: number, note?: string): Promise<string[]>;
+  /** 按任意写法查(不区分大小写,忽略空格和短横线);不存在返回 null。 */
+  getRedeemCode(code: string): Promise<RedeemCode | null>;
+  /**
+   * 兑换:码存在且还没被用过 → 记下 userId 和时间,返回兑换后的行;否则返回 null(含已被任何人用过)。
+   * 并发调用同一个码只有一个成功。
+   */
+  redeemCode(code: string, userId: string, at: string): Promise<RedeemCode | null>;
+  /** 新的在前(createdAt 倒序,同一时间按 code)。 */
+  listRedeemCodes(opts?: { productId?: string; redeemedBy?: string; limit?: number }): Promise<RedeemCode[]>;
 }
 
 /** PgStore 只依赖这个最小接口:线上传 pg.Pool,测试传 PGlite。 */
@@ -147,4 +234,10 @@ export interface SqlClient {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
   /** 多条语句的脚本(迁移用,没有参数)。pg.Pool 可以不提供(它的 query 不带参数时就能跑多条)。 */
   exec?(sql: string): Promise<unknown>;
+}
+
+/** 兑换码的规范格式:去掉空格和短横线、转大写后每 4 位一组用 "-" 连接。两套实现与接口层共用。 */
+export function normalizeRedeemCode(input: string): string {
+  const raw = input.toUpperCase().replace(/[\s-]/g, "");
+  return raw.match(/.{1,4}/g)?.join("-") ?? "";
 }

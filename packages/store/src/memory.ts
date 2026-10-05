@@ -5,6 +5,11 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname } from "node:path";
 import {
   VersionConflictError,
+  normalizeRedeemCode,
+  type EventQuery,
+  type RedeemCode,
+  type StoredEvent,
+  type WaitlistEntry,
   type StoredFeedback,
   type StoredLlmCall,
   type StoredReport,
@@ -14,7 +19,7 @@ import {
 } from "@fde/contracts";
 import type { SessionReport, SessionState } from "@fde/engine";
 import { withProcessLock } from "./lock.ts";
-import { jsonClone, ms, normalizeEmail, randomInviteCode } from "./util.ts";
+import { jsonClone, ms, normalizeEmail, randomInviteCode, randomRedeemCode } from "./util.ts";
 
 export interface MemoryStoreOptions {
   /** 给出时把全部数据落盘成这个 JSON 文件(本地开发重启不丢);不给就纯内存。 */
@@ -49,10 +54,33 @@ interface MemoryData {
   reports: Record<string, StoredReport>;
   feedback: StoredFeedback[];
   llmCalls: StoredLlmCall[];
+  // 第三轮
+  waitlist: Record<string, WaitlistEntry>;
+  events: StoredEvent[];
+  redeemCodes: Record<string, RedeemCode>;
 }
 
 function emptyData(): MemoryData {
-  return { invites: {}, users: {}, loginCodes: {}, authTokens: {}, sessions: {}, reports: {}, feedback: [], llmCalls: [] };
+  return {
+    invites: {},
+    users: {},
+    loginCodes: {},
+    authTokens: {},
+    sessions: {},
+    reports: {},
+    feedback: [],
+    llmCalls: [],
+    waitlist: {},
+    events: [],
+    redeemCodes: {},
+  };
+}
+
+/** 老文件(第三轮之前)里的记录缺新字段,按 null 补上。 */
+function upgrade(d: MemoryData): MemoryData {
+  for (const u of Object.values(d.users)) u.phone ??= null;
+  for (const f of d.feedback) f.wantNext ??= null;
+  return d;
 }
 
 function loadFile(file: string): MemoryData {
@@ -64,7 +92,7 @@ function loadFile(file: string): MemoryData {
     // 宁可启动失败也不要悄悄丢数据
     throw new Error(`内存库文件 ${file} 无法解析:${(e as Error).message}`);
   }
-  return { ...emptyData(), ...(raw as Partial<MemoryData>) };
+  return upgrade({ ...emptyData(), ...(raw as Partial<MemoryData>) });
 }
 
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -119,7 +147,15 @@ class MemoryStore implements Store {
   async createUser(email: string): Promise<User> {
     const e = normalizeEmail(email);
     if (this.findUserByEmail(e)) throw new Error(`用户 ${e} 已存在`);
-    const user: User = { id: randomUUID(), email: e, createdAt: new Date().toISOString(), consentAt: null };
+    const user: User = { id: randomUUID(), email: e, phone: null, createdAt: new Date().toISOString(), consentAt: null };
+    this.data.users[user.id] = user;
+    this.persist();
+    return jsonClone(user);
+  }
+
+  async createUserByPhone(phone: string): Promise<User> {
+    if (Object.values(this.data.users).some((u) => u.phone === phone)) throw new Error(`用户 ${phone} 已存在`);
+    const user: User = { id: randomUUID(), email: null, phone, createdAt: new Date().toISOString(), consentAt: null };
     this.data.users[user.id] = user;
     this.persist();
     return jsonClone(user);
@@ -128,6 +164,11 @@ class MemoryStore implements Store {
   private findUserByEmail(email: string): User | undefined {
     const e = normalizeEmail(email);
     return Object.values(this.data.users).find((u) => u.email === e);
+  }
+
+  async getUserByPhone(phone: string): Promise<User | null> {
+    const u = Object.values(this.data.users).find((x) => x.phone === phone);
+    return u ? jsonClone(u) : null;
   }
 
   async getUser(id: string): Promise<User | null> {
@@ -153,13 +194,13 @@ class MemoryStore implements Store {
 
   // ---------------------------------------------------------------- 登录验证码
 
-  async saveLoginCode(email: string, codeHash: string, expiresAt: string): Promise<void> {
-    this.data.loginCodes[normalizeEmail(email)] = { codeHash, expiresAt, attempts: 0 };
+  async saveLoginCode(address: string, codeHash: string, expiresAt: string): Promise<void> {
+    this.data.loginCodes[normalizeEmail(address)] = { codeHash, expiresAt, attempts: 0 };
     this.persist();
   }
 
-  async verifyLoginCode(email: string, codeHash: string, now: string): Promise<boolean> {
-    const e = normalizeEmail(email);
+  async verifyLoginCode(address: string, codeHash: string, now: string): Promise<boolean> {
+    const e = normalizeEmail(address);
     const row = this.data.loginCodes[e];
     if (!row) return false;
     if (row.codeHash === codeHash && ms(row.expiresAt) > ms(now) && row.attempts < MAX_LOGIN_ATTEMPTS) {
@@ -252,6 +293,7 @@ class MemoryStore implements Store {
     }
     this.data.feedback = this.data.feedback.filter((f) => !ids.has(f.sessionId));
     this.data.llmCalls = this.data.llmCalls.filter((c) => c.sessionId === null || !ids.has(c.sessionId));
+    this.data.events = this.data.events.filter((ev) => ev.sessionId === null || !ids.has(ev.sessionId));
     this.persist();
     return ids.size;
   }
@@ -298,6 +340,105 @@ class MemoryStore implements Store {
 
   async totalCostYuan(): Promise<number> {
     return this.data.llmCalls.reduce((sum, c) => sum + (c.costYuan ?? 0), 0);
+  }
+
+  // ================================================================ 第三轮
+
+  // ---------------------------------------------------------------- 候补名单
+
+  async addToWaitlist(e: { email: string; role: string | null; note: string | null; source: string | null; createdAt: string }): Promise<{ created: boolean }> {
+    const email = normalizeEmail(e.email);
+    if (this.data.waitlist[email]) return { created: false };
+    this.data.waitlist[email] = {
+      email,
+      role: e.role,
+      note: e.note,
+      source: e.source,
+      createdAt: new Date(e.createdAt).toISOString(),
+      invitedAt: null,
+      inviteCode: null,
+    };
+    this.persist();
+    return { created: true };
+  }
+
+  async listWaitlist(opts: { invited?: boolean; limit?: number } = {}): Promise<WaitlistEntry[]> {
+    const rows = Object.values(this.data.waitlist)
+      .filter((w) => opts.invited === undefined || (w.invitedAt !== null) === opts.invited)
+      .sort((a, b) => ms(a.createdAt) - ms(b.createdAt) || (a.email < b.email ? -1 : a.email > b.email ? 1 : 0));
+    return jsonClone(opts.limit === undefined ? rows : rows.slice(0, Math.max(0, opts.limit)));
+  }
+
+  async markWaitlistInvited(email: string, inviteCode: string, at: string): Promise<void> {
+    const w = this.data.waitlist[normalizeEmail(email)];
+    if (!w) return;
+    w.inviteCode = inviteCode;
+    w.invitedAt = new Date(at).toISOString();
+    this.persist();
+  }
+
+  // ---------------------------------------------------------------- 事件
+
+  async logEvent(e: StoredEvent): Promise<void> {
+    this.data.events.push({ ...jsonClone(e), at: new Date(e.at).toISOString() });
+    this.persist();
+  }
+
+  async listEvents(q: EventQuery = {}): Promise<StoredEvent[]> {
+    const since = q.since === undefined ? undefined : ms(q.since);
+    const until = q.until === undefined ? undefined : ms(q.until);
+    const types = q.types === undefined ? undefined : new Set(q.types);
+    const rows = this.data.events
+      .map((e, i) => ({ e, i, t: ms(e.at) }))
+      .filter(
+        ({ e, t }) =>
+          (since === undefined || t >= since) &&
+          (until === undefined || t < until) &&
+          (types === undefined || types.has(e.type)) &&
+          (q.sessionId === undefined || e.sessionId === q.sessionId) &&
+          (q.userId === undefined || e.userId === q.userId) &&
+          (q.visitorId === undefined || e.visitorId === q.visitorId),
+      )
+      .sort((a, b) => a.t - b.t || a.i - b.i)
+      .map(({ e }) => e);
+    return jsonClone(q.limit === undefined ? rows : rows.slice(0, Math.max(0, q.limit)));
+  }
+
+  // ---------------------------------------------------------------- 兑换码
+
+  async createRedeemCodes(productId: string, count: number, note?: string): Promise<string[]> {
+    const codes: string[] = [];
+    const now = new Date().toISOString();
+    while (codes.length < count) {
+      const code = randomRedeemCode();
+      if (this.data.redeemCodes[code]) continue;
+      this.data.redeemCodes[code] = { code, productId, note: note ?? null, createdAt: now, redeemedBy: null, redeemedAt: null };
+      codes.push(code);
+    }
+    this.persist();
+    return codes;
+  }
+
+  async getRedeemCode(code: string): Promise<RedeemCode | null> {
+    const r = this.data.redeemCodes[normalizeRedeemCode(code)];
+    return r ? jsonClone(r) : null;
+  }
+
+  async redeemCode(code: string, userId: string, at: string): Promise<RedeemCode | null> {
+    // 检查和写入之间没有 await,单线程下同一个码只会兑换一次
+    const r = this.data.redeemCodes[normalizeRedeemCode(code)];
+    if (!r || r.redeemedAt !== null) return null;
+    r.redeemedBy = userId;
+    r.redeemedAt = new Date(at).toISOString();
+    this.persist();
+    return jsonClone(r);
+  }
+
+  async listRedeemCodes(opts: { productId?: string; redeemedBy?: string; limit?: number } = {}): Promise<RedeemCode[]> {
+    const rows = Object.values(this.data.redeemCodes)
+      .filter((r) => (opts.productId === undefined || r.productId === opts.productId) && (opts.redeemedBy === undefined || r.redeemedBy === opts.redeemedBy))
+      .sort((a, b) => ms(b.createdAt) - ms(a.createdAt) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+    return jsonClone(opts.limit === undefined ? rows : rows.slice(0, Math.max(0, opts.limit)));
   }
 }
 

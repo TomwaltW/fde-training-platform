@@ -156,7 +156,7 @@ vim .env
 
 ### 5.1 变量表
 
-与 spec 3.2 的环境变量表一致;"生产怎么填"一列是 Docker 部署时的建议。
+与第一轮 spec 3.2、第三轮 spec 第 5 节的环境变量表一致;"生产怎么填"一列是 Docker 部署时的建议。
 
 | 变量 | 默认 | 生产怎么填 | 说明 |
 |---|---|---|---|
@@ -184,6 +184,18 @@ vim .env
 | `OSS_ENDPOINT` | 无 | 建议填 | 如 `oss-cn-hangzhou-internal.aliyuncs.com`(同地域内网) |
 | `OSS_ACCESS_KEY_ID` | 无 | 建议填 | 只有该 Bucket 写权限的 RAM 子账号(第 8 节) |
 | `OSS_ACCESS_KEY_SECRET` | 无 | 建议填 | 同上 |
+| `ALIYUN_SMS_ACCESS_KEY_ID` | 无 | 短信签名审核通过后填 | 只有短信发送权限的 RAM 子账号;四个 `ALIYUN_SMS_*` 都填了才开放手机号登录(见 docs/sms.md) |
+| `ALIYUN_SMS_ACCESS_KEY_SECRET` | 无 | 同上 | 同上 |
+| `ALIYUN_SMS_SIGN_NAME` | 无 | 同上 | 审核通过的短信签名 |
+| `ALIYUN_SMS_TEMPLATE_CODE` | 无 | 同上 | 审核通过的验证码模板,内容里用 `${code}` |
+| `ALIYUN_SMS_ENDPOINT` | `https://dysmsapi.aliyuncs.com` | 不填 | 短信接口地址 |
+| `SMS_HOURLY_LIMIT` | `100` | 不填 | 全站每小时最多发多少条短信(防刷) |
+| `SMS_DAILY_PER_PHONE` | `10` | 不填 | 同一手机号每天最多几条 |
+| `FDE_DEV_SMS_LOGIN` | 无 | **不要设** | 开发模式下不配短信也开放手机号登录 |
+| `SITE_URL` | `https://<DOMAIN>` | 不填 | 邀请邮件里的站点链接 |
+| `WAITLIST_OPEN` | 开 | 不填 | `0` 时关闭候补名单登记 |
+| `FDE_PRODUCTS_CONFIG` | `<FDE_ROOT>/config/products.yaml` | 不填 | 商品、免费场景与预售开关 |
+| `FDE_GATES_CONFIG` | `<FDE_ROOT>/config/gates.yaml` | 不填 | 方案 6.3 的指标门槛 |
 
 只给 compose 用的(应用不读):
 

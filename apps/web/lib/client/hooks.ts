@@ -10,6 +10,8 @@ export const SITE_FALLBACK: SiteInfo = {
   icpNumber: null,
   publicSecurityNumber: null,
   inviteOnly: true,
+  smsLogin: false,
+  presaleOpen: false,
 };
 
 let sitePromise: Promise<SiteInfo> | null = null;

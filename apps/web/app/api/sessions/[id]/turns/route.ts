@@ -11,6 +11,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const { id } = await ctx.params;
     const body = await readJson(req, TurnSchema);
     const store = await getStore();
-    return json(await playStep(store, auth, id, (engine, state) => engine.userTurn(state, body.text)));
+    return json(await playStep(store, auth, id, (engine, state) => engine.userTurn(state, body.text), { type: "turn" }));
   });
 }

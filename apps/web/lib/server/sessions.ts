@@ -2,6 +2,7 @@
 import type { SessionSummary, Store, StoredSession, TurnResponse } from "@fde/contracts";
 import { publicTurnResult, publicView, type Engine, type SessionState, type TurnResult } from "@fde/engine";
 import type { AuthContext } from "./auth.ts";
+import { recordEvent } from "./events.ts";
 import { HttpError, MESSAGES, nowIso } from "./http.ts";
 import { getScenario, scenarioTitle, type ScenarioEntry } from "./scenarios.ts";
 
@@ -44,6 +45,8 @@ export async function playStep(
   auth: AuthContext,
   id: string,
   step: (engine: Engine, state: SessionState) => Promise<TurnResult>,
+  /** 第三轮:记事件用。turn 说话;action 按钮动作(actionType 是 UserAction.type)。 */
+  kind: { type: "turn" } | { type: "action"; actionType: string },
 ): Promise<TurnResponse> {
   const before = await loadSession(store, id);
   assertOwner(auth, before);
@@ -54,9 +57,17 @@ export async function playStep(
       const s = await loadSession(store, id);
       if (isEnded(s)) throw new HttpError("session_ended", MESSAGES.session_ended);
       const { scn, engine } = scenarioOf(s);
+      const t0 = Date.now();
       const r = await step(engine, s.state);
+      const latencyMs = Date.now() - t0;
       const ended = s.state.phase === "debrief";
       await store.saveSession(id, s.state, s.version, ended ? { endedAt: nowIso() } : undefined);
+      await recordEvent({
+        type: kind.type,
+        userId: auth.user.id,
+        sessionId: id,
+        props: { latencyMs, turn: s.state.turn, phase: s.state.phase, ...(kind.type === "action" && { actionType: kind.actionType }) },
+      });
       return { result: publicTurnResult(scn, r), view: publicView(scn, s.state) };
     },
     0,

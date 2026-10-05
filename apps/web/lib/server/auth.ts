@@ -50,8 +50,18 @@ export function clearedSessionCookie(): string {
   return `${SESSION_COOKIE}=; ${cookieAttrs(0)}`;
 }
 
+/** 管理员按邮箱认(ADMIN_EMAILS);手机号用户不会是管理员。 */
+export function isAdminUser(user: User): boolean {
+  return user.email !== null && isAdminEmail(user.email);
+}
+
+/** 给人看的账号标识:邮箱,手机号用户是手机号。 */
+export function userLabel(user: Pick<User, "email" | "phone">): string {
+  return user.email ?? user.phone ?? "(未知账号)";
+}
+
 export function toMe(user: User): Me {
-  return { id: user.id, email: user.email, isAdmin: isAdminEmail(user.email), consentAt: user.consentAt };
+  return { id: user.id, email: user.email, phone: user.phone, isAdmin: isAdminUser(user), consentAt: user.consentAt };
 }
 
 export interface AuthContext {
@@ -68,7 +78,7 @@ export async function currentAuth(req: Request): Promise<AuthContext | null> {
   const store = await getStore();
   const user = await store.getUserByAuthToken(tokenHash, new Date().toISOString());
   if (!user) return null;
-  return { user, isAdmin: isAdminEmail(user.email), tokenHash };
+  return { user, isAdmin: isAdminUser(user), tokenHash };
 }
 
 export async function requireUser(req: Request): Promise<AuthContext> {

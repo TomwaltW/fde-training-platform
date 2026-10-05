@@ -1,0 +1,22 @@
+{
+  "products": [
+    {
+      "id": "sprint",
+      "name": "求职冲刺包",
+      "priceText": "早鸟价 ¥399(原价 ¥699)",
+      "description": "全部场景,外加一次 30 分钟真人复盘。",
+      "includes": {
+        "scenarios": "all",
+        "extraDailySessions": 5,
+        "humanReview": true
+      },
+      "buyUrl": null,
+      "buyNote": "加微信 fde-sim(备注「冲刺包」),转账后发兑换码。",
+      "available": true
+    }
+  ],
+  "freeScenarios": [
+    "freight-docs"
+  ],
+  "humanReviewHowTo": "兑换后加微信 fde-sim,发送兑换码预约时间。"
+}

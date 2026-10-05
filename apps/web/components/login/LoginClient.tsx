@@ -35,7 +35,7 @@ export function LoginClient() {
         if (!alive) return;
         if (r.user.consentAt) router.replace(next);
         else {
-          setEmail(r.user.email);
+          setEmail(r.user.email ?? "");
           setStep("consent");
         }
       })
