@@ -2,7 +2,14 @@
 
 给想做 FDE 的人一个可以翻车的客户现场:AI 扮演的老板、主管、一线和财务各说各的,你去问、去要数据、去做判断,最后拿到一份逐轮指出问题的复盘。
 
-产品与开发方案见 [`FDE训练平台-产品与开发方案-v1.md`](./FDE训练平台-产品与开发方案-v1.md)。本仓库按方案第 5.2 节的里程碑推进,当前完成的是 **W0–W4 的工程部分**:引擎与算分(命令行可玩,回归评测可跑)、合成单据、裁判标定工具、网页(对局、复盘、我的对局、管理页)、邀请码与验证码登录、部署与合规材料。上线前还需要人工完成的事见文末「上线前还要做的」。
+产品与开发方案见 [`FDE训练平台-产品与开发方案-v1.md`](./FDE训练平台-产品与开发方案-v1.md)。本仓库按方案第 5.2 节的里程碑推进,当前完成的是 **W0–W7 的工程部分**:
+
+- 引擎与算分(命令行可玩,回归评测可跑)、合成单据、裁判标定工具;
+- 网页:对局、复盘、我的对局、管理页;邀请码 + 邮箱验证码登录,手机号 + 短信验证码登录(配好短信才开放);
+- 内测与增长要用的:候补名单(W0「候补表单」、W5–W7「分批邀请」)、方案 6.3 继续/转向/放弃指标的看板(自建事件表)、预售页与兑换码核销(7.3「站内不收款」);
+- 部署与合规材料、CI。
+
+上线前还需要人工完成的事见文末「上线前还要做的」。
 
 ## 快速开始
 
@@ -19,14 +26,17 @@ pnpm check             # 类型检查 + 单元测试 + 场景校验 + 回归评�
 
 ```bash
 FDE_DEV_LOGIN_CODES=1 ADMIN_EMAILS=you@example.com pnpm dev:web
-# 打开 http://localhost:3000/login,用 ADMIN_EMAILS 里的邮箱登录(验证码直接显示在页面上),
+# 打开 http://localhost:3000/login,用 ADMIN_EMAILS 里的邮箱登录(验证码直接显示在页面上,不需要邀请码),
 # 在 /admin 生成邀请码给别人。数据落在 .data/dev-store.json。
+# 再加 FDE_DEV_SMS_LOGIN=1 可以在本地试手机号登录(不真发短信,验证码同样显示在页面上)。
 pnpm build:web         # 生产构建(standalone 产物,Docker 镜像用的就是它)
 pnpm test:e2e:mock     # 前端 e2e:拦截接口返回 fixtures,手机和电脑两个视口
 pnpm test:e2e:real     # 真后端 e2e:构建 standalone 产物并启动,从登录走到复盘
 ```
 
 接口与存储的契约在 `packages/contracts/`(冻结);`pnpm fixtures` 用离线引擎重新生成前端 e2e 用的接口样例。
+
+CI(`.github/workflows/ci.yml`)在每个 PR 上跑三组:类型检查与单元测试与回归评测、合成单据自检、网页构建与两套 e2e。本地一键跑第一组:`pnpm ci:local`;各组怎么在本地复现见 [`docs/ci.md`](./docs/ci.md)。
 
 接真模型(需要百炼和 DeepSeek 的 API Key):
 
@@ -53,6 +63,15 @@ tools/docgen/.venv/bin/python tools/docgen/check_docs.py    # 合成单据自检
 ```
 
 每份合成单据都有可见的「合成样本·训练用」标识和元数据里的 AIGC 标识;单据上的公司、人名、单号都是虚构的。详见 [`tools/docgen/README.md`](./tools/docgen/README.md)。
+
+## 内测运营
+
+都在 `/admin` 页面底部(各自展开后才加载):
+
+- **候补名单**:没有邀请码的人在落地页或 `/waitlist` 留邮箱。发内容时把链接写成 `https://<域名>/waitlist?from=xhs`(或 `/?from=jike`),来源会记下来。管理页里按登记顺序或勾选发邀请码;配了 SMTP 会发邀请邮件(链接自动填好邮箱和邀请码),没配就在页面上复制。可导出 CSV。邀请码在对方验证通过时才消耗,输错邮箱不会作废。
+- **继续 / 转向 / 放弃(方案 6.3)**:三关指标按时间范围算,门槛在 `config/gates.yaml`(数值照抄方案,按你的粉丝基数校准一次)。完成者在线时长按事件间隔算(空闲超过 10 分钟按 10 分钟计);"新用户从落地页到第一句话"的秒数也在这里。
+- **兑换码**:商品在 `config/products.yaml`(默认两个商品都没上架,价格待定)。线下成交或企业试点时给任意商品生成兑换码,对方在 `/redeem` 兑换;上架商品后预售页 `/presale` 才出现,站内只核销兑换码、不收款。
+- **手机号登录**:短信签名和模板审核通过后,按 [`docs/sms.md`](./docs/sms.md) 填四个 `ALIYUN_SMS_*`,登录页就会出现手机号入口。
 
 ## 目录
 
@@ -89,8 +108,11 @@ scenarios/freight-docs/
   evals/players/      10 个脚本化玩家
   evals/calibration/  标定用例(现有两个是示例,正式标定时删掉)
 config/models.yaml    线上模型配置
+config/gates.yaml     方案 6.3 的指标门槛
+config/products.yaml  商品、免费场景、预售开关
 infra/                Dockerfile、docker-compose、Caddyfile、备份脚本;db/ 是建表脚本
-docs/                 部署、合规清单、标定流程、本轮开发规格
+docs/                 部署、合规清单、标定流程、短信、CI、各轮开发规格
+.github/workflows/    CI
 ```
 
 ## 引擎的几条硬约束
@@ -139,6 +161,8 @@ docs/                 部署、合规清单、标定流程、本轮开发规格
 - **模型 Key 与标定**:填 `DASHSCOPE_API_KEY`、`DEEPSEEK_API_KEY`,跑 `pnpm evals --live` 看闸门命中率;按 [`docs/calibration.md`](./docs/calibration.md) 人工标注 20 份对话,跑 `pnpm calibrate --live` 过两道门槛。
 - **备案与公示**:ICP 备案号、公安备案号、模型公示文字(`SITE_ICP_NUMBER`、`SITE_PUBLIC_SECURITY_NUMBER`、`SITE_MODEL_DISCLOSURE`),逐项对照 [`docs/compliance-checklist.md`](./docs/compliance-checklist.md)。
 - **协议文本**:`apps/web/content/legal/` 下三份是草稿,不构成法律意见,须法务审阅后替换。
-- **发信**:配置 `SMTP_URL`、`MAIL_FROM`(阿里云邮件推送),否则只能用开发模式的页面回显验证码。
+- **发信**:配置 `SMTP_URL`、`MAIL_FROM`(阿里云邮件推送)。没配 SMTP 时线上发不出验证码,用户无法登录;不要用开发模式的验证码回显代替(生产环境默认也不会生效)。
+- **短信**:提交短信签名和模板;通过后按 `docs/sms.md` 开通手机号登录。开放前请法务看一下隐私政策里手机号那一行。
+- **商品与指标**:在 `config/products.yaml` 定价、写购买方式和真人复盘的预约方式,再把要卖的商品设成 `available: true`;按方案 6.3 的说明在 W0 末校准一次 `config/gates.yaml` 的门槛。
 - **场景内容**:`narratives/real_world.md` 仍是占位,需要作者按方案 4.2 的流程写;单据里的虚构公司名上线前再查一遍重名;LT2609-0446「电子配件」的 HS 编码按真实归类规则复核。
 - **变体 B、C**:引擎已按 `variant` 读取场景并支持 `overlay`,数据还没写。
