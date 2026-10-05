@@ -2,45 +2,20 @@
 // 公开登记的限频、管理页的名单与合计、按登记顺序或勾选发邀请码(有 SMTP 就发邀请邮件)、CSV 导出。
 import { WAITLIST_ROLES, type AdminWaitlistResponse, type InviteWaitlistResponse, type Store, type WaitlistEntry, type WaitlistRole, type WaitlistRow } from "@fde/contracts";
 import { siteUrl } from "./env.ts";
-import { visitorIdFrom } from "./events.ts";
 import { HttpError, nowIso } from "./http.ts";
 import { sendMail } from "./mail.ts";
+import { LIMITS, allowVisitor } from "./ratelimit.ts";
 
 // ---------------------------------------------------------------- 登记限频
 
-/** 同一访客 10 分钟内最多提交 5 次。 */
-export const JOIN_WINDOW_MS = 10 * 60 * 1000;
-export const JOIN_MAX_PER_WINDOW = 5;
-
-const LIMITS_KEY = Symbol.for("fde.web.waitlist-join-limits");
-
-/** 桶 → 窗口内每次提交的时间(毫秒)。放在 globalThis 上,开发模式热更新不清零(同 runtime.ts)。 */
-function joinLimits(): Map<string, number[]> {
-  const g = globalThis as unknown as Record<symbol, Map<string, number[]> | undefined>;
-  return (g[LIMITS_KEY] ??= new Map());
-}
-
-/** 限频的桶:访客 cookie fde_vid;没有就按 x-forwarded-for 的第一段;都没有的算同一个桶。 */
-export function joinBucket(req: Request): string {
-  const vid = visitorIdFrom(req);
-  if (vid) return `vid:${vid}`;
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return ip ? `ip:${ip}` : "unknown";
-}
+/** 同一访客 10 分钟内最多提交 5 次(同一 IP 30 次),额度见 ratelimit.ts 的 LIMITS。 */
+export const JOIN_MAX_PER_WINDOW = LIMITS.waitlistPerVisitor.limit;
 
 /** 占一次提交名额,超了抛 429。占位是同步完成的,并发请求不会超额。 */
-export function claimJoinSlot(bucket: string, now = Date.now()): void {
-  const map = joinLimits();
-  const recent = (map.get(bucket) ?? []).filter((t) => now - t < JOIN_WINDOW_MS);
-  if (recent.length >= JOIN_MAX_PER_WINDOW) {
-    map.set(bucket, recent);
-    const minutes = Math.max(1, Math.ceil((JOIN_WINDOW_MS - (now - recent[0]!)) / 60_000));
-    throw new HttpError("rate_limited", `提交太频繁了,请 ${minutes} 分钟后再试`);
+export function claimJoinSlot(req: Request, now = Date.now()): void {
+  if (!allowVisitor("waitlist", req, LIMITS.waitlistPerVisitor, LIMITS.waitlistPerIp, now)) {
+    throw new HttpError("rate_limited", "提交太频繁了,请过几分钟后再试");
   }
-  recent.push(now);
-  map.set(bucket, recent);
-  // 顺手清理过期的桶,避免表无限增长
-  if (map.size > 5000) for (const [k, ts] of map) if (ts.every((t) => now - t >= JOIN_WINDOW_MS)) map.delete(k);
 }
 
 // ---------------------------------------------------------------- 管理页的名单

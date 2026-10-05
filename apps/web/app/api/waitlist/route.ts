@@ -6,7 +6,7 @@ import { recordEvent, visitorIdFrom } from "../../../lib/server/events.ts";
 import { HttpError, handle, json, nowIso, readJson } from "../../../lib/server/http.ts";
 import { WaitlistSchema } from "../../../lib/server/schemas.ts";
 import { getStore } from "../../../lib/server/store.ts";
-import { claimJoinSlot, joinBucket } from "../../../lib/server/waitlist.ts";
+import { claimJoinSlot } from "../../../lib/server/waitlist.ts";
 
 export async function POST(req: Request) {
   return handle(async () => {
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const body = await readJson(req, WaitlistSchema);
     // 只有机器人会填页面上隐藏的 website:照样回成功,不入库、不记事件、不占限频名额
     if (body.website) return json({ ok: true, alreadyJoined: false } satisfies WaitlistResponse, 201);
-    claimJoinSlot(joinBucket(req));
+    claimJoinSlot(req);
 
     const role = body.role ?? null;
     const source = body.source ?? null;

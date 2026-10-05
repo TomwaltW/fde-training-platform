@@ -8,7 +8,7 @@ import type { CreateSessionResponse, RequestCodeResponse } from "@fde/contracts"
 import * as requestCode from "../app/api/auth/request-code/route.ts";
 import * as verify from "../app/api/auth/verify/route.ts";
 import * as events from "../app/api/events/route.ts";
-import { EVENTS_PER_MINUTE, resetEventQuotaForTests, takeEventQuota } from "../app/api/events/rate-limit.ts";
+import { EVENTS_PER_MINUTE, resetEventQuotaForTests, takeEventQuotaForKey as takeEventQuota } from "../app/api/events/rate-limit.ts";
 import * as consent from "../app/api/me/consent/route.ts";
 import * as sessions from "../app/api/sessions/route.ts";
 import { VISITOR_COOKIE } from "../lib/server/events.ts";

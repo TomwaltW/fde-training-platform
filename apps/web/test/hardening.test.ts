@@ -4,12 +4,15 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import * as events from "../app/api/events/route.ts";
 import * as requestCode from "../app/api/auth/request-code/route.ts";
+import * as waitlist from "../app/api/waitlist/route.ts";
 import * as verify from "../app/api/auth/verify/route.ts";
 import { HttpError, MAX_BODY_BYTES, cleanStrings, readJson } from "../lib/server/http.ts";
 import { LIMITS, allow, clientIp } from "../lib/server/ratelimit.ts";
 import { authSecret, devLoginCodes } from "../lib/server/env.ts";
 import { resetForTests } from "../lib/server/runtime.ts";
+import { getStore } from "../lib/server/store.ts";
 import { safeNext } from "../lib/client/api.ts";
 
 describe("safeNext:只放行站内路径", () => {
@@ -134,5 +137,26 @@ describe("验证码接口按 IP 限频", () => {
     expect(allow("t", "k", 2, 1000, 10)).toBe(true);
     expect(allow("t", "k", 2, 1000, 20)).toBe(false);
     expect(allow("t", "k", 2, 1000, 1001)).toBe(true);
+  });
+});
+
+describe("换着访客 cookie 也绕不过限频(同一 IP 有总额度)", () => {
+  const send = (handler: (req: Request) => Promise<Response>, body: unknown, i: number) =>
+    handler(
+      new Request("http://x/api", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.9", cookie: `fde_vid=rotating-visitor-${String(i).padStart(6, "0")}` },
+      }),
+    );
+
+  it("埋点:每次换一个 cookie,同一 IP 每分钟最多入库 600 条", async () => {
+    for (let i = 0; i < LIMITS.eventsPerIp.limit + 50; i++) expect((await send(events.POST, { type: "landing_viewed" }, i)).status).toBe(204);
+    expect(await (await getStore()).listEvents({ types: ["landing_viewed"] })).toHaveLength(LIMITS.eventsPerIp.limit);
+  });
+
+  it("候补名单:每次换一个 cookie,同一 IP 10 分钟最多 30 次", async () => {
+    for (let i = 0; i < LIMITS.waitlistPerIp.limit; i++) expect((await send(waitlist.POST, { email: `w${i}@example.com` }, i)).status).toBe(201);
+    expect((await send(waitlist.POST, { email: "late@example.com" }, 999)).status).toBe(429);
   });
 });
