@@ -1,0 +1,83 @@
+{% extends "_base.html.j2" %}
+{# 报关草单:货代内部给报关行的核对稿,不是海关正式报关单,不仿制任何官方抬头(方案 4.1 第 4 条)。 #}
+{% block style %}
+.page { padding: 40px 46px; }
+.hd { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #333; padding-bottom: 8px; }
+.hd .co { font-size: 13px; font-weight: bold; }
+.hd .t { font-size: 20px; font-weight: bold; letter-spacing: 2px; }
+.hd .t small { display: block; font-size: 11px; font-weight: normal; letter-spacing: 0; color: #a11; }
+.meta { font-size: 11px; text-align: right; line-height: 1.6; }
+.f { width: 100%; font-size: 11.5px; margin-top: 12px; }
+.f td { border: 1px solid #555; padding: 5px 6px; height: 46px; vertical-align: top; }
+.f .lab { font-size: 9.5px; color: #444; }
+.f .v { font-size: 12.5px; margin-top: 3px; }
+.g { width: 100%; font-size: 11.5px; margin-top: 10px; }
+.g th { border: 1px solid #555; background: #eee; padding: 5px; font-size: 10.5px; }
+.g td { border: 1px solid #555; padding: 8px 6px; height: 40px; vertical-align: top; }
+.ph { color: #777; font-size: 10.5px; }
+.ft { margin-top: 18px; font-size: 11.5px; display: flex; justify-content: space-between; }
+.box { border: 1px solid #555; min-height: 90px; padding: 6px 8px; margin-top: 10px; font-size: 11px; }
+{% endblock %}
+{% block body %}
+<div class="page">
+  <div class="hd">
+    <div><div class="co">{{ forwarder.cn }}</div><div class="muted" style="font-size:10.5px">{{ forwarder.en }} · 单证部</div></div>
+    <div class="t">出口报关资料草单<small>内部核对稿 · 非正式报关单</small></div>
+    <div class="meta">草单号:{{ draft_no }}<br>日期:{{ date }}</div>
+  </div>
+  <table class="f">
+    <tr>
+      <td colspan="2" style="width:40%"><div class="lab">发货人(客户)</div><div class="v">{{ exporter }}</div></td>
+      <td><div class="lab">运单号</div><div class="v"><b>{{ ref }}</b></div></td>
+      <td><div class="lab">运输方式</div><div class="v">{{ transport }}</div></td>
+    </tr>
+    <tr>
+      <td><div class="lab">起运港</div><div class="v">{{ pol }}</div></td>
+      <td><div class="lab">运抵国(地区)</div><div class="v">{{ country }}</div></td>
+      <td><div class="lab">指运港</div><div class="v">{{ pod }}</div></td>
+      <td><div class="lab">目的仓</div><div class="v">FBA {{ fba }}</div></td>
+    </tr>
+    <tr>
+      <td><div class="lab">包装种类</div><div class="v">纸箱</div></td>
+      <td><div class="lab">件数(箱)</div><div class="v">{{ cartons }}</div></td>
+      <td><div class="lab">毛重(KG)</div><div class="v">{{ gw | kg }}</div></td>
+      <td><div class="lab">成交方式 / 币制</div><div class="v">{{ terms }} / 美元</div></td>
+    </tr>
+  </table>
+  <table class="g">
+    <thead>
+      <tr>
+        <th style="width:5%">项号</th>
+        <th style="width:17%">商品编号(HS)</th>
+        <th style="width:15%">商品名称</th>
+        <th>规格型号 / 申报要素</th>
+        <th style="width:11%">数量及单位</th>
+        <th style="width:9%">单价</th>
+        <th style="width:12%">总价</th>
+        <th style="width:7%">原产国</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ln in lines %}
+      <tr>
+        <td class="ctr">{{ ln.no }}</td>
+        <td>{{ ln.hs }}<div class="ph">占位,非真实编码</div></td>
+        <td><b>{{ ln.declared }}</b></td>
+        <td>{{ ln.spec }}</td>
+        <td class="num">{{ ln.pcs | qty }} 个</td>
+        <td class="num">{{ ln.unit | money }}</td>
+        <td class="num">{{ ln.amount | money }}</td>
+        <td class="ctr">中国</td>
+      </tr>
+      {% endfor %}
+      {% for _ in range(3) %}<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <div class="box"><b>备注:</b>{{ remark }}</div>
+  <div class="box" style="min-height:70px"><b>随附单据:</b>{% for a in attachments %}☐ {{ a }}　{% endfor %}</div>
+  <div class="ft">
+    <div>制单:{{ maker }}</div><div>复核:＿＿＿＿＿＿</div><div>报关行确认:＿＿＿＿＿＿</div>
+  </div>
+  {% if pdf %}<div class="pdfmark">{{ mark }}</div>{% endif %}
+</div>
+{% endblock %}

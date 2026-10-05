@@ -1,0 +1,26 @@
+key,value,basis
+a8.contract_amount_cny,68000,K1「花 6.8 万」
+a8.abandon_after_months,3,K1「3 个月弃用」
+a8.contract_year,2024,K1「前年」;场景年份 2026
+a8.sign_date,2024-03-18,设计参数
+a8.acceptance_date,2024-04-22,设计参数
+a8.stop_month,2024-07,验收月 + K1 弃用月数
+a8.payment_first_pct,50,设计参数
+a8.payment_first_cny,34000,合同金额 × 首付比例
+a8.payment_final_cny,34000,合同金额 − 首付
+a8.license_users,5,设计参数
+a8.vendor_accuracy_claim,≥95%,"设计参数(乙方宣称,以乙方标准样张测试)"
+a6.waybill,LT2609-0412,shipments.csv clue_ids=P4
+a6.customer,栖木家居,shipments.csv
+a6.original_cartons,40,shipments.csv bl_cartons(原版)
+a6.revised_cartons,46,shipments.csv cartons(改2)
+a6.added_cartons,6,改2 − 原版
+a6.revised_version,改2,shipments.csv pl_version
+a6.t_original_posted,2026-09-01 14:05,设计参数(出货前一天)
+a6.t_email_sent,2026-09-01 16:20,设计参数(出货前一天)
+a6.t_rev1_posted,2026-09-01 20:16,设计参数(出货前一天)
+a6.t_rev2_posted,2026-09-01 23:41,设计参数(出货前一天)
+a6.t_chen_ack,2026-09-02 08:52,设计参数(出货当天)
+a6.t_broker_reply,2026-09-02 09:47,设计参数(出货当天)
+a6.t_warehouse_report,2026-09-02 10:18,设计参数(出货当天)
+a7.fms_last_modified,2026-09-02 08:52,= a6.t_chen_ack

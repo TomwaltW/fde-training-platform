@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+<style>
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: {{ body_bg | default('#ffffff') }}; }
+/* 截图模板给 html/body 写死尺寸;body 作为定位容器,版面不随浏览器窗口(视口)大小变化 */
+body { position: relative; }
+body {
+  font-family: "Liberation Sans", "WenQuanYi Zen Hei", sans-serif;
+  color: #1c1c1c; font-size: 12px; line-height: 1.45;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.page { width: 210mm; height: 296mm; position: relative; overflow: hidden; background: #fff; padding: 44px 50px; }
+table { border-collapse: collapse; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ctr { text-align: center; }
+.muted { color: #6b6b6b; }
+.pdfmark { position: absolute; right: 30px; bottom: 14px; font-size: 9px; color: #8a8a8a; letter-spacing: .5px; }
+.hw { font-family: "WenQuanYi Zen Hei", sans-serif; color: #1f3f95; white-space: nowrap; }
+.hw > span { display: inline-block; }
+.hw.red { color: #b3261e; }
+{% block style %}{% endblock %}
+</style>
+</head>
+<body>
+{% block body %}{% endblock %}
+</body>
+</html>

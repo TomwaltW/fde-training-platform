@@ -1,0 +1,72 @@
+{% extends "_base.html.j2" %}
+{# A5 近一周来料文件统计:堆叠柱状图 + 汇总表。配色取 dataviz 参考调色板前三位(蓝/橙/青),三类两两可分。 #}
+{% block style %}
+html, body { width: 1200px; height: 720px; overflow: hidden; background: #f4f5f7; }
+body { font-family: "WenQuanYi Zen Hei", "Liberation Sans", sans-serif; color: #0b0b0b; }
+.card { position: absolute; inset: 20px; background: #fcfcfb; border: 1px solid #dedcd6; border-radius: 6px; padding: 22px 28px; }
+h1 { font-size: 21px; margin: 0; }
+.sub { color: #52514e; font-size: 13px; margin-top: 4px; }
+.body { display: flex; gap: 34px; margin-top: 14px; }
+.legend { display: flex; gap: 20px; font-size: 13px; color: #52514e; margin: 0 0 4px 56px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legend { margin-bottom: 2px; }
+svg text { font-family: "WenQuanYi Zen Hei", "Liberation Sans", sans-serif; }
+.side { flex: 1; font-size: 13.5px; }
+.side h2 { font-size: 14px; margin: 6px 0 8px; color: #333; }
+table.s { width: 100%; border-collapse: collapse; }
+table.s td, table.s th { padding: 7px 8px; border-bottom: 1px solid #e4e2dc; }
+table.s th { text-align: left; color: #52514e; font-weight: normal; font-size: 12.5px; }
+table.s .num { text-align: right; }
+table.s tr.tot td { font-weight: bold; border-top: 2px solid #b8b6ae; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; }
+.big { font-size: 26px; font-weight: bold; }
+.foot { position: absolute; left: 28px; bottom: 16px; font-size: 12px; color: #6b6a66; }
+{% endblock %}
+{% block body %}
+<div class="card">
+  <h1>近一周客户来料文件统计</h1>
+  <div class="sub">单证组下载文件夹(微信群 + 邮件),周一至周日,共 {{ grand | qty }} 个文件 · {{ '陈晓雯' }} 手工统计</div>
+  <div class="body">
+    <div>
+      <div class="legend">{% for f, label, color in series %}<span><i style="background:{{ color }}"></i>{{ label }}</span>{% endfor %}</div>
+      <svg width="{{ chart.w }}" height="{{ chart.h }}" viewBox="0 0 {{ chart.w }} {{ chart.h }}">
+        {% for tk in ticks %}
+        <line x1="{{ chart.left }}" x2="{{ chart.left + chart.ch_w }}" y1="{{ tk.y }}" y2="{{ tk.y }}" stroke="#e4e2dc" stroke-width="1"/>
+        <text x="{{ chart.left - 10 }}" y="{{ tk.y + 4 }}" font-size="12" fill="#6b6a66" text-anchor="end">{{ tk.v }}</text>
+        {% endfor %}
+        {% for b in bars %}
+          {% for s in b.segs %}
+          {% if loop.last %}
+          <path d="M{{ s.x }},{{ s.y + s.h }} V{{ s.y + 4 }} Q{{ s.x }},{{ s.y }} {{ s.x + 4 }},{{ s.y }} H{{ s.x + s.w - 4 }} Q{{ s.x + s.w }},{{ s.y }} {{ s.x + s.w }},{{ s.y + 4 }} V{{ s.y + s.h }} Z" fill="{{ s.color }}"/>
+          {% else %}
+          <rect x="{{ s.x }}" y="{{ s.y }}" width="{{ s.w }}" height="{{ s.h }}" fill="{{ s.color }}"/>
+          {% endif %}
+          {% endfor %}
+          <text x="{{ b.x }}" y="{{ b.top - 8 }}" font-size="13" font-weight="bold" fill="#0b0b0b" text-anchor="middle">{{ b.total }}</text>
+          <text x="{{ b.x }}" y="{{ chart.base + 22 }}" font-size="13" fill="#52514e" text-anchor="middle">{{ b.day }}</text>
+        {% endfor %}
+        <line x1="{{ chart.left }}" x2="{{ chart.left + chart.ch_w }}" y1="{{ chart.base }}" y2="{{ chart.base }}" stroke="#b8b6ae" stroke-width="1"/>
+      </svg>
+    </div>
+    <div class="side">
+      <h2>按格式汇总</h2>
+      <table class="s">
+        <tr><th>格式</th><th class="num">文件数</th><th class="num">占比</th></tr>
+        {% for f, label, color in series %}
+        <tr><td><span class="sw" style="background:{{ color }}"></span>{{ label }}</td><td class="num">{{ tot[f] | qty }}</td><td class="num">{{ share[f] }}%</td></tr>
+        {% endfor %}
+        <tr class="tot"><td>合计</td><td class="num">{{ grand | qty }}</td><td class="num">100%</td></tr>
+      </table>
+      <h2 style="margin-top:18px">图片/扫描件 {{ tot['image'] }} 个里</h2>
+      <table class="s">
+        {% for k, v in subs.items() %}<tr><td>{{ k }}</td><td class="num">{{ v }}</td></tr>{% endfor %}
+      </table>
+      <h2 style="margin-top:18px">来源渠道</h2>
+      <table class="s">
+        {% for k, v in chans.items() %}<tr><td>{{ k }}</td><td class="num">{{ v | qty }}</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+  <div class="foot">注:同一票资料发了多个版本时每个文件都算;压缩包已解开计数。</div>
+</div>
+{% endblock %}

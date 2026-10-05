@@ -1,0 +1,92 @@
+{% extends "_base.html.j2" %}
+{# A7 运链通 FMS(虚构)录单界面:老式桌面业务系统风格。「API 对接」按钮灰色未开通;批量录入只能导入 Excel。 #}
+{% block style %}
+html, body { width: 1366px; height: 768px; overflow: hidden; background: #d4d8de; }
+body { font-family: "WenQuanYi Zen Hei", "Liberation Sans", sans-serif; font-size: 12.5px; color: #1e1e1e; }
+.title { height: 30px; background: linear-gradient(#3d6aa3, #2c5488); color: #fff; display: flex; align-items: center; padding: 0 10px; font-size: 13px; }
+.title .ctl { margin-left: auto; display: flex; gap: 16px; }
+.menu { height: 26px; background: #eef1f5; border-bottom: 1px solid #b9c2cf; display: flex; align-items: center; gap: 22px; padding: 0 12px; }
+.tool { height: 40px; background: #f6f8fa; border-bottom: 1px solid #b9c2cf; display: flex; align-items: center; gap: 6px; padding: 0 10px; }
+.tool .b { border: 1px solid #a9b4c2; background: linear-gradient(#ffffff, #e6ebf1); padding: 5px 12px; border-radius: 3px; }
+.tool .sep { width: 1px; height: 24px; background: #c3cad4; margin: 0 6px; }
+.tool .dis { color: #9aa3ad; background: #eceef1; border-color: #cfd5dc; }
+.tip { position: absolute; left: 592px; top: 62px; background: #fffde7; border: 1px solid #b5a96a; padding: 7px 10px; font-size: 12px;
+       box-shadow: 2px 2px 5px rgba(0,0,0,.18); width: 300px; line-height: 1.5; z-index: 3; }
+.wrap { display: flex; height: {{ 768 - 30 - 26 - 40 - 24 }}px; }
+.nav { width: 190px; background: #f2f4f7; border-right: 1px solid #b9c2cf; padding: 8px 0; }
+.nav div { padding: 5px 14px; }
+.nav .g { font-weight: bold; color: #2c5488; margin-top: 6px; }
+.nav .on { background: #cfe0f5; border-left: 3px solid #2c5488; padding-left: 11px; }
+.pane { flex: 1; padding: 10px 14px; background: #fff; overflow: hidden; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid #b9c2cf; margin-bottom: 10px; }
+.tabs div { padding: 5px 14px; background: #e8ecf1; border: 1px solid #b9c2cf; border-bottom: none; }
+.tabs .on { background: #fff; font-weight: bold; }
+fieldset { border: 1px solid #c3cad4; padding: 8px 12px 10px; margin: 0 0 10px; }
+legend { color: #2c5488; font-weight: bold; padding: 0 6px; }
+.form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px 22px; }
+.fld { display: flex; align-items: center; gap: 8px; }
+.fld label { width: 84px; text-align: right; color: #444; }
+.fld .in { flex: 1; border: 1px solid #a9b4c2; height: 24px; padding: 3px 7px; background: #fff; }
+.fld .in.ro { background: #f1f3f6; color: #555; }
+.fld .in.hl { background: #fff8d6; }
+table.t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.t th { background: #e8ecf1; border: 1px solid #b9c2cf; padding: 5px 6px; font-weight: normal; }
+table.t td { border: 1px solid #c9d0d9; padding: 5px 6px; height: 26px; }
+table.t tr.tot td { background: #f4f6f9; font-weight: bold; }
+.status { height: 24px; background: #e6eaef; border-top: 1px solid #b9c2cf; display: flex; align-items: center; gap: 28px; padding: 0 12px; font-size: 12px; color: #444; }
+{% endblock %}
+{% block body %}
+<div class="title">{{ fms }} 6.3 — {{ company }} — 当前用户:{{ user }}<div class="ctl"><span>—</span><span>☐</span><span>✕</span></div></div>
+<div class="menu">{% for m in ['系统', '海运出口', '海运进口', '空运', '报关', '仓储', '财务', '报表', '帮助'] %}<span>{{ m }}</span>{% endfor %}</div>
+<div class="tool">
+  <span class="b">新增</span><span class="b">保存</span><span class="b">复制</span><span class="b">删除</span>
+  <span class="sep"></span>
+  <span class="b">导入Excel</span><span class="b">导出</span><span class="b">打印</span>
+  <span class="sep"></span>
+  <span class="b dis">API 对接 · 未开通</span>
+</div>
+<div class="tip"><b>API 对接(未开通)</b><br>数据接口为增值服务,当前版本未开通。请联系运链通客户经理。<br>批量录入请使用「导入Excel」(标准导入模板 v3.2)。</div>
+<div class="wrap">
+  <div class="nav">
+    <div class="g">海运出口</div>
+    <div class="on">订单录入</div><div>订单查询</div><div>改单记录</div><div>订舱</div><div>装箱 / 入仓</div><div>提单</div>
+    <div class="g">报关</div><div>报关资料</div><div>报关状态</div>
+    <div class="g">基础资料</div><div>客户</div><div>品名 / HS</div><div>港口 / 仓库</div>
+  </div>
+  <div class="pane">
+    <div class="tabs"><div>订单查询</div><div class="on">订单录入 [{{ waybill }}]</div></div>
+    <fieldset>
+      <legend>基本信息</legend>
+      <div class="form">
+        <div class="fld"><label>运单号</label><div class="in ro">{{ waybill }}</div></div>
+        <div class="fld"><label>客户</label><div class="in">{{ customer }}</div></div>
+        <div class="fld"><label>业务类型</label><div class="in">{{ biz }}</div></div>
+        <div class="fld"><label>出货日期</label><div class="in">{{ ship_date }}</div></div>
+        <div class="fld"><label>起运港</label><div class="in">{{ pol }}</div></div>
+        <div class="fld"><label>目的港</label><div class="in">{{ pod }}</div></div>
+        <div class="fld"><label>目的仓</label><div class="in">FBA {{ fba }}</div></div>
+        <div class="fld"><label>装箱单版本</label><div class="in hl">{{ version }}</div></div>
+        <div class="fld"><label>经手人</label><div class="in">{{ handler }}</div></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>货物明细</legend>
+      <table class="t">
+        <tr><th>行</th><th>货号</th><th>品名</th><th>申报品名</th><th>HS 编码(占位)</th><th>箱数</th><th>每箱件数</th><th>件数</th><th>毛重(KG)</th><th>体积(CBM)</th><th>带电</th></tr>
+        {% for ln in lines %}
+        <tr><td class="ctr">{{ ln.no }}</td><td>{{ ln.sku }}</td><td>{{ ln.name }}</td><td>{{ ln.declared }}</td><td>{{ ln.hs }}</td>
+            <td class="num" style="background:#fff8d6">{{ ln.ctn }}</td><td class="num">{{ ln.ppc }}</td><td class="num">{{ ln.pcs | qty }}</td>
+            <td class="num">{{ ln.gw | kg }}</td><td class="num">{{ ln.cbm }}</td><td class="ctr">{{ ln.battery }}</td></tr>
+        {% endfor %}
+        {% for _ in range(4) %}<tr>{% for _ in range(11) %}<td></td>{% endfor %}</tr>{% endfor %}
+        <tr class="tot"><td colspan="5" class="num">合计</td><td class="num">{{ total_ctn }}</td><td></td><td class="num">{{ total_pcs | qty }}</td><td class="num">{{ total_gw | kg }}</td><td class="num">{{ total_cbm }}</td><td></td></tr>
+      </table>
+    </fieldset>
+    <fieldset>
+      <legend>备注</legend>
+      <div style="height:34px;color:#555">客户群里改单,已按{{ version }}修改箱数。</div>
+    </fieldset>
+  </div>
+</div>
+<div class="status"><span>就绪</span><span>最后修改:{{ modified }} {{ handler }}</span><span>记录 1 / 1</span><span>{{ fms }} · 澜途国际(虚构)授权使用</span></div>
+{% endblock %}

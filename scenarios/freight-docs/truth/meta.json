@@ -89,6 +89,12 @@
     "x4_sample": 30,
     "x4_issues": 7
   },
+  "docs": {
+    "products": 63,
+    "a1_docs": 14,
+    "a1_images": 9,
+    "doc_lines": 27
+  },
   "targets": {
     "volume_q3": 19800,
     "keyin_image": 21,
@@ -105,10 +111,13 @@
   },
   "files_sha256": {
     "customers.csv": "bb0fcc33ae710b30b3d0f3b92102d322e88e0fdf81b765f2dc9a7437e572e196",
+    "doc_facts.csv": "4c59f128ffae4aebe4943993e539f8eb68fc3875ca1adb02e996846e9e55922f",
+    "doc_lines.csv": "557efa475e39581033539c597a246e14f0cbae0da6c5da2e3766f10cc2da5127",
     "exceptions.csv": "deecdba347a416781a7d61ab347523e92ae0b3d2ef89e90b7127e47056f5b9b4",
     "handler_volume.csv": "a48a142ab59ca6791163ab0a0392dd49c1f5c3c372722943f75026f798206cdb",
     "intake_week.csv": "9b6b5715fee103a23bdc4dc4654a50c475c97b324c8209bd8e9134e3f2a0481f",
     "loss.csv": "be2c2ed3ac91dc4452a1199d848b05734f8781599d724d82a4ca3a3385af180e",
+    "products.csv": "61443272cb4651ff45a8082615ac5316245971d268dbdebbd1b54eded30422f8",
     "shipments.csv": "093794c70cd3da080353e553375911aacf97276b705607d96a7546f30883f53c"
   }
 }

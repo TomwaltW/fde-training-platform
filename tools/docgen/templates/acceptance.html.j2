@@ -1,0 +1,47 @@
+{% extends "_base.html.j2" %}
+{# A8 验收单(扫描件):印刷表格 + 手写勾选与签名 + 事后补的一行手写批注。不画印章。 #}
+{% block style %}
+.page { padding: 70px 70px; font-size: 13px; }
+h1 { text-align: center; font-size: 24px; letter-spacing: 10px; margin: 0 0 20px; }
+.info { width: 100%; margin-bottom: 14px; }
+.info td { border: 1px solid #333; padding: 8px 10px; }
+.info .k { width: 110px; background: #f2f2f2; }
+.items { width: 100%; }
+.items th { border: 1px solid #333; background: #f2f2f2; padding: 7px; }
+.items td { border: 1px solid #333; padding: 9px 8px; height: 48px; vertical-align: middle; }
+.items td .hw { font-size: 19px; }
+.concl { border: 1px solid #333; border-top: none; padding: 12px 12px; height: 92px; }
+.concl .hw { font-size: 20px; }
+.sig { display: flex; margin-top: 0; }
+.sig > div { flex: 1; border: 1px solid #333; border-top: none; padding: 12px; height: 104px; }
+.sig > div + div { border-left: none; }
+.sig .hw { font-size: 30px; }
+.nostamp { color: #999; font-size: 10.5px; margin-top: 4px; }
+.late { margin-top: 34px; transform: rotate(-2.5deg); transform-origin: left; }
+.late .hw { font-size: 22px; }
+{% endblock %}
+{% block body %}
+<div class="page">
+  <h1>项目验收单</h1>
+  <table class="info">
+    <tr><td class="k">项目名称</td><td colspan="3">{{ product }} 部署项目</td></tr>
+    <tr><td class="k">合同编号</td><td>{{ no }}</td><td class="k">验收日期</td><td>{{ date | hw('d') }}</td></tr>
+    <tr><td class="k">甲方</td><td>{{ party_a }}</td><td class="k">乙方</td><td>{{ party_b }}</td></tr>
+  </table>
+  <table class="items">
+    <tr><th style="width:7%">序号</th><th style="width:25%">验收项目</th><th>验收标准</th><th style="width:22%">结果</th></tr>
+    <tr><td class="ctr">1</td><td>软件安装部署</td><td>{{ users }} 个账号可正常登录使用</td><td>{{ '✓ 通过' | hw('r1') }}</td></tr>
+    <tr><td class="ctr">2</td><td>操作培训</td><td>单证组完成培训</td><td>{{ '✓ 通过' | hw('r2') }}</td></tr>
+    <tr><td class="ctr">3</td><td>单据识别测试</td><td>乙方标准样张,印刷体字段识别准确率{{ accuracy }}</td><td>{{ '✓ 通过(乙方样张)' | hw('r3') }}</td></tr>
+    <tr><td class="ctr">4</td><td>识别结果导出</td><td>可导出 Excel / CSV</td><td>{{ '✓ 通过' | hw('r4') }}</td></tr>
+    <tr><td class="ctr">5</td><td>与 {{ fms }} 对接</td><td>不在合同范围(见合同第二条)</td><td>{{ '—' | hw('r5') }}</td></tr>
+  </table>
+  <div class="concl">验收结论:　☑ 同意验收　　☐ 不同意验收<br>
+    其他意见:{{ '识别后需人工核对,导出Excel后再录系统' | hw('c1') }}</div>
+  <div class="sig">
+    <div>甲方代表(签字):{{ sign_a | hw('sa') }}<div class="nostamp">(合成样本,不含印章)</div></div>
+    <div>乙方代表(签字):{{ sign_b | hw('sb') }}<div class="nostamp">(合成样本,不含印章)</div></div>
+  </div>
+  <div class="late">{% for l in note_lines %}<div>{{ l | hw('late' ~ loop.index, 'red') }}</div>{% endfor %}</div>
+</div>
+{% endblock %}

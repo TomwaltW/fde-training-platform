@@ -14,6 +14,7 @@ check_truth.py —— 真值账本与 Excel 资料的自检(方案 4.1 步骤 8 
   · A2 只有 8 个可见列、没有任何真值列;A4 按费用类型汇总;A2×A4 按运单号能还原各类损失
   · 复算 scenario.yaml 里 X2/X3/X5 等文字结论并逐条比对
   · 无真实主体信息、无形似真实的信用代码/海关编码;manifest 引用与 sha256
+合成单据(A1/A3/A5 图/A6/A7/A8)的文件、标识与数字由 check_docs.py 单独核对。
 """
 from __future__ import annotations
 
@@ -51,6 +52,8 @@ REAL_ENTITIES_EN = ["Amazon", "COSCO", "Maersk", "DHL", "FedEx", "UPS", "SHEIN",
 USCC_RE = re.compile(r"(?<![0-9A-Z])[0-9A-HJ-NPQRTUWXY]{2}\d{6}[0-9A-HJ-NPQRTUWXY]{10}(?![0-9A-Z])")
 HS10_RE = re.compile(r"(?<!\d)\d{10}(?!\d)")
 WAYBILL_RE = re.compile(r"^LT26\d{2}-\d{4}$")
+# sha256 摘要(meta.json、manifest.yaml 里的文件指纹)是十六进制串,里面偶尔有 10 位连续数字,扫描编码前先去掉
+SHA256_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])")
 
 results: list[tuple[str, str, str, str, bool]] = []
 section = ""
@@ -532,7 +535,8 @@ def main() -> int:
             hits += [f"{name}:{w}" for w in REAL_ENTITIES_CN if w in txt]
             hits += [f"{name}:{w}" for w in REAL_ENTITIES_EN if re.search(rf"(?<![A-Za-z]){w}(?![A-Za-z])", txt)]
         check("无真实主体名称(黑名单)", "0 命中", hits or "0 命中", not hits)
-        code_hits = [f"{n}:{m}" for n, txt in blobs for m in USCC_RE.findall(txt) + HS10_RE.findall(txt)]
+        code_hits = [f"{n}:{m}" for n, txt in blobs for m in
+                     USCC_RE.findall(SHA256_RE.sub("", txt)) + HS10_RE.findall(SHA256_RE.sub("", txt))]
         check("无形似真实的信用代码/10 位海关编码", "0 命中", code_hits[:5] or "0 命中", not code_hits)
         check("关键客户名与 YAML 一致(拓浪科技(虚构))", p["key_customer"]["name"], G.KEY_CUSTOMER,
               G.KEY_CUSTOMER in p["key_customer"]["name"])
@@ -544,7 +548,8 @@ def main() -> int:
     def _manifest():
         m = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
         ids = [a["id"] for a in m["artifacts"]]
-        check("manifest 含 A2/A4/A5", "A2, A4, A5", ", ".join(ids), ids == ["A2", "A4", "A5"])
+        # W3 之后清单覆盖全部 8 份资料(A2/A4/A5 的条目保留在其中);合成单据的细项由 check_docs.py 核对
+        check("manifest 含 A1–A8(含 A2/A4/A5)", "A1…A8", ", ".join(ids), ids == [f"A{i}" for i in range(1, 9)])
         bad, n = [], 0
         for a in m["artifacts"]:
             for f in a["files"]:
@@ -557,7 +562,7 @@ def main() -> int:
         check("manifest 文件存在且 sha256 匹配", f"{n} 个", f"{n - len(bad)} 个匹配", not bad)
         allowed = {"fact", "experiment", "where", "waybill", "note"}
         extra = [k for a in m["artifacts"] for c in a["clues"] for k in c if k not in allowed]
-        extra += [k for c in m["pending"][0]["clues"] for k in c if k not in allowed]
+        extra += [k for p in m.get("pending", []) for c in p.get("clues", []) for k in c if k not in allowed]
         check("manifest 线索条目无未定义键(防逗号截断)", "0", len(extra), not extra)
         j = m["joins"][0]["expected_loss_by_cause"]
         check("manifest 预期各类损失 = 设定", "一致", "一致" if all(j[c["id"]]["loss"] == c["loss"] and
