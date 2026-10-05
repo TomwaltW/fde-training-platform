@@ -9,7 +9,7 @@
     "start": "next start -p 3000",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:e2e:mock": "playwright test e2e/mock",
-    "test:e2e:real": "playwright test e2e/real"
+    "test:e2e:real": "playwright test -c e2e/real/playwright.config.ts"
   },
   "dependencies": {
     "@fde/contracts": "workspace:*",
@@ -34,6 +34,7 @@
     "@types/react-dom": "^19.2.0",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.1.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "yaml": "^2.9.1"
   }
 }
