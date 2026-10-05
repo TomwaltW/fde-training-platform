@@ -233,9 +233,9 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   // 3. 只是去现场或做验证(自然语言等价于按钮):直接做,不需要角色回话
   const actReq = st.phase === "report" ? undefined : actionRequest(gate, matched);
   if (actReq && isActionOnly(gate, matched)) {
-    // 起身去现场时的态度照样算;动作本身代表的加分(如"肯去现场看")由动作的效果负责,不重复加
-    applyTrustMoves(scn, st, role, gate, actionTrustMove(scn, st, actReq, role));
-    const r = runActionRequest(scn, st, actReq);
+    // 起身去现场时的态度照样算;动作执行时如果发现这个加分已经由这句话给过,就不再重复加
+    const credited = applyTrustMoves(scn, st, role, gate);
+    const r = runActionRequest(scn, st, actReq, credited ? { role, move: credited } : undefined);
     plan.system.push(...r.system);
     plan.obtained.push(...r.obtained);
     plan.discovered.push(...r.discovered);
@@ -277,8 +277,8 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   // 7. 承诺账本(用本轮披露之前的状态判断是否过早)
   const commitsNow = recordCommitments(scn, st, gate, role);
 
-  // 8. 信任(本轮要执行的动作如果自己会加这个角色的信任,对应的加分行为不重复算)
-  applyTrustMoves(scn, st, role, gate, actReq ? actionTrustMove(scn, st, actReq, role) : undefined);
+  // 8. 信任(记下本轮给了哪种加分,本轮稍后执行的动作据此避免重复加)
+  const credited = applyTrustMoves(scn, st, role, gate);
 
   // 9. 授权
   applyPerms(st, role, matched, plan);
@@ -367,7 +367,7 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   spend(scn, st, roleDef.time_cost_min, plan);
 
   // 15. 同一句话里还要去现场或做验证:等角色回完话再做,这样本轮刚拿到的授权、刚认识的人都算数
-  if (actReq) appendAction(plan, runActionRequest(scn, st, actReq), "after");
+  if (actReq) appendAction(plan, runActionRequest(scn, st, actReq, credited ? { role, move: credited } : undefined), "after");
   return plan;
 }
 
@@ -375,9 +375,10 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
  * 信任:每轮最多 +1,每种加分行为只算一次;减分行为每条 -1。
  * 同一轮有几种新的加分行为时,按场景 trust_moves.plus 的顺序取第一种(和闸门输出的顺序无关)。
  */
-function applyTrustMoves(scn: LoadedScenario, st: SessionState, role: string, gate: GateOutput, exclude?: string) {
+/** 返回本轮加分的那一种行为(没有加分返回 undefined)。 */
+function applyTrustMoves(scn: LoadedScenario, st: SessionState, role: string, gate: GateOutput): string | undefined {
   const def = scn.role(role).trust;
-  if (!def) return;
+  if (!def) return undefined;
   const before = st.trust[role] ?? 0;
   const used = (st.trustPlusUsed[role] ??= []);
   const order = (w: string) => {
@@ -385,7 +386,7 @@ function applyTrustMoves(scn: LoadedScenario, st: SessionState, role: string, ga
     return i < 0 ? Number.MAX_SAFE_INTEGER : i;
   };
   const fresh = gate.trust_moves
-    .filter((m) => m.dir === "plus" && !used.includes(m.what) && m.what !== exclude)
+    .filter((m) => m.dir === "plus" && !used.includes(m.what))
     .sort((a, b) => order(a.what) - order(b.what) || a.what.localeCompare(b.what))[0];
   if (fresh) used.push(fresh.what);
   const minus = gate.trust_moves.filter((m) => m.dir === "minus").length;
@@ -394,6 +395,7 @@ function applyTrustMoves(scn: LoadedScenario, st: SessionState, role: string, ga
     st.trust[role] = after;
     addEvent(st, "trust_change", { role, from: before, to: after, moves: gate.trust_moves.map((m) => `${m.dir}:${m.what}`) });
   }
+  return fresh?.what;
 }
 
 function applyPerms(st: SessionState, role: string, matched: Trigger[], plan: TurnPlan) {
@@ -406,15 +408,6 @@ function applyPerms(st: SessionState, role: string, matched: Trigger[], plan: Tu
 
 type ActionRequest = { kind: "act"; id: string } | { kind: "exp"; id: string };
 
-/** 本轮会真正执行、且效果里会给 role 加信任的动作,它代表的加分行为(否则 undefined)。 */
-function actionTrustMove(scn: LoadedScenario, st: SessionState, req: ActionRequest, role: string): string | undefined {
-  if (req.kind !== "act") return undefined;
-  const a = scn.data.actions[req.id];
-  if (!a?.trust_move || st.actionsDone[req.id] || !phaseAllowsDiscovery(st)) return undefined;
-  if (!evalRequirement(a.requires, stateResolver(st, scn))) return undefined;
-  const credits = a.effects.some((e) => new RegExp(`^trust\\.${role}\\s*\\+\\d+$`).test(e));
-  return credits ? a.trust_move : undefined;
-}
 
 function actionRequest(gate: GateOutput, matched: Trigger[]): ActionRequest | undefined {
   const act = matched.find((t) => t.kind === "act");
@@ -435,8 +428,8 @@ function isActionOnly(gate: GateOutput, matched: Trigger[]): boolean {
   );
 }
 
-function runActionRequest(scn: LoadedScenario, st: SessionState, req: ActionRequest): ActionResult {
-  return req.kind === "act" ? doAction(scn, st, req.id) : doExperiment(scn, st, req.id);
+function runActionRequest(scn: LoadedScenario, st: SessionState, req: ActionRequest, credited?: Credited): ActionResult {
+  return req.kind === "act" ? doAction(scn, st, req.id, credited) : doExperiment(scn, st, req.id);
 }
 
 function appendAction(plan: TurnPlan, r: ActionResult, where: "system" | "after") {
@@ -606,7 +599,10 @@ export function doOpenArtifact(scn: LoadedScenario, st: SessionState, artifactId
   return ar(true, [`你花了 ${a.review_cost_min} 分钟看「${a.title}」。`, ...plan.system], { obtained: plan.obtained });
 }
 
-export function doAction(scn: LoadedScenario, st: SessionState, actionId: string): ActionResult {
+/** 同一句话里已经给某个角色加过的那一种信任行为。 */
+export type Credited = { role: string; move: string } | undefined;
+
+export function doAction(scn: LoadedScenario, st: SessionState, actionId: string, credited?: Credited): ActionResult {
   const a = scn.data.actions[actionId];
   if (!a) return ar(false, ["没有这个动作。"]);
   if (!phaseAllowsDiscovery(st)) return ar(false, ["现在不能做这个了。"]);
@@ -618,7 +614,18 @@ export function doAction(scn: LoadedScenario, st: SessionState, actionId: string
   st.actionsDone[actionId] = { turn: st.turn };
   addEvent(st, "action", { action: actionId });
   applyVia(scn, st, actionId, plan);
-  for (const eff of a.effects) applyEffect(scn, st, eff, plan, `action:${actionId}`);
+  for (const eff of a.effects) {
+    const tm = eff.match(/^trust\.(\w+)\s*\+\d+$/);
+    if (tm && a.trust_move) {
+      const r = tm[1]!;
+      // 动作本身就代表这种加分行为:这句话已经为它给过 r 加分就不重复;做过之后再说同样的话也不再加
+      const used = (st.trustPlusUsed[r] ??= []);
+      const already = credited?.role === r && credited.move === a.trust_move;
+      if (!used.includes(a.trust_move)) used.push(a.trust_move);
+      if (already) continue;
+    }
+    applyEffect(scn, st, eff, plan, `action:${actionId}`);
+  }
   leaveKickoff(st);
   const narrative = a.narrative ? scn.readText(a.narrative)?.trim() : undefined;
   const text = narrative ?? `(${a.title})`;

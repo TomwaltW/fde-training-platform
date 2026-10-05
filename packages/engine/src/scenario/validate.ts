@@ -82,6 +82,11 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
   }
   for (const [id, a] of Object.entries(d.actions)) {
     checkReq(a.requires, `动作 ${id}`);
+    if (a.trust_move !== undefined) {
+      if (!d.trust_moves.plus.includes(a.trust_move)) errors.push(`动作 ${id} 的 trust_move「${a.trust_move}」不在 trust_moves.plus 里`);
+      if (!a.effects.some((e) => /^trust\.\w+\s*\+\d+$/.test(e)))
+        warnings.push(`动作 ${id} 设了 trust_move,但效果里没有给任何角色加信任,这个字段不起作用`);
+    }
     if (a.narrative && !scn.readText(a.narrative)) warnings.push(`动作 ${id} 的叙述稿 ${a.narrative} 还没写`);
     for (const eff of a.effects) {
       let m: RegExpMatchArray | null;
