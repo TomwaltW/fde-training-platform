@@ -1,5 +1,6 @@
 // 分享卡:用 canvas 画成图片,只用 report.shareCard(总分、标记、一句评语),不含任何真相。
 // 方案 8.2 第 3 条:图上印显式标识"内容由 AI 生成",PNG 元数据里再写一条隐式标识。
+// 第三轮:另有一段可复制的分享文字,同样只用 shareCard。
 import type { PublicReport } from "@fde/contracts";
 
 type ShareCard = PublicReport["shareCard"];
@@ -182,4 +183,48 @@ export async function shareCardBlob(canvas: HTMLCanvasElement): Promise<Blob | n
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const marked = withPngText(bytes, "AIGC", `${AIGC_MARK};FDE 训练场复盘分享卡`);
   return new Blob([marked.buffer as ArrayBuffer], { type: "image/png" });
+}
+
+// ---------------------------------------------------------------- 分享文字
+
+/**
+ * "复制分享文字"的内容:只用 shareCard 的字段(场景名、总分、一句评语、标记)和站点地址,不含任何真相。
+ * 和分享图一样带上显式标识"内容由 AI 生成"。
+ */
+export function shareText(card: ShareCard, origin: string): string {
+  const lines = [`我在 FDE 训练场玩了一局:${card.title}`, `得分 ${Math.round(card.total)} / 100 · ${card.line}`];
+  const badges = card.badges.slice(0, 6);
+  if (badges.length) lines.push(`标记:${badges.join("、")}`);
+  lines.push(`可以翻车的客户现场,来试试:${origin}`);
+  lines.push(`(${AIGC_MARK},不含剧情答案)`);
+  return lines.join("\n");
+}
+
+/** 复制到剪贴板:先用 Clipboard API,不行(老的内置浏览器、没权限)再退回 execCommand;都不行返回 false。 */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // 退回到下面的办法
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "0";
+    ta.style.left = "0";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }
