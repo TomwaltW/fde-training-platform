@@ -1,20 +1,8 @@
-// T1 实现。T0 只放签名:两套实现都必须通过 packages/store/test/conformance.ts。
-import type { SqlClient, Store } from "@fde/contracts";
-
-export interface MemoryStoreOptions {
-  /** 给出时把全部数据落盘成这个 JSON 文件(本地开发重启不丢);不给就纯内存。 */
-  file?: string;
-}
-
-export function createMemoryStore(_opts: MemoryStoreOptions = {}): Store {
-  throw new Error("NotImplemented: createMemoryStore(T1)");
-}
-
-export interface PgStoreOptions {
-  /** 迁移脚本目录(infra/db),按文件名排序执行 *.sql,已执行的记在 schema_migrations。 */
-  migrationsDir: string;
-}
-
-export function createPgStore(_client: SqlClient, _opts: PgStoreOptions): Store {
-  throw new Error("NotImplemented: createPgStore(T1)");
-}
+// 持久化的两套实现,都必须通过 packages/store/test/conformance.ts。
+//   MemoryStore:本地开发、测试(可选落盘 JSON)。
+//   PgStore:线上 PostgreSQL 16(只依赖 SqlClient)。
+// 会话锁(withSessionLock)两套共用同一个进程内互斥,见 lock.ts。
+export { createMemoryStore, type MemoryStoreOptions } from "./memory.ts";
+export { createPgStore, type PgStoreOptions } from "./pg.ts";
+export { DEFAULT_LOCK_TIMEOUT_MS, withProcessLock } from "./lock.ts";
+export { INVITE_ALPHABET, INVITE_LENGTH } from "./util.ts";
