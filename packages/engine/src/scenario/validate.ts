@@ -120,6 +120,14 @@ export function validateScenario(scn: LoadedScenario): ValidationReport {
     }
   }
   if (semanticTraps.length) info.push(`由闸门识别条件的压力时刻:${semanticTraps.join("、")}`);
+  // 兜底台词不过守卫、原样说出,所以不能含别的事实的金丝雀词
+  for (const t of d.traps) {
+    if (!t.line) continue;
+    for (const f of d.facts) {
+      if (f.id === t.reveal) continue;
+      for (const w of f.canaries ?? []) if (t.line.includes(w)) warnings.push(`压力时刻 ${t.id} 的兜底台词含有事实 ${f.id} 的金丝雀词「${w}」`);
+    }
+  }
   const noLine = d.traps.filter((t) => !t.line).map((t) => t.id);
   if (noLine.length) warnings.push(`压力时刻没有兜底台词(line):${noLine.join("、")}。演员出错时这个压力时刻会丢`);
 
@@ -304,7 +312,7 @@ export function reachability(scn: LoadedScenario): Reachability {
       const ns = name.slice(0, dot);
       const key = name.slice(dot + 1);
       if (ns === "discovered") return startRoles.has(key) ? { t: true, f: false } : { t: R.roles.has(key), f: true };
-      if (ns === "opened") return { t: stage === "discovery" && R.artifacts.has(key), f: true };
+      if (ns === "opened") return { t: R.openable.has(key) || (stage === "discovery" && R.artifacts.has(key)), f: true };
       return undefined;
     }
     if (name === "no_artifact_opened" || name === "committed_before_any_artifact") return BOTH;
@@ -325,8 +333,11 @@ export function reachability(scn: LoadedScenario): Reachability {
     const role = scn.roles.get(key);
     if (!role) return undefined;
     if (ns === "trust") {
+      // 信任会被减分行为或 trust.X-N 效果拉低(引擎在 0 封底),所以下限是 0
       const t = role.trust ?? { initial: 0, max: 0 };
-      return [t.initial, R.roles.has(key) ? t.max : t.initial];
+      const negEffect = Object.values(d.actions).some((a) => a.effects.some((e) => new RegExp(`^trust\\.${key}\\s*-\\d+$`).test(e)));
+      const canDrop = Boolean(role.trust) && (R.roles.has(key) || negEffect);
+      return [canDrop ? Math.min(t.initial, 0) : t.initial, R.roles.has(key) ? t.max : t.initial];
     }
     if (ns === "exchanges") return [0, R.roles.has(key) ? Number.POSITIVE_INFINITY : 0];
     return undefined;
@@ -414,6 +425,16 @@ export function reachability(scn: LoadedScenario): Reachability {
     return false;
   };
 
+  const doAction = (id: string, mark: <T>(set: Set<T>, v: T) => void) => {
+    mark(R.actions, id);
+    for (const eff of d.actions[id]!.effects) {
+      const m = eff.match(/^discover\s+(\w+)$/);
+      if (m) mark(R.roles, m[1]!);
+      const s = eff.match(/^set\s+(\w+)$/);
+      if (s) mark(R.flags, s[1]!);
+    }
+  };
+
   const fixpoint = () => {
     for (let changed = true; changed; ) {
       changed = false;
@@ -450,16 +471,7 @@ export function reachability(scn: LoadedScenario): Reachability {
         }
       }
       if (stage === "discovery") {
-        for (const [id, a] of Object.entries(d.actions)) {
-          if (!can(a.requires)) continue;
-          mark(R.actions, id);
-          for (const eff of a.effects) {
-            const m = eff.match(/^discover\s+(\w+)$/);
-            if (m) mark(R.roles, m[1]!);
-            const s = eff.match(/^set\s+(\w+)$/);
-            if (s) mark(R.flags, s[1]!);
-          }
-        }
+        for (const [id, a] of Object.entries(d.actions)) if (can(a.requires)) doAction(id, mark);
         for (const x of d.experiments) if (can(x.requires)) mark(R.experiments, x.id);
       }
       for (const a of d.artifacts) if (a.unlock && talkable(a.holder) && can(a.unlock.requires)) mark(R.artifacts, a.id);
@@ -476,10 +488,22 @@ export function reachability(scn: LoadedScenario): Reachability {
     }
   };
 
+  // 开场时就能做的动作和验证(前提按开场判断):做了就进入调研,所以结果在调研阶段开始时生效
+  const kickoffActions: string[] = [];
+  const kickoffExperiments: string[] = [];
   for (const p of ["kickoff", "discovery", "report"]) {
     if (!has(p)) continue;
     stage = p;
+    if (p === "discovery") {
+      const noop = <T>(set: Set<T>, v: T) => void set.add(v);
+      for (const id of kickoffActions) doAction(id, noop);
+      for (const id of kickoffExperiments) R.experiments.add(id);
+    }
     fixpoint();
+    if (p === "kickoff") {
+      for (const [id, a] of Object.entries(d.actions)) if (can(a.requires)) kickoffActions.push(id);
+      for (const x of d.experiments) if (can(x.requires)) kickoffExperiments.push(x.id);
+    }
     if (p === "discovery") R.openable = new Set(R.artifacts);
   }
   return R;

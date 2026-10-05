@@ -197,6 +197,17 @@ export function extractNumbers(input: string): NumberMention[] {
         while (i < text.length && /[\d-]/.test(text[i]!)) i++;
         continue;
       }
+      // "7点8分钟""8点4":不是钟点的"数字点数字"一律按小数检查,不能拆成钟点加一个整数
+      const dec = /(\d+)点(\d+)\s*(万|亿|千)?/y;
+      dec.lastIndex = i;
+      const dm = dec.exec(text);
+      if (dm) {
+        let value = Number(`${dm[1]}.${dm[2]}`);
+        if (dm[3]) value *= dm[3] === "万" ? 10_000 : dm[3] === "亿" ? 100_000_000 : 1000;
+        out.push({ value: round(value), raw: dm[0].trim(), index: i, unit: dm[3] ?? matchMeasure(text, dec.lastIndex), percent: false });
+        i = dec.lastIndex;
+        continue;
+      }
       ARABIC.lastIndex = i;
       const m = ARABIC.exec(text);
       if (m) {

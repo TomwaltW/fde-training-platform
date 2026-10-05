@@ -220,7 +220,7 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
       // 没换成:这句话是对当前角色说的,承诺、信任行为、授权请求照样算
       if (!gate.meta_or_injection) {
         recordCommitments(scn, st, gate, from);
-        applyTrustMoves(scn, st, from, gate, "all");
+        applyTrustMoves(scn, st, from, gate);
         applyPerms(st, from, matched, plan);
       }
       return plan;
@@ -233,8 +233,8 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   // 3. 只是去现场或做验证(自然语言等价于按钮):直接做,不需要角色回话
   const actReq = st.phase === "report" ? undefined : actionRequest(gate, matched);
   if (actReq && isActionOnly(gate, matched)) {
-    // 起身去现场时的态度:无礼照样扣信任;"肯去现场看"的加分由现场本身的效果负责,不重复加
-    applyTrustMoves(scn, st, role, gate, "minus");
+    // 起身去现场时的态度照样算;动作本身代表的加分(如"肯去现场看")由动作的效果负责,不重复加
+    applyTrustMoves(scn, st, role, gate, actionTrustMove(scn, st, actReq, role));
     const r = runActionRequest(scn, st, actReq);
     plan.system.push(...r.system);
     plan.obtained.push(...r.obtained);
@@ -277,8 +277,8 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
   // 7. 承诺账本(用本轮披露之前的状态判断是否过早)
   const commitsNow = recordCommitments(scn, st, gate, role);
 
-  // 8. 信任
-  applyTrustMoves(scn, st, role, gate, "all");
+  // 8. 信任(本轮要执行的动作如果自己会加这个角色的信任,对应的加分行为不重复算)
+  applyTrustMoves(scn, st, role, gate, actReq ? actionTrustMove(scn, st, actReq, role) : undefined);
 
   // 9. 授权
   applyPerms(st, role, matched, plan);
@@ -375,7 +375,7 @@ export function planUserTurn(scn: LoadedScenario, st: SessionState, gate: GateOu
  * 信任:每轮最多 +1,每种加分行为只算一次;减分行为每条 -1。
  * 同一轮有几种新的加分行为时,按场景 trust_moves.plus 的顺序取第一种(和闸门输出的顺序无关)。
  */
-function applyTrustMoves(scn: LoadedScenario, st: SessionState, role: string, gate: GateOutput, which: "all" | "minus") {
+function applyTrustMoves(scn: LoadedScenario, st: SessionState, role: string, gate: GateOutput, exclude?: string) {
   const def = scn.role(role).trust;
   if (!def) return;
   const before = st.trust[role] ?? 0;
@@ -384,12 +384,9 @@ function applyTrustMoves(scn: LoadedScenario, st: SessionState, role: string, ga
     const i = scn.data.trust_moves.plus.indexOf(w);
     return i < 0 ? Number.MAX_SAFE_INTEGER : i;
   };
-  const fresh =
-    which === "all"
-      ? gate.trust_moves
-          .filter((m) => m.dir === "plus" && !used.includes(m.what))
-          .sort((a, b) => order(a.what) - order(b.what) || a.what.localeCompare(b.what))[0]
-      : undefined;
+  const fresh = gate.trust_moves
+    .filter((m) => m.dir === "plus" && !used.includes(m.what) && m.what !== exclude)
+    .sort((a, b) => order(a.what) - order(b.what) || a.what.localeCompare(b.what))[0];
   if (fresh) used.push(fresh.what);
   const minus = gate.trust_moves.filter((m) => m.dir === "minus").length;
   const after = Math.max(0, Math.min(def.max, before + (fresh ? 1 : 0) - minus));
@@ -408,6 +405,16 @@ function applyPerms(st: SessionState, role: string, matched: Trigger[], plan: Tu
 }
 
 type ActionRequest = { kind: "act"; id: string } | { kind: "exp"; id: string };
+
+/** 本轮会真正执行、且效果里会给 role 加信任的动作,它代表的加分行为(否则 undefined)。 */
+function actionTrustMove(scn: LoadedScenario, st: SessionState, req: ActionRequest, role: string): string | undefined {
+  if (req.kind !== "act") return undefined;
+  const a = scn.data.actions[req.id];
+  if (!a?.trust_move || st.actionsDone[req.id] || !phaseAllowsDiscovery(st)) return undefined;
+  if (!evalRequirement(a.requires, stateResolver(st, scn))) return undefined;
+  const credits = a.effects.some((e) => new RegExp(`^trust\\.${role}\\s*\\+\\d+$`).test(e));
+  return credits ? a.trust_move : undefined;
+}
 
 function actionRequest(gate: GateOutput, matched: Trigger[]): ActionRequest | undefined {
   const act = matched.find((t) => t.kind === "act");

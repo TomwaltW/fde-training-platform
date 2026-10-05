@@ -366,6 +366,7 @@ actions:
   site_visit:
     title: 去操作部现场看半小时
     cost_min: 40
+    trust_move: 肯去现场看
     requires: {any: [auth_ops, discovered.liu]}
     narrative: narratives/site_visit.md      # 预先写好的观察记录,不由模型生成
     effects: [reveal P3@L2, reveal P6@L2, reveal K2@L1, discover chen, trust.chen+1]

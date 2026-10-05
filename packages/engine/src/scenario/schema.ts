@@ -170,6 +170,8 @@ export type Artifact = z.infer<typeof Artifact>;
 const Action = z.strictObject({
   title: z.string(),
   cost_min: z.number().int().nonnegative(),
+  /** 这个动作本身代表的信任加分行为(比如"肯去现场看");动作的效果已经加过信任时,同一句话里不再重复加。 */
+  trust_move: z.string().optional(),
   requires: Requirement.optional(),
   narrative: z.string().optional(),
   effects: z.array(z.string()),
