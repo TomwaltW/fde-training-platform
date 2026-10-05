@@ -90,11 +90,11 @@ test("管理页:看板展开才请求;三关表格、状态文字、其他数字
   await expect(status("dispute")).toHaveText("过");
   await expect(row("dispute")).toContainText("过 <20% · 修 20–40% · 不过 >40%");
 
-  // 第三关:样本不足
+  // 第三关:0 / 118,低于 2% → 不过
   const gate3 = panel.getByTestId("gates-gate3");
   await expect(gate3.getByRole("heading", { name: /第三关:付费/ })).toBeVisible();
   await expect(row("waitlist_to_paid")).toContainText("0 / 118");
-  await expect(status("waitlist_to_paid")).toHaveText("样本不足");
+  await expect(status("waitlist_to_paid")).toHaveText("不过");
 
   // 其他数字和门槛来源
   const extra = panel.getByTestId("gates-extra");

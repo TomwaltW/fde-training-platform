@@ -1,5 +1,5 @@
 // 真后端:手机上玩到一半存档续玩(只在手机视口跑,见 playwright.config.ts 的 testIgnore)。
-// 管理员用接口生成邀请码 → 新玩家从落地页点"开始这一局" → 登录、同意协议 → 开局 → 说 3 句话
+// 管理员用接口生成邀请码 → 新玩家从落地页点"开始这一局" → 登录、同意协议 → 自动开局 → 说 3 句话
 // → 刷新页面,3 句话和剩余时间都还在 → 离开这一局去"我的对局",点"接着玩" → 回到同一局再说 1 句。
 // 同时计时"打开落地页 → 第一句话得到回复",必须在 60 秒内(W4 验收的冒烟检查)。
 //
@@ -82,14 +82,12 @@ test("真后端(手机):新用户登录、说 3 句 → 刷新存档还在 → �
     await showPanel(page, info, "对话");
   };
 
-  // ---- 计时开始:打开落地页。没登录点"开始这一局"会先去登录页,登录完回到落地页
+  // ---- 计时开始:打开落地页。没登录点"开始这一局"会先去登录页,登录(和同意协议)后直接开局,不用再点一次
   const openedAt = Date.now();
   await page.goto("/");
   await page.getByRole("button", { name: "开始这一局" }).click();
-  await expect(page).toHaveURL(/\/login\?/);
+  await expect(page).toHaveURL(/\/login\?next=%2F%3Fstart%3Dfreight-docs$/);
   await loginWithInvite(page, PLAYER_EMAIL, invite);
-  await expect(page).toHaveURL(/:\d+\/$/);
-  await page.getByRole("button", { name: "开始这一局" }).click();
   await expect(page).toHaveURL(/\/play\/[^/]+$/);
   const sessionId = new URL(page.url()).pathname.split("/").pop()!;
   await expect(timeLeft).toHaveText("今天还剩 6 小时");
