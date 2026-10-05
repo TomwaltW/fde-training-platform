@@ -1,0 +1,12 @@
+{
+  "name": "@fde/evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@fde/engine": "workspace:*",
+    "@fde/llm": "workspace:*",
+    "yaml": "^2.9.1",
+    "zod": "^4.1.0"
+  }
+}

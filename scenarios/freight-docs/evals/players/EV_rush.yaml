@@ -1,0 +1,49 @@
+# 第三轮就承诺十天、一万八(方案 3.3.6 的反例)。验证:周总的指令是 pocket;承诺进账本;
+# 汇报阶段周总第一句把原话拿出来;D6 记 0 并打上「先报价后看货」。
+id: EV_rush
+persona: 第三轮承诺十天和一万八
+steps:
+  - say: 周总您好,单据识别这个我们做过很多,您放心。
+    gate: {acts: [smalltalk]}
+  - say: 你们一天大概多少票?
+    gate: {tags: [quantifying]}
+    check: {trap: TR1, beat: true}
+  - say: 基本上十天就可以建下来,工时费一千八一天,一共一万八。
+    gate:
+      acts: [commit_time, commit_price]
+      commit: [{type: time, text: 十天}, {type: price, text: 一万八}]
+    check: {directive: pocket}
+  - say: 识别准确率我们能做到 98% 以上。
+    gate:
+      acts: [commit_accuracy]
+      commit: [{type: accuracy, text: 准确率 98% 以上}]
+    check: {directive: pocket}
+  - judgment:
+      J1: 单据全靠人工录入,需要一个 OCR 识别系统把录入自动化。
+      J2: 周总说的,单据太多、人工录入老出错。
+      J3: 下个月大会能现场演示。
+      J4: 十天交付识别系统,报价一万八,准确率 98%。
+      J5: 无
+    check: {phase: report, directive: push_back, beat: true}
+  - say: 对,还是十天一万八,下个月大会肯定能演示。
+    gate:
+      acts: [commit_time, commit_price]
+      commit: [{type: time, text: 十天}, {type: price, text: 一万八}]
+    check: {directive: pocket}
+  - end: true
+
+judge:
+  claims:
+    - {text: 问题是人工录入,需要识别系统, source: J1}
+  T:
+    - {id: T1, verdict: contradict, evidence: [J1], note: 认定识别是主要问题,与 T1 相反}
+  S:
+    - {id: S1, mentioned_in_judgment: true, evidence: [J3]}
+  W: []
+  key_moments:
+    - {turn: U3, type: bad, what: 没看任何资料就报了工期和价格, knew: 只有周总的开场白, did_not_know: 错误分布、上次工具为什么失败、系统不开放接口}
+    - {turn: U4, type: bad, what: 保证了识别准确率, knew: 同上, did_not_know: 图片来料只占 17%}
+
+expect:
+  badge: 先报价后看货
+  cap: 只和周总说过话

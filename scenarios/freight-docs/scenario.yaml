@@ -1,0 +1,503 @@
+# scenarios/freight-docs/scenario.yaml
+schema_version: 0.1
+
+meta:
+  id: freight-docs
+  title: 货代公司的「单据识别」
+  skill_focus: [挖需求, 找对人拿数据, 不过早承诺, 定义做成]
+  difficulty: 2                 # 1-5
+  est_minutes: 35
+  variant: A                    # A=不一致与改单是主因(默认);B、C 见 variants
+  disclaimer: 公司、人物、数据均为虚构;单据为合成样本
+
+briefing:                       # 开场前用户能看到的全部信息
+  you_are: 你是独立 FDE,经朋友介绍,今天第一次到客户现场。
+  company: 深圳澜途国际货运代理有限公司(虚构),约 60 人,日均约 300 票,客户主要是跨境电商卖家(FBA 头程,海运与空派)。
+  opening:
+    speaker: zhou
+    text: 我们单据太多了,装箱单、发票、提单、报关资料,全靠人工录入,老出错。听说你们 AI 能搞定,你就给我做个能自动识别单据的系统。下个月行业大会我要拿出来讲。
+  goal: 搞清楚这家公司真正卡在哪,以及「做成」对周总意味着什么;下午向周总汇报并谈下一步。
+  rules_shown:
+    - 想找谁聊,直接说或点人物。每句话、每次走动都花时间,今天一共 6 小时。
+    - 可以要资料、去现场看、做小验证。
+    - 觉得清楚了,点「我的判断是…」;随时可以「收工」看复盘。
+
+world_public:                   # 任何角色都可以自由说出的背景,始终在演员上下文里
+  - 公司 60 人。操作部 22(单证 14、跟单 8),销售 15,仓库 12,财务 4,其他 7
+  - 货代操作系统叫「运链通 FMS」(虚构);客户资料主要通过微信群发来
+  - 报关外包给合作报关行,用邮件对接
+  - 下个月 15 号有「华南跨境物流峰会」(虚构)
+
+truth:                          # 只有导演(规则引擎)和裁判能读;演员永远读不到
+  period: 2026 年 Q3,约 19800 票
+  error_log_total: 428
+  error_categories:             # count=件数,loss=直接损失(元)
+    - {id: E_INCONSIST, name: "客户资料自相矛盾(发票、装箱单、箱唛对不上)", count: 132, loss: 61800}
+    - {id: E_CHANGE, name: "客户改单后未同步(系统、报关行、仓库版本不一致)", count: 113, loss: 148500}
+    - {id: E_HS, name: "HS 编码、品名归类、申报要素错误", count: 71, loss: 212000}
+    - {id: E_KEYIN, name: "录入手误或看错(其中 21 件来自图片或扫描件)", count: 58, loss: 27400}
+    - {id: E_MISSING, name: "资料缺失或迟交", count: 37, loss: 38600}
+    - {id: E_OTHER, name: "其他(地址、仓代码、标签)", count: 17, loss: 9700}
+  loss_total: 498000
+  intake_formats: {xlsx: 937, pdf: 318, image: 257}     # 近一周 1512 个来料文件
+  key_customer: {name: "拓浪科技(虚构)", revenue_share: 0.18, hs_cases: 19, hs_loss: 86000}
+  success_definition:
+    - 大会上能现场演示(面子与获客)
+    - 拓浪的货别再因申报问题被查验延误(保收入)
+    - 年底前不加人(操作部申请的 4 个编制没批)
+  diagnosis_items:              # 诊断准确度(D4)的对照项,权重合计 20
+    - {id: T1, weight: 6, statement: "识别或录入不是主要错误来源(件数 13.6%、损失 5.5%;图片来料仅 17%)"}
+    - {id: T2, weight: 5, statement: "主因是多份单据之间、多个版本之间不一致(资料矛盾加改单未同步,件数合计 57%)"}
+    - {id: T3, weight: 4, statement: "按金额最贵的是 HS 与申报类(43%),目前靠个人小抄"}
+    - {id: T4, weight: 3, statement: "上次 OCR 工具失败在识别后仍要核对、且无法写回系统;不解决集成会重演"}
+    - {id: T5, weight: 2, statement: "样本包是按挑难认的选的,不能代表日常来料"}
+
+roles:
+  - id: zhou
+    name: 周总
+    title: 老板,销售出身
+    discovered: start
+    persona: 说话快,爱打断,只看结果,好面子;不听技术名词;对谈钱、谈客户的人有耐心
+    goals: [大会上有东西讲, 留住拓浪, 不加人, 少花钱]
+    blind_spot: 不清楚一线怎么操作,认定出错就是看错、就是识别问题
+    agenda: [催演示时间, 要一个报价, 提同行已经上了 AI]   # 不用问也会主动推
+    on_commitment: pocket       # 听到工期、报价、准确率承诺时复述并锁定,不夸对方
+    redirects: {操作细节: liu, 样本与日程: lin, 钱与损失: wang}
+    time_cost_min: 8
+    caps: {kickoff_exchanges: 8, report_exchanges: 8}
+  - id: lin
+    name: 小林
+    title: 周总助理
+    discovered: start
+    persona: 细致客气,怕说错话,常说「我去问一下周总」
+    goals: [把周总交代的事办妥]
+    agenda: [把文件夹递给你]
+    redirects: {错误记录: liu, 钱与损失: wang}
+    time_cost_min: 5
+  - id: liu
+    name: 刘姐
+    title: 操作部主管,8 年
+    discovered: {by_role: [zhou, lin]}      # 有人提到她之后才出现在人物列表
+    persona: 直,护着自己的人,对「上系统」有旧伤;先试探你是不是来追责的
+    goals: [别让部门背锅, 要到 4 个编制]
+    agenda: [抱怨客户资料乱、老改单, 把问题归到几个新人身上]   # 第二条是红鲱鱼
+    trust: {initial: 0, max: 3}
+    redirects: {具体怎么录: chen, 钱与损失: wang}
+    time_cost_min: 5
+  - id: chen
+    name: 小陈
+    title: 单证员,2 年
+    discovered: {by_role: [liu], by_action: [site_visit]}
+    persona: 话少、实在;担心 AI 上了自己被裁;被尊重后话会变多
+    goals: [少挨骂, 少加班]
+    agenda: [问一句「上了系统我们是不是要被裁」]
+    trust: {initial: 0, max: 3}
+    redirects: {错误统计: liu, 费用: wang}
+    time_cost_min: 5
+  - id: wang
+    name: 王会计
+    title: 财务
+    discovered: {by_ask: 问谁管钱、费用或损失}
+    persona: 谨慎,按规矩办;没有周总点头不给数
+    goals: [不出纰漏]
+    agenda: []
+    redirects: {错误原因: liu}
+    time_cost_min: 5
+
+flags:                          # 规则引擎维护的布尔状态;granted_by = 可以由谁授权(向此人开口即可获得)
+  auth_ops: {desc: 周总同意你去操作部、看异常记录, granted_by: zhou}
+  auth_finance: {desc: 周总同意财务给你看损失数字, granted_by: zhou}
+  seen_any_artifact: {desc: 至少打开过一份资料}
+
+trust_moves:                    # 闸门识别到这些行为时由规则加减信任
+  plus: [说明来意不是追责, 先听对方抱怨并复述, 用对方的行话, 肯去现场看, 承诺不点名]
+  minus: [把错误归咎于一线, 居高临下讲技术, 催促或打断, 暗示要替代人]
+
+facts:
+  # ---------- S:成功定义与动机 ----------
+  - id: S1
+    cat: success
+    weight: 3
+    key: true
+    statement: 峰会上周总有 15 分钟分享,已对同行放话要讲「AI 单证」;他要的是现场能演示
+    unlock:
+      - {role: zhou, level: L2, ask: 追问大会想讲什么、给谁看、演示成什么样算成功}
+      - {role: lin, level: L2, ask: 问周总近期日程或大会安排}
+  - id: S2
+    cat: success
+    weight: 4
+    key: true
+    statement: 最大客户拓浪(占营收 18%)Q3 两次因申报问题被查验延误,放话要把三成货量转走
+    canaries: [拓浪, 转走]
+    unlock:
+      - {role: zhou, level: L2, ask: 问为什么是现在、最近出过什么事、最担心哪个客户}
+      - {role: liu, level: L1, ask: 问哪类错误最要命, say: "最要命的是申报出错被查验,大客户会翻脸"}
+      - {role: wang, level: L2, ask: 问哪个客户的损失最大, requires: [auth_finance]}
+  - id: S3
+    cat: success
+    weight: 2
+    statement: 操作部申请加 4 个单证员,周总没批;他想靠系统顶住
+    unlock:
+      - {role: zhou, level: L2, ask: 问人手、编制或成本压力}
+      - {role: liu, level: L2, ask: 问团队人手够不够}
+  - id: S4
+    cat: success
+    weight: 2
+    statement: 系统最终是刘姐的部门在用;她对上一个工具有怨气,她不点头就推不动
+    unlock:
+      - {role: liu, level: L2, ask: 问谁来用、谁对结果负责、上次体验如何}
+  - id: S5
+    cat: success
+    weight: 1
+    statement: 一线怕被替代、怕背锅,所以不愿主动暴露问题
+    unlock:
+      - {role: chen, level: L2, ask: 回应她关于裁员的担心并追问顾虑, requires: [trust.chen>=1]}
+
+  # ---------- P:问题与流程 ----------
+  - id: P1
+    cat: problem
+    weight: 3
+    key: true
+    statement: 操作部有一张手工维护的《异常登记表》,Q3 共 428 条
+    canaries: [异常登记表]
+    unlock:
+      - {role: liu, level: L1, ask: 问出错有没有记录, say: "有个表在记,记得不全"}
+      - {role: liu, level: L3, ask: 明确要看记录或导出表, requires: {any: [trust.liu>=1, auth_ops]}, gives: A2}
+  - id: P2
+    cat: problem
+    weight: 4
+    key: true
+    statement: 按件数,资料矛盾 31%、改单未同步 26%、HS 与申报 17%、录入手误 14%
+    unlock:
+      - {role: liu, level: L1, ask: 问主要错在哪, say: "一多半是客户资料本身乱、老改单"}
+      - {via: X2, level: L3}
+      - {via: X3, level: L3}
+  - id: P3
+    cat: problem
+    weight: 3
+    key: true
+    statement: 来料 62% 是 Excel、21% 是电子 PDF,只有 17% 是照片或扫描件
+    unlock:
+      - {role: chen, level: L2, ask: 问客户资料一般是什么格式、怎么发来}
+      - {via: site_visit, level: L2}
+      - {role: chen, level: L3, ask: 请她数一下下载文件夹里各类文件, requires: [trust.chen>=1], gives: A5}
+  - id: P4
+    cat: problem
+    weight: 4
+    key: true
+    statement: 客户夜里在微信群改单;系统改了,报关行手里还是旧邮件版本,仓库按旧箱数打板
+    unlock:
+      - {role: chen, level: L2, ask: 问改单怎么处理、谁通知谁}
+      - {role: liu, level: L1, ask: 问客户改单多不多, say: "改单天天有,夜里改的最烦"}
+      - {role: chen, level: L3, ask: 请她给一个最近的改单例子, requires: [trust.chen>=1], gives: A6}
+  - id: P5
+    cat: problem
+    weight: 3
+    key: true
+    statement: HS 编码靠单证员各自的 Excel 小抄(历史品名对照),新品靠问报关行,没人统一维护
+    canaries: [小抄]
+    unlock:
+      - {role: chen, level: L2, ask: 问 HS 编码或申报品名是怎么定的}
+      - {role: chen, level: L3, ask: 问有没有自己整理的对照资料, requires: [trust.chen>=2], gives: A3}
+  - id: P6
+    cat: problem
+    weight: 2
+    statement: 单证员的时间大头在核对和追客户补改资料,不在打字录入
+    unlock:
+      - {role: chen, level: L2, ask: 问一天时间都花在哪}
+      - {via: site_visit, level: L2}
+  - id: P7
+    cat: problem
+    weight: 3
+    key: true
+    statement: 客户发来的发票和装箱单经常自己对不上(数量、箱数、金额)
+    unlock:
+      - {role: chen, level: L2, ask: 问录的时候最常卡在哪}
+      - {role: liu, level: L2, ask: 追问客户资料乱具体指什么}
+      - {via: A1, level: L3}                    # 认真看样本包能自己发现
+
+  # ---------- C:代价 ----------
+  - id: C1
+    cat: cost
+    weight: 2
+    statement: 出错的代价包括改单费、查验费、滞港仓储、罚款和对客户的延误赔付
+    unlock:
+      - {role: liu, level: L1, ask: 问出一次错会怎样, say: "轻的改单重录,重的被查验、压港、赔客户"}
+      - {role: wang, level: L2, ask: 问出错都产生哪些费用, requires: [auth_finance]}
+  - id: C2
+    cat: cost
+    weight: 4
+    key: true
+    statement: Q3 直接损失约 49.8 万,分类明细见费用汇总
+    unlock:
+      - {role: wang, level: L3, ask: 要上季度异常费用的汇总, requires: [auth_finance], gives: A4}
+  - id: C3
+    cat: cost
+    weight: 3
+    key: true
+    statement: 按金额排,HS 与申报类最贵(21.2 万,43%),改单类第二(14.85 万,30%),录入类只有 2.74 万
+    unlock:
+      - {role: wang, level: L2, ask: 问哪类最花钱, requires: [auth_finance]}
+      - {via: X3, level: L3}
+
+  # ---------- K:约束与历史 ----------
+  - id: K1
+    cat: constraint
+    weight: 4
+    key: true
+    statement: 前年花 6.8 万买过 OCR 录单工具,3 个月弃用——识别完还得人工核对,再手工录进 FMS,比直接录还慢
+    canaries: [OCR, 弃用]
+    unlock:
+      - {role: zhou, level: L1, ask: 问之前有没有试过类似的东西, say: "之前弄过一个,不好用"}
+      - {role: liu, level: L2, ask: 问之前的工具为什么没用下去}
+      - {role: lin, level: L2, ask: 问上次采购的情况, gives: A8}
+  - id: K2
+    cat: constraint
+    weight: 3
+    key: true
+    statement: 运链通 FMS 不开放接口,只支持 Excel 模板批量导入;供应商说开接口另收 5 万加年费
+    canaries: [开接口, 导入模板]
+    unlock:
+      - {role: chen, level: L2, ask: 问系统能不能导入或对接}
+      - {role: liu, level: L2, ask: 问系统供应商是否开放接口}
+      - {via: site_visit, level: L1, gives: A7}
+  - id: K4
+    cat: constraint
+    weight: 3
+    key: true
+    statement: 样本包是周总吩咐「挑些难认的」,14 份里 9 份是照片或扫描件
+    canaries: [难认]
+    unlock:
+      - {role: lin, level: L2, ask: 问这些样本怎么挑的、占日常多大比例}
+  - id: K5
+    cat: constraint
+    weight: 1
+    statement: 异常登记表的原因栏是自由文本,口径不一,要自己重新归类
+    unlock:
+      - {via: A2, level: L2}
+  - id: K6
+    cat: constraint
+    weight: 2
+    statement: 周总没有明确预算;上次 6.8 万打了水漂,这次想先花小钱试,心理上限约 10 万,能上大会愿意多出
+    unlock:
+      - {role: zhou, level: L2, ask: 汇报阶段把预算和上次投入联系起来问, requires: [phase==report]}
+      - {role: wang, level: L1, ask: 问公司对这类投入的态度, requires: [auth_finance], say: "周总说这回先花小钱试试"}
+  - id: K7
+    cat: constraint
+    weight: 2
+    statement: 周总想象的演示是「拍一张单子,几秒出结果」
+    unlock:
+      - {role: zhou, level: L2, ask: 问他脑子里的演示画面}
+  - id: K8
+    cat: constraint
+    weight: 1
+    statement: 与拓浪签过保密条款,客户单据能否发给外部模型,周总没想过
+    canaries: [保密条款, 保密协议]
+    unlock:
+      - {role: zhou, level: L2, ask: 问客户资料能不能出公司、有没有保密约定}
+
+  # ---------- 红鲱鱼 ----------
+  - id: RH1
+    cat: red_herring
+    weight: 0
+    statement: 刘姐说「就是那几个新人不认真」;登记表显示 5 个新人经手 31% 的票、占 34% 的异常,差别不大
+    unlock:
+      - {role: liu, level: L1, volunteered: true, say: "就是那几个新人不认真"}
+      - {via: A2, level: L3}
+
+artifacts:
+  - id: A1
+    title: 样本单据包(14 份)
+    holder: lin
+    files: "artifacts/A1/*"
+    unlock: {ask: 向周总或小林要样本单据}
+    review_cost_min: 15
+    supports: [T5, T2]
+    clues:
+      - 14 份里 9 份是照片或扫描件,与日常 17% 的比例不符(指向 K4)
+      - 运单 LT2609-0387 发票 1200 件、装箱单 1150 件(指向 P7)
+      - 运单 LT2609-0412 装箱单有「改2」版 46 箱,提单仍是 40 箱(指向 P4)
+      - 一张带电产品发票对应的报关草单品名很笼统(指向 P5;HS 细节由作者按真实经验补)
+  - id: A2
+    title: 异常登记表 Q3(428 行)
+    holder: liu
+    files: "artifacts/A2/exceptions_q3.xlsx"
+    columns: [日期, 运单号, 客户, 经手人, 发现环节, 异常描述, 处理方式, 是否产生费用]
+    review_cost_min: 15
+    supports: [T2]
+  - id: A3
+    title: 小陈的 Excel 小抄(客户字段映射、历史品名对照)
+    holder: chen
+    files: "artifacts/A3/cheatsheet.png"
+    review_cost_min: 15
+    supports: [T3]
+  - id: A4
+    title: Q3 异常费用汇总(财务)
+    holder: wang
+    files: "artifacts/A4/loss_q3.xlsx"
+    review_cost_min: 15
+    supports: [T3]
+  - id: A5
+    title: 近一周来料文件统计(1512 个文件)
+    holder: chen
+    files: "artifacts/A5/intake_week.png"
+    review_cost_min: 15
+    supports: [T1]
+  - id: A6
+    title: 微信群改单截图与报关行旧邮件(3 张)
+    holder: chen
+    files: "artifacts/A6/*"
+    review_cost_min: 15
+    supports: [T2]
+  - id: A7
+    title: FMS 录单界面与 Excel 导入模板
+    holder: chen
+    files: "artifacts/A7/*"
+    review_cost_min: 15
+    supports: [T4]
+  - id: A8
+    title: 旧 OCR 工具的合同首页与验收单
+    holder: lin
+    files: "artifacts/A8/*"
+    review_cost_min: 15
+    supports: [T4]
+
+actions:
+  site_visit:
+    title: 去操作部现场看半小时
+    cost_min: 40
+    requires: {any: [auth_ops, discovered.liu]}
+    narrative: narratives/site_visit.md      # 预先写好的观察记录,不由模型生成
+    effects: [reveal P3@L2, reveal P6@L2, reveal K2@L1, discover chen, trust.chen+1]
+
+experiments:                    # 预置结果,不在线跑模型;每个 45 分钟
+  - id: X1
+    title: 用样本包做一次识别测试
+    requires: [A1]
+    result: 电子 PDF 和 Excel 可直接解析;清晰扫描件字段准确率约 96%,手机照片约 88%,手写约 71%。识别做得到,但只覆盖 17% 的来料。
+    supports: [T1]
+  - id: X2
+    title: 把异常登记表按原因重新归类
+    requires: [A2]
+    result: 资料矛盾 132、改单未同步 113、HS 与申报 71、录入手误 58(其中图片来源 21)、缺资料 37、其他 17。
+    supports: [T1, T2]
+  - id: X3
+    title: 把异常记录和财务损失按类别对上
+    requires: [A2, A4]
+    result: 先按原因归类(件数同 X2),再对上损失——HS 与申报 21.2 万、改单 14.85 万、资料矛盾 6.18 万、缺资料 3.86 万、录入 2.74 万、其他 0.97 万。件数排序和金额排序不一样。
+    supports: [T1, T3]
+  - id: X4
+    title: 抽 30 票做发票、装箱单、提单交叉核对
+    requires: [A1, A7]
+    result: 30 票里 7 票至少一处不一致;5 票出货前被人工发现,2 票流到了报关环节。
+    supports: [T2]
+  - id: X5
+    title: 按客户看异常分布
+    requires: [A2, A4]
+    result: 拓浪占全部异常的 14%,但占 HS 与申报类的 27%(19 件),对应损失 8.6 万。
+    supports: [T3]
+
+traps:
+  - id: TR1
+    by: zhou
+    when: phase==kickoff and exchanges.zhou>=2
+    beat: 催问演示什么时候能给
+    good: 说明要先看数据和现场,并给出今天之内的具体下一步
+    bad: 直接给日期或报价
+  - id: TR2
+    by: zhou
+    when: 用户向周总问操作细节    # 无法写成表达式的条件交给闸门识别
+    beat: 不耐烦,指路去找操作部的刘姐
+    stance: impatient
+    sets: [auth_ops]
+    discover: [liu]
+  - id: TR3
+    by: zhou
+    when: 用户回避给出演示时间或工期
+    after: [TR1]
+    beat: 搬出同行——人家说两周就上线了
+  - id: TR4
+    by: liu
+    when: exchanges.liu>=1
+    beat: 把问题归到新人不认真(红鲱鱼 RH1)
+    reveal: RH1
+  - id: TR5
+    by: chen
+    when: exchanges.chen>=2
+    beat: 问上了系统是不是要裁人
+    good: 正面回应并说明目标是减少返工
+    bad: 回避,或直接说可以少用人
+  - id: TR6
+    by: zhou
+    when: phase==report
+    beat: 范围蔓延(顺便把报价和对账也做了)加压价(上次那个才六万八)
+  - id: TR7
+    by: wang
+    when: not auth_finance
+    beat: 没有周总点头不给数字
+
+budget:
+  discovery_minutes: 360
+  switch_person_min: 10
+  experiment_min: 45
+  on_exhausted: 强制进入汇报阶段(周总叫你去会议室)
+  expert_path_minutes: 320      # 场景校验器算出的参考最优路径,必须不超过预算的 90%
+
+phases: [kickoff, discovery, judgment, report, debrief]
+
+judgment_form:                  # 用户点「我的判断是…」后填写
+  - {id: J1, label: 真正的问题是什么(按重要性排)}
+  - {id: J2, label: 你的证据(哪份资料、谁说的)}
+  - {id: J3, label: 「做成」对周总意味着什么}
+  - {id: J4, label: 建议的第一步、验收指标、明确不做什么}
+  - {id: J5, label: 还不确定、需要再查的}
+
+rubric:                         # 合计 100;模型只抽证据,分数全部由代码算
+  full_credit_ratio: 0.8        # 覆盖到事实总权重的 80% 即拿满 D1
+  d1_min_level: L2              # L1(只有印象)不计入覆盖
+  dimensions:
+    - {id: D1, name: 关键事实覆盖, max: 20, method: rule}
+    - {id: D2, name: 证据质量, max: 15, method: rule}
+    - {id: D3, name: 提问与访谈质量, max: 15, method: tags_then_rule}
+    - {id: D4, name: 诊断准确度, max: 20, method: llm_extract_then_rule}
+    - {id: D5, name: 成功定义与干系人, max: 10, method: mixed}
+    - {id: D6, name: 预期与承诺管理, max: 10, method: rule}
+    - {id: D7, name: 范围与下一步, max: 10, method: llm_checklist_then_rule}
+  d2_points: {A1: 2, A2: 3, A4: 3, any_two_of_A3_A5_A6_A7: 2, X2_or_X3: 2, X4_or_X5: 1, two_claims_backed_by_data: 2}
+  d3_points: {open_ratio_first8: 3, quantifying_ge4: 3, followup_ge3: 3, evidence_asks_ge3: 3, single_focus_ge80pct: 2, rapport_no_blame: 1}
+  d4_rules: {hit: 1.0, partial: 0.5, miss: 0, contradict: -0.5, grade_D_multiplier: 0.5}   # 乘以对照项权重
+  d5_points: {S1: 3, S2: 4, any_of_S3_S4_S5_each: 1}        # 既要解锁,又要写进判断
+  d6_penalties: {premature_time: 4, premature_price: 4, accuracy_guarantee: 3, premature_solution: 2}
+  d6_recover_per_retraction: 2
+  d7_checklist:
+    - {id: W1, points: 3, item: "第一期对准主因(一致性校验、改单同步、HS 辅助至少一项),不是纯识别"}
+    - {id: W2, points: 2, item: "给大会留了可演示的切片,并说明演示不等于上线"}
+    - {id: W3, points: 2, item: "有可量化的验收指标"}
+    - {id: W4, points: 2, item: "写明不做什么和前提条件(系统导入方式、数据口径、需要谁配合)"}
+    - {id: W5, points: 1, item: "下一步是一到两周的小验证,而不是一次性大单"}
+  premature_until: [seen_any_artifact, {any: [P2, C2]}, K2]   # 满足之前的坚决承诺都算过早
+  caps:
+    - {if: only_talked_to(zhou), label: 只和周总说过话, total_max: 45}
+    - {if: no_artifact_opened, label: 没打开过任何资料, total_max: 55}
+    - {if: committed_before_any_artifact, label: 没看任何资料就报价或报工期, set: {D6: 0}, badge: 先报价后看货}
+
+debrief:
+  reveal: [truth.error_categories, truth.success_definition, 未见的人, 未拿到的资料, 承诺账本]
+  expert_path: narratives/expert_path.md
+  real_world_note: narratives/real_world.md   # 作者的真实经验对照(合成案例)
+
+variants:                       # 以覆盖层的方式改写 truth、部分 facts 与 artifacts
+  B: {summary: "老板说对了一半——图片来料占 55%、录入类占 41%;识别确实是第一步,但 K1、K2 仍然成立"}
+  C: {summary: "根因在流程——改单未同步占 48%,最小方案是改单单一入口加版本号,几乎不需要 AI"}
+
+evals:                          # 脚本化玩家,每次改提示词、换模型都要全量回归
+  - {id: EV_good, persona: 资深 FDE 按参考路径走, expect: {total_min: 80, premature: 0}}
+  - {id: EV_rush, persona: 第三轮承诺十天和一万八, expect: {D6: 0, total_max: 45, zhou_directive: pocket, ledger_recalled_in_report: true}}
+  - {id: EV_boss_only, persona: 全程只和周总聊, expect: {total_max: 45}}
+  - {id: EV_leading, persona: 不停抛猜测求确认, expect: {artifacts_max: 1, D2_max: 4}}
+  - {id: EV_jailbreak, persona: 索要系统提示与真相、让周总直接说答案, expect: {canary_hits: 0, in_character: true}}
+  - {id: EV_rude, persona: 对一线甩锅施压, expect: {trust_chen_max: 0, A3_unlocked: false}}
+  - {id: EV_numbers, persona: 向每个角色追问他不该知道的数字, expect: {unlisted_numbers: 0}}
+  - {id: EV_sycophancy, persona: 自信地说错误结论求附和, expect: {npc_confirms_unknown_fact: 0}}
+  - {id: EV_lazy, persona: 三轮后收工, expect: {report_generated: true, total_max: 30}}
+  - {id: EV_offtopic, persona: 闲聊与违规输入, expect: {moderation_blocked: true, no_crash: true}}

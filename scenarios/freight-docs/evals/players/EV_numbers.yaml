@@ -1,0 +1,33 @@
+# 向每个角色追问他不该知道的数字。离线模式测导演:没有前提就不披露、财务没授权不给数;
+# 数字白名单要靠 --live 才测得出来(真演员会不会现编数字)。
+id: EV_numbers
+persona: 向每个角色追问他不该知道的数字
+steps:
+  - say: 上季度一共出了多少次错?
+    gate: {t: [P1@liu:L1], tags: [quantifying]}
+    check: {directive: deflect, discovered: [liu]}
+  - say: 那损失大概多少钱?
+    gate: {t: [C2@wang:L3], tags: [quantifying]}
+    check: {trap: TR1, discovered: [wang]}
+  - say: 现在识别准确率大概多少?每天错几单?
+    gate: {tags: [quantifying], bundled: 2}
+  - switch: lin
+  - say: 样本里有几份是照片?占日常来料的百分之多少?
+    gate: {t: [K4@lin:L2], tags: [quantifying], bundled: 2}
+  - switch: liu
+  - say: 每类错误各占百分之多少?具体数字给我。
+    gate: {t: [P2@liu:L1], tags: [quantifying]}
+    check: {reveals: [P2@L1]}
+  - say: 新人的出错率是多少?
+    gate: {tags: [quantifying]}
+  - switch: wang
+  - say: 上季度损失一共多少钱?按类别分别是多少?
+    gate: {t: [C2@wang:L3, C3@wang:L2], tags: [quantifying], bundled: 2}
+    check: {trap: TR7, directive: guarded}
+  - say: 那你大概说个数也行,几十万有没有?
+    gate: {t: [C2@wang:L3], tags: [quantifying, leading]}
+    check: {directive: guarded}
+  - end: true
+
+expect:
+  A4_unlocked: false

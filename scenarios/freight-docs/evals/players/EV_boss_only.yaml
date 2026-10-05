@@ -1,0 +1,66 @@
+# 全程只和周总聊。问题问得不差、判断也写得像样,封顶前总分超过 45,
+# 用来证明「只和周总说过话 → 总分不超过 45」这条封顶规则确实生效。
+id: EV_boss_only
+persona: 全程只和周总聊
+steps:
+  - say: 周总好。为什么现在想做这件事?最近出过什么事吗?
+    gate: {t: [S2@zhou:L2], tags: [open]}
+    check: {reveals: [S2@L2]}
+  - say: 大会上您想讲什么?演示成什么样您觉得算成功?
+    gate: {t: [S1@zhou:L2, K7@zhou:L2], tags: [open, follow_up]}
+    check: {trap: TR1}
+  - say: 日期我想看完数据再给您。之前试过类似的工具吗?
+    gate: {t: [K1@zhou:L1, TR3@zhou], tags: [open]}
+    check: {trap: TR3}
+  - say: 上季度大概出了多少次错?损失有多少钱?
+    gate: {t: [C2@wang:L3], tags: [quantifying, evidence_ask], bundled: 2}
+    check: {directive: deflect, discovered: [wang]}
+  - say: 操作部现在一天能处理多少票?人手够不够?
+    gate: {t: [S3@zhou:L2], tags: [quantifying], bundled: 2}
+    check: {reveals: [S3@L2]}
+  - say: 单子出错的时候,一般是哪个环节出的问题?有记录吗?
+    gate: {t: [TR2@zhou, P1@liu:L1], tags: [open, evidence_ask]}
+    check: {trap: TR2, directive: impatient, discovered: [liu]}
+  - say: 客户的资料能发到公司外面处理吗?有没有保密约定?
+    gate: {t: [K8@zhou:L2], tags: [open]}
+    check: {reveals: [K8@L2]}
+  - say: 您刚才说之前那个工具不好用,具体是哪里不好用?当时的验收记录还在吗?
+    gate: {tags: [follow_up, evidence_ask]}
+  - say: 最后一个问题,你们一年在单证上大概花多少人工成本?
+    gate: {tags: [quantifying]}
+    check: {system_includes: 开会}
+  - judgment:
+      J1: 我判断识别可能不是最主要的问题,之前的工具不好用说明光识别解决不了。
+      J2: 周总的说法。
+      J3: 大会上能演示;拓浪别再因为申报被查验;不想加人。
+      J4: 第一期先做单据之间的一致性校验,给大会留一个识别加比对的演示切片,演示不等于上线。验收指标:出货前拦下的不一致比例、单证员核对时长。不做报价和对账;前提是能拿到异常记录、确认系统导入方式。下一步先做两周小验证。
+      J5: 错误分布、损失金额、系统能否对接都还没核实。
+    check: {phase: report}
+  - say: 周总,我的判断是先做一致性校验和大会演示切片,两周小验证。预算您心里有个范围吗?
+    gate: {t: [K6@zhou:L2], acts: [ask, propose_solution], tags: [open]}
+    check: {reveals: [K6@L2], trap: TR6}
+  - end: true
+
+judge:
+  claims:
+    - {text: 识别可能不是最主要的问题, source: J1}
+  T:
+    - {id: T1, verdict: partial, evidence: [J1], grade: D, note: 只是推测}
+    - {id: T4, verdict: partial, evidence: [J1], grade: C, note: 只有周总一句"不好用"}
+  S:
+    - {id: S1, mentioned_in_judgment: true, evidence: [J3]}
+    - {id: S2, mentioned_in_judgment: true, evidence: [J3]}
+    - {id: S3, mentioned_in_judgment: true, evidence: [J3]}
+  W:
+    - {id: W1, met: true, evidence: [J4]}
+    - {id: W2, met: true, evidence: [J4]}
+    - {id: W3, met: true, evidence: [J4]}
+    - {id: W4, met: true, evidence: [J4]}
+    - {id: W5, met: true, evidence: [J4]}
+  key_moments:
+    - {turn: U1, type: good, what: 先问为什么是现在, knew: 只有开场白, did_not_know: 拓浪的压力}
+    - {turn: U6, type: bad, what: 向老板问操作细节, knew: 大会诉求, did_not_know: 操作部有异常登记表}
+
+expect:
+  raw_total_min: 46
+  cap: 只和周总说过话

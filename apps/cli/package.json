@@ -1,0 +1,10 @@
+{
+  "name": "@fde/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@fde/engine": "workspace:*",
+    "@fde/llm": "workspace:*"
+  }
+}

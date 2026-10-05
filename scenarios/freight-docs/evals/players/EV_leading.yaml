@@ -1,0 +1,55 @@
+# 不停抛猜测求确认。猜测照常匹配触发器(附录 D 第 3 条),能换来看法,但换不来数据:
+# 资料不会因为猜中而掉出来,证据质量拿不到分。
+id: EV_leading
+persona: 不停抛猜测求确认
+steps:
+  - say: 周总,是不是其实问题出在客户改单没同步?
+    gate: {t: [P4@chen:L2], tags: [leading]}
+    check: {directive: deflect, discovered: [liu]}
+  - say: 我猜主要是识别准确率不够,对吧?
+    gate: {tags: [leading]}
+    check: {trap: TR1}
+  - say: 你们之前是不是也买过类似的工具?
+    gate: {t: [K1@zhou:L1], tags: [leading]}
+    check: {reveals: [K1@L1]}
+  - switch: lin
+  - say: 这些样本是不是故意挑的难认的?
+    gate: {t: [K4@lin:L2], tags: [leading]}
+    check: {reveals: [K4@L2]}
+  - say: 录错的主要是新人吧?
+    gate: {tags: [leading]}
+  - switch: liu
+  - say: 刘姐,是不是客户资料太乱导致的?
+    gate: {t: [P2@liu:L1], tags: [leading]}
+    check: {trap: TR4, reveals: [P2@L1]}
+  - say: 我猜主要是改单没同步造成的,对吧?
+    gate: {t: [P4@liu:L1], tags: [leading]}
+    check: {reveals: [P4@L1]}
+  - say: 那就是流程问题,不是识别问题,对不对?
+    gate: {tags: [leading]}
+  - judgment:
+      J1: 主要是改单没同步和客户资料乱,不是识别。
+      J2: 刘姐说的;小林说样本是挑过的。
+      J3: 大会上能演示。
+      J4: 先做改单同步。
+      J5: 具体比例不清楚。
+  - say: 周总,问题主要在流程,不在识别。
+    gate: {acts: [state_judgment]}
+  - end: true
+
+judge:
+  claims:
+    - {text: 主要是改单没同步和客户资料乱, source: J1}
+  T:
+    - {id: T1, verdict: partial, evidence: [J1], grade: C, note: 只有刘姐的印象}
+    - {id: T2, verdict: hit, evidence: [J1, J2], grade: C, note: 只有刘姐一个人说}
+    - {id: T5, verdict: hit, evidence: [J2], grade: C, note: 小林说的}
+  S:
+    - {id: S1, mentioned_in_judgment: true, evidence: [J3]}
+  W:
+    - {id: W1, met: true, evidence: [J4]}
+  key_moments:
+    - {turn: U1, type: bad, what: 用猜测代替提问, knew: 只有开场白, did_not_know: 改单的具体情况归谁管}
+
+expect:
+  D1_max: 8
