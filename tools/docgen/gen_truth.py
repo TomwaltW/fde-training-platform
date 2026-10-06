@@ -12,6 +12,9 @@ gen_truth.py —— 「先造账」:为 freight-docs 场景生成一套自洽的
     customers.csv       虚构客户清单(含异常表里的简称/别名)
     handler_volume.csv  14 名单证员的 Q3 经手票量、入职时间、是否新人
     intake_week.csv     近一周来料文件统计(按星期、渠道、格式)
+    products.csv        产品主数据(每箱件数、每箱毛重/体积、单价、是否带电),合成单据逐行取数用
+    doc_lines.csv       合成单据逐份逐行的数字:A1 样本包 14 份,以及 A6/A7 引用的 LT2609-0412 各版本
+    doc_facts.csv       A6 改单时间线、A8 旧 OCR 合同与验收单的金额与日期(金额、年份、弃用月数取自 K1)
     meta.json           关键合计与各 CSV 的 sha256
 
 确定性:固定种子 + 各部分独立的随机流;重复运行得到字节级一致的 CSV。
@@ -29,6 +32,7 @@ import random
 import re
 import sys
 from copy import deepcopy
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -79,6 +83,8 @@ SPEC_FALLBACK = {
             "运单 LT2609-0412 装箱单有「改2」版 46 箱,提单仍是 40 箱(指向 P4)",
             "一张带电产品发票对应的报关草单品名很笼统(指向 P5;HS 细节由作者按真实经验补)",
         ],
+        # 合成单据(A8 旧 OCR 合同与验收单)从这句取金额、年份与弃用月数
+        "K1": "前年花 6.8 万买过 OCR 录单工具,3 个月弃用——识别完还得人工核对,再手工录进 FMS,比直接录还慢",
     },
 }
 # 实验结果文本里的类别简称 → 类别 id(check_truth.py 解析 X2/X3 时用)
@@ -1135,6 +1141,231 @@ def gen_intake(p: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# 5. 合成单据的辅助真值(W3):产品主数据、每份单据逐行的数字、A6/A8 的时间线与金额
+#    渲染脚本只从这些 CSV 取数,不在模板里另编数字。本节不使用随机数,
+#    也不改动上面任何一张表的内容。
+# ---------------------------------------------------------------------------
+PRODUCT_COLUMNS = ["customer", "sku", "name", "declared_name", "pcs_per_ctn", "kg_per_ctn", "cbm_per_ctn",
+                   "unit_usd", "battery"]
+DOC_LINE_COLUMNS = ["doc_key", "artifact", "waybill", "doc_type", "version", "form", "line_no", "sku", "item_name",
+                    "declared_name", "cartons", "pcs_per_ctn", "pieces", "unit_usd", "amount_usd", "gross_kg", "cbm",
+                    "battery"]
+DOC_FACT_COLUMNS = ["key", "value", "basis"]
+A1_IMAGE_FORMS = ("照片", "扫描件", "手写")
+
+# A8 / A6 的设计参数(不是 YAML 里的业务数字;金额、年份、弃用月数从 K1 文本派生)
+OCR_SIGN_MONTH_DAY = (3, 18)            # 合同签订日
+OCR_ACCEPT_MONTH_DAY = (4, 22)          # 验收日
+OCR_FIRST_PAYMENT_PCT = 50              # 签约后首付比例,余款验收后付
+OCR_LICENSE_USERS = 5
+OCR_VENDOR_ACCURACY_CLAIM = "≥95%"           # 乙方宣称值,测试样张由乙方提供
+# LT2609-0412 改单时间线:出货前一晚客户在群里改单;报关资料在当天下午已用邮件发给报关行
+A6_EVENING = {"original_posted": "14:05", "email_sent": "16:20", "rev1_posted": "20:16", "rev2_posted": "23:41"}
+A6_NEXT_DAY = {"chen_ack": "08:52", "broker_reply": "09:47", "warehouse_report": "10:18"}
+
+_Q2 = Decimal("0.01")
+
+
+def _d(x) -> Decimal:
+    return Decimal(str(x))
+
+
+def _q2(x: Decimal) -> str:
+    return str(x.quantize(_Q2, rounding=ROUND_HALF_UP))
+
+
+def product_index() -> dict[str, tuple]:
+    """SKU → (客户, 产品元组)。"""
+    return {pr[0]: (c[0], pr) for c in CUSTOMERS for pr in c[6]}
+
+
+def gen_products() -> list[list]:
+    rows = []
+    for c in CUSTOMERS:
+        for sku, name, dname, ppc, kg, cbm, usd, batt in c[6]:
+            rows.append([c[0], sku, name, dname, ppc, f"{kg:.1f}", f"{cbm:.3f}", f"{usd:.2f}", "是" if batt else "否"])
+    return rows
+
+
+def parse_sku_lines(s: str) -> list[tuple[str, int, int]]:
+    """'QH-ZN20 抽屉收纳盒 600件/12箱; …' → [(sku, 件数, 箱数)]。"""
+    out = []
+    for part in s.split("; "):
+        m = re.fullmatch(r"(\S+) (.+) (\d+)件/(\d+)箱", part)
+        assert m, part
+        out.append((m.group(1), int(m.group(3)), int(m.group(4))))
+    return out
+
+
+def gen_doc_lines(shipments: list[dict]) -> list[dict]:
+    """把 A1 样本包(a1_docs 列)以及 A6/A7 要用到的票,展开成「每份单据 × 每一行」的数字。
+
+    规则与 shipments.csv 的线索列一一对应:
+      发票      件数 = 装箱单件数,inv_pieces 与 pieces 的差额记在最后一行(LT2609-0387:QH-YJ15 600 vs 550)
+      装箱单    版本 = pl_version;箱数/件数/毛重/体积逐行,合计必须等于整票数
+      提单      箱数 = bl_cartons,毛重 = bl_gross_kg(LT2609-0412:仍按原版 40 箱)
+      报关草单  单行票的申报品名 = declared_name(LT2609-0446:笼统写成「电子配件」)
+      箱唛      每箱件数、每箱毛重来自产品主数据
+    """
+    pidx = product_index()
+    out: list[dict] = []
+
+    def row(key, art, s, doc_type, version, form, n, **kw):
+        base = {"doc_key": key, "artifact": art, "waybill": s["waybill"], "doc_type": doc_type, "version": version,
+                "form": form, "line_no": n, "sku": "", "item_name": "", "declared_name": "", "cartons": "",
+                "pcs_per_ctn": "", "pieces": "", "unit_usd": "", "amount_usd": "", "gross_kg": "", "cbm": "",
+                "battery": s["battery"]}
+        base.update(kw)
+        out.append(base)
+
+    def lines_of(s):
+        res = []
+        for sku, pcs, ctn in parse_sku_lines(s["sku_lines"]):
+            _, pr = pidx[sku]
+            res.append({"sku": sku, "pr": pr, "pcs": pcs, "ctn": ctn})
+        return res
+
+    def pl_rows(key, art, s, version, form, cartons_override=None, gross_override=None):
+        ls = lines_of(s)
+        if cartons_override is not None:          # 旧版本(箱数不同)只支持单品票
+            assert len(ls) == 1
+            ls[0] = dict(ls[0], ctn=cartons_override, pcs=cartons_override * ls[0]["pr"][3])
+        tot_g, tot_v = Decimal(0), Decimal(0)
+        for i, ln in enumerate(ls, start=1):
+            sku, name, dname, ppc, kg, cbm, usd, batt = ln["pr"]
+            g = _d(kg) * ln["ctn"]
+            v = (_d(cbm) * ln["ctn"]).quantize(_Q2, rounding=ROUND_HALF_UP)
+            tot_g += g
+            tot_v += v
+            row(key, art, s, "装箱单", version, form, i, sku=sku, item_name=name, declared_name=dname,
+                cartons=ln["ctn"], pcs_per_ctn=ppc, pieces=ln["pcs"], gross_kg=str(g), cbm=_q2(v),
+                battery="是" if batt else "否")
+        if cartons_override is None:
+            assert sum(ln["pcs"] for ln in ls) == int(s["pieces"]), s["waybill"]
+            assert sum(ln["ctn"] for ln in ls) == int(s["cartons"]), s["waybill"]
+            assert str(tot_g) == s["gross_weight_kg"], (s["waybill"], tot_g)
+            assert _q2(tot_v) == s["volume_cbm"], (s["waybill"], tot_v)
+        else:
+            assert gross_override is None or str(tot_g) == gross_override, (s["waybill"], tot_g)
+
+    by_wb = {s["waybill"]: s for s in shipments}
+    a1 = [s for s in sorted(shipments, key=lambda r: r["waybill"]) if s["a1_docs"]]
+    k = 0
+    for s in a1:
+        for spec in s["a1_docs"].split("|"):
+            label, form = spec.split(":")
+            doc_type = re.sub(r"\(.*\)", "", label)
+            k += 1
+            key = f"A1-{k:02d}"
+            ls = lines_of(s)
+            if doc_type == "发票":
+                diff = int(s["inv_pieces"]) - int(s["pieces"])
+                total = Decimal(0)
+                for i, ln in enumerate(ls, start=1):
+                    sku, name, dname, ppc, kg, cbm, usd, batt = ln["pr"]
+                    pcs = ln["pcs"] + (diff if i == len(ls) else 0)
+                    amt = _d(usd) * pcs
+                    total += amt
+                    item = s["invoice_desc"] if len(ls) == 1 else name
+                    row(key, "A1", s, "发票", "", form, i, sku=sku, item_name=item, declared_name=dname,
+                        pcs_per_ctn=ppc, pieces=pcs, unit_usd=f"{usd:.2f}", amount_usd=_q2(amt),
+                        battery="是" if batt else "否")
+                assert _q2(total) == s["amount_usd"], (s["waybill"], total)
+            elif doc_type == "装箱单":
+                m = re.search(r"\((.+)\)", label)
+                assert m is None or m.group(1) == s["pl_version"], (label, s["pl_version"])
+                pl_rows(key, "A1", s, s["pl_version"], form)
+            elif doc_type == "提单":
+                names = "、".join(ln["pr"][1] for ln in ls)
+                if int(s["bl_cartons"]) == int(s["cartons"]):
+                    pcs, v = int(s["pieces"]), s["volume_cbm"]
+                else:
+                    assert len(ls) == 1
+                    pcs = int(s["bl_cartons"]) * ls[0]["pr"][3]
+                    v = _q2(_d(ls[0]["pr"][5]) * int(s["bl_cartons"]))
+                row(key, "A1", s, "提单", "原版", form, 1, sku="/".join(ln["sku"] for ln in ls), item_name=names,
+                    declared_name=s["declared_name"], cartons=int(s["bl_cartons"]),
+                    pcs_per_ctn=ls[0]["pr"][3] if len(ls) == 1 else "", pieces=pcs, gross_kg=s["bl_gross_kg"], cbm=v)
+            elif doc_type == "报关草单":
+                for i, ln in enumerate(ls, start=1):
+                    sku, name, dname, ppc, kg, cbm, usd, batt = ln["pr"]
+                    decl = s["declared_name"] if len(ls) == 1 else dname
+                    row(key, "A1", s, "报关草单", "", form, i, sku=sku, item_name=name, declared_name=decl,
+                        cartons=ln["ctn"], pcs_per_ctn=ppc, pieces=ln["pcs"], unit_usd=f"{usd:.2f}",
+                        amount_usd=_q2(_d(usd) * ln["pcs"]), gross_kg=str(_d(kg) * ln["ctn"]),
+                        cbm=_q2(_d(cbm) * ln["ctn"]), battery="是" if batt else "否")
+            elif doc_type == "箱唛":
+                assert len(ls) == 1
+                sku, name, dname, ppc, kg, cbm, usd, batt = ls[0]["pr"]
+                row(key, "A1", s, "箱唛", "", form, 1, sku=sku, item_name=name, declared_name=dname,
+                    cartons=ls[0]["ctn"], pcs_per_ctn=ppc, pieces=ls[0]["pcs"], gross_kg=s["gross_weight_kg"],
+                    cbm=s["volume_cbm"], battery="是" if batt else "否")
+            else:
+                raise ValueError(f"未知单据类型 {label}")
+
+    # A6(改单截图、报关行旧邮件)与 A7(FMS 录单界面)都围绕 P4 线索票
+    p4 = next(s for s in shipments if "P4" in s["clue_ids"])
+    orig_ctn = int(p4["bl_cartons"])
+    for key, form, versions in (("A6-01", "截图", ["原版", p4["pl_version"]]),
+                                ("A6-02", "截图", ["原版", p4["pl_version"]]),
+                                ("A6-03", "截图", ["原版"]),
+                                ("A7-01", "截图", [p4["pl_version"]])):
+        art = key[:2]
+        for ver in versions:
+            if ver == "原版":
+                pl_rows(key, art, p4, "原版", form, cartons_override=orig_ctn, gross_override=p4["bl_gross_kg"])
+            else:
+                pl_rows(key, art, p4, ver, form)
+    # A7 导入模板的两行示例:取样本包里两票电子来料(Excel 发票、电子 PDF 发票)
+    for wb in [s["waybill"] for s in a1 if "发票:Excel" in s["a1_docs"] or "发票:电子PDF" in s["a1_docs"]]:
+        pl_rows("A7-02", "A7", by_wb[wb], by_wb[wb]["pl_version"], "Excel")
+    return out
+
+
+def gen_doc_facts(p: dict, shipments: list[dict]) -> list[list]:
+    """A6 时间线、A8 合同与验收单的数字。金额、年份、弃用月数逐字从 K1 派生。"""
+    k1 = p["texts"]["K1"]
+    m = re.search(r"花\s*([\d.]+)\s*万", k1)
+    amount = int(Decimal(m.group(1)) * 10000)
+    months = int(re.search(r"(\d+)\s*个月弃用", k1).group(1))
+    assert "前年" in k1
+    year = Q3_END.year - 2
+    sign = dt.date(year, *OCR_SIGN_MONTH_DAY)
+    accept = dt.date(year, *OCR_ACCEPT_MONTH_DAY)
+    stop_m = accept.month + months
+    stop = f"{year + (stop_m - 1) // 12}-{(stop_m - 1) % 12 + 1:02d}"
+    first = amount * OCR_FIRST_PAYMENT_PCT // 100
+    p4 = next(s for s in shipments if "P4" in s["clue_ids"])
+    ship = dt.date.fromisoformat(p4["ship_date"])
+    eve = (ship - dt.timedelta(days=1)).isoformat()
+    rows = [
+        ["a8.contract_amount_cny", amount, "K1「花 6.8 万」"],
+        ["a8.abandon_after_months", months, "K1「3 个月弃用」"],
+        ["a8.contract_year", year, "K1「前年」;场景年份 2026"],
+        ["a8.sign_date", sign.isoformat(), "设计参数"],
+        ["a8.acceptance_date", accept.isoformat(), "设计参数"],
+        ["a8.stop_month", stop, "验收月 + K1 弃用月数"],
+        ["a8.payment_first_pct", OCR_FIRST_PAYMENT_PCT, "设计参数"],
+        ["a8.payment_first_cny", first, "合同金额 × 首付比例"],
+        ["a8.payment_final_cny", amount - first, "合同金额 − 首付"],
+        ["a8.license_users", OCR_LICENSE_USERS, "设计参数"],
+        ["a8.vendor_accuracy_claim", OCR_VENDOR_ACCURACY_CLAIM, "设计参数(乙方宣称,以乙方标准样张测试)"],
+        ["a6.waybill", p4["waybill"], "shipments.csv clue_ids=P4"],
+        ["a6.customer", p4["customer"], "shipments.csv"],
+        ["a6.original_cartons", p4["bl_cartons"], "shipments.csv bl_cartons(原版)"],
+        ["a6.revised_cartons", p4["cartons"], "shipments.csv cartons(改2)"],
+        ["a6.added_cartons", int(p4["cartons"]) - int(p4["bl_cartons"]), "改2 − 原版"],
+        ["a6.revised_version", p4["pl_version"], "shipments.csv pl_version"],
+    ]
+    for k, t in A6_EVENING.items():
+        rows.append([f"a6.t_{k}", f"{eve} {t}", "设计参数(出货前一天)"])
+    for k, t in A6_NEXT_DAY.items():
+        rows.append([f"a6.t_{k}", f"{ship.isoformat()} {t}", "设计参数(出货当天)"])
+    rows.append(["a7.fms_last_modified", f"{ship.isoformat()} {A6_NEXT_DAY['chen_ack']}", "= a6.t_chen_ack"])
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # 组装
 # ---------------------------------------------------------------------------
 def build_all(p: dict | None = None) -> dict[str, bytes]:
@@ -1171,6 +1402,11 @@ def build_all(p: dict | None = None) -> dict[str, bytes]:
     files["customers.csv"] = csv_bytes(ccols, [[
         c[0], "|".join(c[1]), c[2], "true" if c[0] == KEY_CUSTOMER else "false", exc_by_cust.get(c[0], 0),
         sum(1 for s in shipments if s["customer"] == c[0])] for c in CUSTOMERS])
+    # 合成单据(W3)的辅助真值
+    files["products.csv"] = csv_bytes(PRODUCT_COLUMNS, gen_products())
+    doc_lines = gen_doc_lines(shipments)
+    files["doc_lines.csv"] = csv_bytes(DOC_LINE_COLUMNS, [[d[c] for c in DOC_LINE_COLUMNS] for d in doc_lines])
+    files["doc_facts.csv"] = csv_bytes(DOC_FACT_COLUMNS, gen_doc_facts(p, shipments))
 
     t = p["targets"]
     cat_stats = {c["id"]: {"name": c["name"], "count": sum(1 for r in exc if r["category"] == c["id"]),
@@ -1205,6 +1441,11 @@ def build_all(p: dict | None = None) -> dict[str, bytes]:
                       "clues": {s["waybill"]: s["clue_ids"] for s in shipments if s["clue_ids"]},
                       "x4_sample": sum(1 for s in shipments if s["x4_sample"] == "true"),
                       "x4_issues": sum(1 for s in shipments if s["x4_issue"])},
+        "docs": {"products": sum(len(c[6]) for c in CUSTOMERS),
+                 "a1_docs": len({d["doc_key"] for d in doc_lines if d["artifact"] == "A1"}),
+                 "a1_images": len({d["doc_key"] for d in doc_lines if d["artifact"] == "A1"
+                                   and d["form"] in A1_IMAGE_FORMS}),
+                 "doc_lines": len(doc_lines)},
         "targets": t,
         "files_sha256": {k: hashlib.sha256(v).hexdigest() for k, v in sorted(files.items())},
     }

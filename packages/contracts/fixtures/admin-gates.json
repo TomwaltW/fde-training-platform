@@ -1,0 +1,106 @@
+{
+  "range": {
+    "since": null,
+    "until": null
+  },
+  "gate1": [
+    {
+      "id": "waitlist_7d",
+      "label": "首条内容 7 天内的候补名单人数",
+      "value": 118,
+      "display": "118 人",
+      "numerator": 118,
+      "denominator": 1,
+      "status": "pass",
+      "thresholds": "过 ≥100 人 · 修 30–100 人 · 不过 <30 人",
+      "note": "所选时间范围内登记的人数。"
+    }
+  ],
+  "gate2": [
+    {
+      "id": "completion",
+      "label": "开局到看到复盘的完成率",
+      "value": 0.45,
+      "display": "45%",
+      "numerator": 9,
+      "denominator": 20,
+      "status": "pass",
+      "thresholds": "过 ≥40% · 修 20–40% · 不过 <20%",
+      "note": "出了复盘的对局 / 开局数。"
+    },
+    {
+      "id": "median_minutes",
+      "label": "完成者的中位时长",
+      "value": 27,
+      "display": "27 分钟",
+      "numerator": 27,
+      "denominator": 9,
+      "status": "pass",
+      "thresholds": "过 15–35 分钟 · 修 35–50 分钟 · 不过 >50 或 <8 分钟",
+      "note": "按事件时间算的实际在线时长,两次操作间隔超过 10 分钟的按 10 分钟计。"
+    },
+    {
+      "id": "promoters",
+      "label": "完成者中打 9–10 分推荐意愿的比例",
+      "value": 0.2222222222222222,
+      "display": "22%",
+      "numerator": 2,
+      "denominator": 9,
+      "status": "fix",
+      "thresholds": "过 ≥30% · 修 15–30% · 不过 <15%",
+      "note": "分母是完成者(没打分的按不推荐计)。"
+    },
+    {
+      "id": "want_next",
+      "label": "完成者中表示想玩下一个场景的比例",
+      "value": 0.6666666666666666,
+      "display": "67%",
+      "numerator": 6,
+      "denominator": 9,
+      "status": "pass",
+      "thresholds": "过 ≥60% · 修 40–60% · 不过 <40%",
+      "note": "分母是完成者。"
+    },
+    {
+      "id": "share",
+      "label": "完成者中主动分享复盘卡的比例",
+      "value": 0.1111111111111111,
+      "display": "11%",
+      "numerator": 1,
+      "denominator": 9,
+      "status": "fix",
+      "thresholds": "过 ≥15% · 修 5–15% · 不过 <5%",
+      "note": "保存分享图或复制分享文字算分享。"
+    },
+    {
+      "id": "dispute",
+      "label": "对评分提出申诉的比例",
+      "value": 0.1111111111111111,
+      "display": "11%",
+      "numerator": 1,
+      "denominator": 9,
+      "status": "pass",
+      "thresholds": "过 <20% · 修 20–40% · 不过 >40%",
+      "note": "有申诉的复盘 / 出了复盘的对局。"
+    }
+  ],
+  "gate3": [
+    {
+      "id": "waitlist_to_paid",
+      "label": "候补名单到预售付费的转化",
+      "value": 0,
+      "display": "0%",
+      "numerator": 0,
+      "denominator": 118,
+      "status": "fail",
+      "thresholds": "过 ≥5% · 修 2–5% · 不过 <2%",
+      "note": "兑换过付费商品的候补名单用户 / 候补名单人数。"
+    }
+  ],
+  "extra": {
+    "turnLatencyMsP50": 2350,
+    "turnLatencyMsP90": 4100,
+    "firstTurnSecondsP50": 48,
+    "firstTurnSample": 7
+  }
+}

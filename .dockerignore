@@ -1,0 +1,42 @@
+# Docker 构建上下文的排除表(构建上下文是仓库根目录,见 infra/Dockerfile)。
+# 原则:依赖和产物在镜像里重新生成;密钥、本地数据、开发工具不进镜像。
+
+# 依赖与构建产物
+**/node_modules
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+**/next-env.d.ts
+**/dist
+**/coverage
+
+# 密钥与本地数据(.env 由 compose 在运行时注入,绝不能打进镜像)
+**/.env
+**/.env.*
+!.env.example
+.data
+.sessions
+**/*.log
+
+# 版本库、编辑器与 agent 工作目录
+.git
+.github
+.claude
+.vscode
+.idea
+**/.DS_Store
+
+# 测试输出
+**/test-results
+**/playwright-report
+tools/evals/out
+
+# 离线工具(Python 合成数据脚本不进线上)
+tools/docgen
+**/.venv
+**/__pycache__
+
+# 文档(运行时不需要;apps/web/content/legal 里的协议不在此列)
+docs
+FDE训练平台-产品与开发方案-v1.md
+README.md

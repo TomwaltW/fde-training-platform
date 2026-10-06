@@ -1,0 +1,51 @@
+{% extends "_base.html.j2" %}
+{# A8 旧 OCR 工具的采购合同首页(电子 PDF)。不含印章、不含任何官方抬头;签章处只放说明文字。 #}
+{% block style %}
+.page { padding: 64px 74px; font-family: "Liberation Serif", "WenQuanYi Zen Hei", serif; font-size: 13px; line-height: 1.85; }
+.no { text-align: right; font-size: 12px; color: #444; }
+h1 { text-align: center; font-size: 23px; letter-spacing: 6px; margin: 18px 0 22px; }
+.parties { margin-bottom: 14px; }
+.parties td { padding: 2px 0; vertical-align: top; }
+.parties .k { width: 64px; }
+h3 { font-size: 13.5px; margin: 14px 0 4px; }
+p { margin: 0 0 4px; text-indent: 2em; text-align: justify; }
+.key { font-weight: bold; }
+.foot { position: absolute; left: 0; right: 0; bottom: 40px; text-align: center; font-size: 11px; color: #555; }
+{% endblock %}
+{% block body %}
+<div class="page">
+  <div class="no">合同编号:{{ no }}</div>
+  <h1>软件产品购买及服务合同</h1>
+  <table class="parties">
+    <tr><td class="k">甲方:</td><td>{{ party_a }}</td></tr>
+    <tr><td class="k">乙方:</td><td>{{ party_b }}</td></tr>
+    <tr><td class="k">签订日期:</td><td>{{ sign_date }}　　签订地点:深圳</td></tr>
+  </table>
+  <p>甲乙双方本着平等互利的原则,就甲方采购乙方「{{ product }}」软件产品及相关服务事宜,经友好协商,订立本合同,共同遵守。</p>
+
+  <h3>第一条　产品与服务内容</h3>
+  <p>1.1 乙方向甲方提供「{{ product }}」标准版永久使用授权,账号数 {{ users }} 个。</p>
+  <p>1.2 识别范围:商业发票、装箱单、提单等常见版式的印刷体单据;识别结果可导出为 Excel / CSV 文件,由甲方自行使用。</p>
+  <p>1.3 乙方负责软件部署、操作培训及合同期内的远程维护。</p>
+
+  <h3>第二条　不在本合同范围内的事项</h3>
+  <p class="key">2.1 与甲方现有业务系统({{ fms }})的接口对接、数据写回;</p>
+  <p>2.2 手写单据的识别;</p>
+  <p>2.3 如甲方需要上述服务,双方另行协商并签订补充协议,费用另计。</p>
+
+  <h3>第三条　合同金额与付款方式</h3>
+  <p class="key">3.1 本合同总金额为人民币 {{ amount | money }} 元(大写:人民币{{ amount_cn }}),含税。</p>
+  <p>3.2 合同签订后 7 个工作日内,甲方支付合同总额的 {{ first_pct }}%,即人民币 {{ first | money }} 元(大写:{{ first_cn }});</p>
+  <p>3.3 验收合格后 7 个工作日内,甲方支付剩余款项人民币 {{ final | money }} 元(大写:{{ final_cn }})。</p>
+
+  <h3>第四条　交付与验收</h3>
+  <p>4.1 乙方在合同签订后 30 日内完成部署与培训。</p>
+  <p>4.2 验收标准:以乙方提供的标准样张进行识别测试,印刷体清晰单据字段识别准确率{{ accuracy }}即视为验收合格。</p>
+  <p>4.3 甲方应在乙方提交验收申请后 5 个工作日内组织验收;逾期未提出书面异议的,视为验收合格。</p>
+
+  <h3>第五条　知识产权与保密</h3>
+  <p>5.1 本软件的著作权归乙方所有。甲方仅获得本合同约定范围内的使用权……</p>
+
+  <div class="foot">第 1 页 共 4 页<br>{{ mark }}</div>
+</div>
+{% endblock %}

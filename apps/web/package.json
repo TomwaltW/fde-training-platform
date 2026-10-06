@@ -1,0 +1,40 @@
+{
+  "name": "@fde/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:e2e:mock": "playwright test e2e/mock",
+    "test:e2e:real": "playwright test -c e2e/real/playwright.config.ts"
+  },
+  "dependencies": {
+    "@fde/contracts": "workspace:*",
+    "@fde/engine": "workspace:*",
+    "@fde/llm": "workspace:*",
+    "@fde/store": "workspace:*",
+    "marked": "^16.0.0",
+    "next": "^16.0.0",
+    "nodemailer": "^7.0.0",
+    "pg": "^8.16.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "yaml": "^2.9.1",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@playwright/test": "^1.55.0",
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/nodemailer": "^6.4.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.9.0"
+  }
+}

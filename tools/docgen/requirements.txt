@@ -1,2 +1,8 @@
 openpyxl==3.1.5
+et_xmlfile==2.0.0
 PyYAML==6.0.2
+Pillow==12.3.0
+numpy==2.4.6
+Jinja2==3.1.6
+MarkupSafe==3.0.4
+pypdf==6.19.0

@@ -1,0 +1,567 @@
+{
+  "version": 1,
+  "sessionId": "calib-EV_rush",
+  "scenarioId": "freight-docs",
+  "variant": "A",
+  "phase": "debrief",
+  "turn": 5,
+  "minutesUsed": 32,
+  "currentRole": "zhou",
+  "discovered": [
+    "zhou",
+    "lin"
+  ],
+  "exchanges": {
+    "zhou": 5
+  },
+  "phaseExchanges": {},
+  "trust": {
+    "liu": 0,
+    "chen": 0
+  },
+  "trustPlusUsed": {},
+  "flags": {
+    "auth_ops": false,
+    "auth_finance": false,
+    "seen_any_artifact": false
+  },
+  "facts": {},
+  "roleTold": {},
+  "artifacts": {},
+  "experiments": {},
+  "actionsDone": {},
+  "traps": {
+    "TR1": {
+      "turn": 2
+    },
+    "TR6": {
+      "turn": 5
+    }
+  },
+  "ledger": [
+    {
+      "id": "L1",
+      "type": "time",
+      "valueText": "十天",
+      "turn": 3,
+      "role": "zhou",
+      "premature": true,
+      "knownAtThatTime": {
+        "facts": [],
+        "artifactsOpened": []
+      }
+    },
+    {
+      "id": "L2",
+      "type": "price",
+      "valueText": "一万八",
+      "turn": 3,
+      "role": "zhou",
+      "premature": true,
+      "knownAtThatTime": {
+        "facts": [],
+        "artifactsOpened": []
+      }
+    },
+    {
+      "id": "L3",
+      "type": "accuracy",
+      "valueText": "准确率 98% 以上",
+      "turn": 4,
+      "role": "zhou",
+      "premature": true,
+      "knownAtThatTime": {
+        "facts": [],
+        "artifactsOpened": []
+      }
+    },
+    {
+      "id": "L4",
+      "type": "time",
+      "valueText": "十天",
+      "turn": 5,
+      "role": "zhou",
+      "premature": true,
+      "knownAtThatTime": {
+        "facts": [],
+        "artifactsOpened": []
+      }
+    },
+    {
+      "id": "L5",
+      "type": "price",
+      "valueText": "一万八",
+      "turn": 5,
+      "role": "zhou",
+      "premature": true,
+      "knownAtThatTime": {
+        "facts": [],
+        "artifactsOpened": []
+      }
+    }
+  ],
+  "transcript": [
+    {
+      "ref": "N1",
+      "turn": 0,
+      "speaker": "npc",
+      "text": "我们单据太多了,装箱单、发票、提单、报关资料,全靠人工录入,老出错。听说你们 AI 能搞定,你就给我做个能自动识别单据的系统。下个月行业大会我要拿出来讲。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U1",
+      "turn": 1,
+      "speaker": "user",
+      "text": "周总您好,单据识别这个我们做过很多,您放心。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N2",
+      "turn": 1,
+      "speaker": "npc",
+      "text": "嗯。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U2",
+      "turn": 2,
+      "speaker": "user",
+      "text": "你们一天大概多少票?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N3",
+      "turn": 2,
+      "speaker": "npc",
+      "text": "演示到底什么时候能给我?大会可不等人。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U3",
+      "turn": 3,
+      "speaker": "user",
+      "text": "基本上十天就可以建下来,工时费一千八一天,一共一万八。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N4",
+      "turn": 3,
+      "speaker": "npc",
+      "text": "十天,一万八。行,我记下了。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U4",
+      "turn": 4,
+      "speaker": "user",
+      "text": "识别准确率我们能做到 98% 以上。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N5",
+      "turn": 4,
+      "speaker": "npc",
+      "text": "准确率 98% 以上。行,我记下了。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "S1",
+      "turn": 4,
+      "speaker": "system",
+      "text": "下午,会议室。你把判断整理好,去向周总汇报。",
+      "phase": "report"
+    },
+    {
+      "ref": "N6",
+      "turn": 4,
+      "speaker": "npc",
+      "text": "(皱眉)你上午说十天、一万八、准确率 98% 以上,现在还算数吗?",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U5",
+      "turn": 5,
+      "speaker": "user",
+      "text": "对,还是十天一万八,下个月大会肯定能演示。",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N7",
+      "turn": 5,
+      "speaker": "npc",
+      "text": "十天,一万八。行,我记下了。顺便把报价和对账也做了吧。上次那个才六万八,你这个凭什么要这么多?",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "S2",
+      "turn": 5,
+      "speaker": "system",
+      "text": "你收工了。",
+      "phase": "debrief"
+    }
+  ],
+  "turns": [
+    {
+      "turn": 1,
+      "role": "zhou",
+      "userText": "周总您好,单据识别这个我们做过很多,您放心。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "smalltalk"
+        ],
+        "matched_triggers": [],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "neutral",
+        "instruction": "正常回应。只说你的看法和印象,不给对方没问到的具体数字。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 8
+    },
+    {
+      "turn": 2,
+      "role": "zhou",
+      "userText": "你们一天大概多少票?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": true,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "beat",
+        "instruction": "按下面要求说出指定的话或做出指定的动作。",
+        "beat": "催问演示什么时候能给",
+        "trapId": "TR1",
+        "fallback": "演示到底什么时候能给我?大会可不等人。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 16
+    },
+    {
+      "turn": 3,
+      "role": "zhou",
+      "userText": "基本上十天就可以建下来,工时费一千八一天,一共一万八。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "commit_time",
+          "commit_price"
+        ],
+        "matched_triggers": [],
+        "commitments": [
+          {
+            "type": "time",
+            "value_text": "十天",
+            "firm": true
+          },
+          {
+            "type": "price",
+            "value_text": "一万八",
+            "firm": true
+          }
+        ],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "pocket",
+        "instruction": "把对方刚给的工期、报价或准确率用你自己的话复述一遍并当场确认,再追问一句让它更具体。不夸对方。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 24
+    },
+    {
+      "turn": 4,
+      "role": "zhou",
+      "userText": "识别准确率我们能做到 98% 以上。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "commit_accuracy"
+        ],
+        "matched_triggers": [],
+        "commitments": [
+          {
+            "type": "accuracy",
+            "value_text": "准确率 98% 以上",
+            "firm": true
+          }
+        ],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "pocket",
+        "instruction": "把对方刚给的工期、报价或准确率用你自己的话复述一遍并当场确认,再追问一句让它更具体。不夸对方。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 32
+    },
+    {
+      "turn": 5,
+      "role": "zhou",
+      "userText": "对,还是十天一万八,下个月大会肯定能演示。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "commit_time",
+          "commit_price"
+        ],
+        "matched_triggers": [],
+        "commitments": [
+          {
+            "type": "time",
+            "value_text": "十天",
+            "firm": true
+          },
+          {
+            "type": "price",
+            "value_text": "一万八",
+            "firm": true
+          }
+        ],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "pocket",
+        "instruction": "把对方刚给的工期、报价或准确率用你自己的话复述一遍并当场确认,再追问一句让它更具体。不夸对方。",
+        "beat": "范围蔓延(顺便把报价和对账也做了)加压价(上次那个才六万八)",
+        "trapId": "TR6",
+        "fallback": "顺便把报价和对账也做了吧。上次那个才六万八,你这个凭什么要这么多?"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 32
+    }
+  ],
+  "events": [
+    {
+      "turn": 2,
+      "type": "trap",
+      "payload": {
+        "trap": "TR1",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "commitment",
+      "payload": {
+        "id": "L1",
+        "type": "time",
+        "valueText": "十天",
+        "turn": 3,
+        "role": "zhou",
+        "premature": true,
+        "knownAtThatTime": {
+          "facts": [],
+          "artifactsOpened": []
+        }
+      }
+    },
+    {
+      "turn": 3,
+      "type": "commitment",
+      "payload": {
+        "id": "L2",
+        "type": "price",
+        "valueText": "一万八",
+        "turn": 3,
+        "role": "zhou",
+        "premature": true,
+        "knownAtThatTime": {
+          "facts": [],
+          "artifactsOpened": []
+        }
+      }
+    },
+    {
+      "turn": 4,
+      "type": "commitment",
+      "payload": {
+        "id": "L3",
+        "type": "accuracy",
+        "valueText": "准确率 98% 以上",
+        "turn": 4,
+        "role": "zhou",
+        "premature": true,
+        "knownAtThatTime": {
+          "facts": [],
+          "artifactsOpened": []
+        }
+      }
+    },
+    {
+      "turn": 4,
+      "type": "judgment_submit",
+      "payload": {
+        "filled": [
+          "J1",
+          "J2",
+          "J3",
+          "J4",
+          "J5"
+        ]
+      }
+    },
+    {
+      "turn": 4,
+      "type": "phase_change",
+      "payload": {
+        "from": "kickoff",
+        "to": "report"
+      }
+    },
+    {
+      "turn": 4,
+      "type": "trap",
+      "payload": {
+        "trap": "ledger_recall",
+        "by": "zhou",
+        "entries": [
+          "L1",
+          "L2",
+          "L3"
+        ]
+      }
+    },
+    {
+      "turn": 5,
+      "type": "commitment",
+      "payload": {
+        "id": "L4",
+        "type": "time",
+        "valueText": "十天",
+        "turn": 5,
+        "role": "zhou",
+        "premature": true,
+        "knownAtThatTime": {
+          "facts": [],
+          "artifactsOpened": []
+        }
+      }
+    },
+    {
+      "turn": 5,
+      "type": "commitment",
+      "payload": {
+        "id": "L5",
+        "type": "price",
+        "valueText": "一万八",
+        "turn": 5,
+        "role": "zhou",
+        "premature": true,
+        "knownAtThatTime": {
+          "facts": [],
+          "artifactsOpened": []
+        }
+      }
+    },
+    {
+      "turn": 5,
+      "type": "trap",
+      "payload": {
+        "trap": "TR6",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 5,
+      "type": "phase_change",
+      "payload": {
+        "from": "report",
+        "to": "debrief"
+      }
+    }
+  ],
+  "ledgerRecalled": true,
+  "judgment": {
+    "J1": "单据全靠人工录入,需要一个 OCR 识别系统把录入自动化。",
+    "J2": "周总说的,单据太多、人工录入老出错。",
+    "J3": "下个月大会能现场演示。",
+    "J4": "十天交付识别系统,报价一万八,准确率 98%。",
+    "J5": "无"
+  },
+  "endedReason": "user"
+}

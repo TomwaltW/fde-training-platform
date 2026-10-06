@@ -1,0 +1,274 @@
+// 评审修复的回归测试:回跳地址、请求体上限与怪字符、验证码接口限频、生产环境的开发模式开关。
+import { join, resolve } from "node:path";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import * as events from "../app/api/events/route.ts";
+import * as requestCode from "../app/api/auth/request-code/route.ts";
+import * as waitlist from "../app/api/waitlist/route.ts";
+import * as verify from "../app/api/auth/verify/route.ts";
+import { HttpError, MAX_BODY_BYTES, cleanStrings, readJson } from "../lib/server/http.ts";
+import { LIMITS, allow, clientIp } from "../lib/server/ratelimit.ts";
+import { authSecret, devLoginCodes } from "../lib/server/env.ts";
+import { resetForTests, runtime } from "../lib/server/runtime.ts";
+import { inviteFromWaitlist } from "../lib/server/waitlist.ts";
+import { getStore } from "../lib/server/store.ts";
+import { safeNext } from "../lib/client/api.ts";
+import { renderMarkdown } from "../lib/client/markdown.ts";
+import * as consentRoute from "../app/api/me/consent/route.ts";
+import * as redeemRoute from "../app/api/redeem/route.ts";
+
+describe("safeNext:只放行站内路径", () => {
+  it.each([
+    ["/", "/"],
+    ["/me", "/me"],
+    ["/play/abc?x=1#t", "/play/abc?x=1#t"],
+  ])("%s → %s", (input, out) => expect(safeNext(input)).toBe(out));
+
+  it.each([
+    null,
+    undefined,
+    "",
+    "me",
+    "https://evil.com",
+    "//evil.com",
+    "/\\evil.com",
+    "/\t/evil.com",
+    "/\n/evil.com",
+    "/\r//evil.com",
+    "\\/evil.com",
+    "/%0A/x\u0000",
+    // 点号路径折叠后变成 "//evil.com"
+    "/.//evil.com",
+    "/a/..//evil.com",
+    "/%2e//evil.com",
+    "/..//evil.com/x",
+    "/%2e%2e//evil.com",
+  ])(
+    "拒绝 %j",
+    (input) => expect(safeNext(input as string | null | undefined, "/fallback")).toBe("/fallback"),
+  );
+});
+
+describe("readJson:请求体上限与清洗", () => {
+  const schema = z.object({ text: z.string() });
+  const req = (body: string, headers: Record<string, string> = {}) =>
+    new Request("http://x/api", { method: "POST", body, headers: { "content-type": "application/json", ...headers } });
+
+  it("超过上限 → 400(按声明的长度,也按实际读到的长度)", async () => {
+    const big = JSON.stringify({ text: "字".repeat(MAX_BODY_BYTES) });
+    await expect(readJson(req(big), schema)).rejects.toMatchObject({ code: "bad_request", message: "请求体太大" });
+    const stream = new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(big));
+        c.close();
+      },
+    });
+    const chunked = new Request("http://x/api", { method: "POST", body: stream, duplex: "half" } as RequestInit);
+    await expect(readJson(chunked, schema)).rejects.toBeInstanceOf(HttpError);
+  });
+
+  it("NUL 去掉、落单的代理项换成 U+FFFD,正常的 emoji 不动", async () => {
+    const body = JSON.stringify({ text: "a\u0000b\uD800c🚢" });
+    expect(await readJson(req(body), schema)).toEqual({ text: "ab�c🚢" });
+  });
+
+  it("键名 __proto__ 只是普通的自有属性", () => {
+    const out = cleanStrings(JSON.parse('{"__proto__": {"polluted": true}, "a": 1}')) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect((out as { polluted?: boolean }).polluted).toBeUndefined();
+    expect(Object.keys(out)).toEqual(["__proto__", "a"]);
+  });
+
+  it("不是 JSON → 400", async () => {
+    await expect(readJson(req("{"), schema)).rejects.toMatchObject({ code: "bad_request" });
+  });
+});
+
+// ---------------------------------------------------------------- 登录相关
+
+const env = process.env as Record<string, string | undefined>;
+const KEYS = ["NODE_ENV", "FDE_DEV_LOGIN_CODES", "FDE_DEV_LOGIN_CODES_IN_PRODUCTION", "FDE_AUTH_SECRET", "FDE_ROOT", "FDE_MEMORY_STORE_FILE", "ADMIN_EMAILS", "DATABASE_URL", "FDE_DEV_SMS_LOGIN", "SMS_HOURLY_LIMIT", "SMS_DAILY_PER_PHONE"];
+let saved: Record<string, string | undefined> = {};
+beforeEach(async () => {
+  saved = Object.fromEntries(KEYS.map((k) => [k, env[k]]));
+  delete env.DATABASE_URL;
+  Object.assign(env, {
+    FDE_ROOT: resolve(import.meta.dirname, "../../.."),
+    FDE_MEMORY_STORE_FILE: join(mkdtempSync(join(tmpdir(), "fde-hardening-")), "store.json"),
+    ADMIN_EMAILS: "admin@example.com",
+    FDE_DEV_LOGIN_CODES: "1",
+  });
+  await resetForTests();
+});
+afterEach(async () => {
+  for (const k of KEYS) {
+    if (saved[k] === undefined) delete env[k];
+    else env[k] = saved[k];
+  }
+  await resetForTests();
+});
+
+describe("开发模式验证码不能在生产环境误开", () => {
+  it("生产环境只设 FDE_DEV_LOGIN_CODES=1 不生效,还要 FDE_DEV_LOGIN_CODES_IN_PRODUCTION=1", () => {
+    env.NODE_ENV = "production";
+    delete env.FDE_DEV_LOGIN_CODES_IN_PRODUCTION;
+    expect(devLoginCodes()).toBe(false);
+    env.FDE_DEV_LOGIN_CODES_IN_PRODUCTION = "1";
+    expect(devLoginCodes()).toBe(true);
+    env.NODE_ENV = "test";
+    delete env.FDE_DEV_LOGIN_CODES_IN_PRODUCTION;
+    expect(devLoginCodes()).toBe(true);
+  });
+
+  it("生产环境没有 FDE_AUTH_SECRET 一律报错(开发模式也不例外)", () => {
+    env.NODE_ENV = "production";
+    env.FDE_DEV_LOGIN_CODES_IN_PRODUCTION = "1";
+    delete env.FDE_AUTH_SECRET;
+    expect(() => authSecret()).toThrow(/FDE_AUTH_SECRET/);
+  });
+});
+
+describe("验证码接口按 IP 限频", () => {
+  const post = (handler: (req: Request) => Promise<Response>, body: unknown, ip: string) =>
+    handler(new Request("http://x/api", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", "x-forwarded-for": `${ip}, 10.0.0.1` } }));
+
+  it("同一 IP 第 21 次请求验证码 → 429;别的 IP 不受影响", async () => {
+    for (let i = 0; i < LIMITS.requestCodePerIp.limit; i++) {
+      const r = await post(requestCode.POST, { email: `u${i}@example.com`, inviteCode: "NOPE2345" }, "1.2.3.4");
+      expect(r.status).toBe(400); // 邀请码无效,但计数
+    }
+    const blocked = await post(requestCode.POST, { email: "admin@example.com" }, "1.2.3.4");
+    expect(blocked.status).toBe(429);
+    const other = await post(requestCode.POST, { email: "admin@example.com" }, "5.6.7.8");
+    expect(other.status).toBe(200);
+  });
+
+  it("同一 IP 第 31 次校验 → 429", async () => {
+    for (let i = 0; i < LIMITS.verifyPerIp.limit; i++) {
+      const r = await post(verify.POST, { email: `v${i}@example.com`, code: "000000" }, "9.9.9.9");
+      expect(r.status).toBe(400);
+    }
+    expect((await post(verify.POST, { email: "v@example.com", code: "000000" }, "9.9.9.9")).status).toBe(429);
+  });
+
+  it("clientIp 取 X-Forwarded-For 第一段;allow 按窗口计数", () => {
+    expect(clientIp(new Request("http://x", { headers: { "x-forwarded-for": " 203.0.113.7 , 10.0.0.1" } }))).toBe("203.0.113.7");
+    expect(clientIp(new Request("http://x"))).toBe("unknown");
+    expect(allow("t", "k", 2, 1000, 0)).toBe(true);
+    expect(allow("t", "k", 2, 1000, 10)).toBe(true);
+    expect(allow("t", "k", 2, 1000, 20)).toBe(false);
+    expect(allow("t", "k", 2, 1000, 1001)).toBe(true);
+  });
+});
+
+describe("换着访客 cookie 也绕不过限频(同一 IP 有总额度)", () => {
+  const send = (handler: (req: Request) => Promise<Response>, body: unknown, i: number) =>
+    handler(
+      new Request("http://x/api", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.9", cookie: `fde_vid=rotating-visitor-${String(i).padStart(6, "0")}` },
+      }),
+    );
+
+  it("埋点:每次换一个 cookie,同一 IP 每分钟最多入库 600 条", async () => {
+    for (let i = 0; i < LIMITS.eventsPerIp.limit + 50; i++) expect((await send(events.POST, { type: "landing_viewed" }, i)).status).toBe(204);
+    expect(await (await getStore()).listEvents({ types: ["landing_viewed"] })).toHaveLength(LIMITS.eventsPerIp.limit);
+  });
+
+  it("候补名单:每次换一个 cookie,同一 IP 10 分钟最多 30 次", async () => {
+    for (let i = 0; i < LIMITS.waitlistPerIp.limit; i++) expect((await send(waitlist.POST, { email: `w${i}@example.com` }, i)).status).toBe(201);
+    expect((await send(waitlist.POST, { email: "late@example.com" }, 999)).status).toBe(429);
+  });
+});
+
+describe("评审第三轮:邀请码在验证前不消耗之后的防滥用", () => {
+  const ask = (email: string, inviteCode: string, ip: string) =>
+    requestCode.POST(new Request("http://x/api", { method: "POST", body: JSON.stringify({ email, inviteCode }), headers: { "content-type": "application/json", "x-forwarded-for": ip } }));
+
+  it("一个邀请码一小时内最多给 5 个不同的新地址发验证码(换 IP 也一样)", async () => {
+    const [code] = await (await getStore()).createInvites(1, 1);
+    for (let i = 0; i < LIMITS.requestCodePerInvite.limit; i++) expect((await ask(`n${i}@example.com`, code!, `203.0.113.${i}`)).status).toBe(200);
+    expect((await ask("n-extra@example.com", code!, "203.0.113.99")).status).toBe(429);
+  });
+
+  it("两个管理员同时发候补邀请:每人只拿到一个码", async () => {
+    const store = await getStore();
+    for (const e of ["c1@example.com", "c2@example.com"]) await store.addToWaitlist({ email: e, role: null, note: null, source: null, createdAt: new Date().toISOString() });
+    const [a, b] = await Promise.all([inviteFromWaitlist(store, { count: 2 }), inviteFromWaitlist(store, { count: 2 })]);
+    const all = [...a.invited, ...b.invited];
+    expect(all.map((x) => x.email).sort()).toEqual(["c1@example.com", "c2@example.com"]);
+    const rows = await store.listWaitlist();
+    for (const x of all) expect(rows.find((r) => r.email === x.email)?.inviteCode).toBe(x.inviteCode);
+  });
+});
+
+describe("评审第三轮:手机号登录", () => {
+  const post = (handler: (req: Request) => Promise<Response>, body: unknown) =>
+    handler(new Request("http://x/api", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.77" } }));
+
+  it("全站每小时额度满了时,不扣这个号码当天的条数", async () => {
+    Object.assign(env, { FDE_DEV_SMS_LOGIN: "1", SMS_HOURLY_LIMIT: "1", SMS_DAILY_PER_PHONE: "2" });
+    const [code] = await (await getStore()).createInvites(1, 10);
+    expect((await post(requestCode.POST, { phone: "13800000001", inviteCode: code })).status).toBe(200); // 用掉全站这一小时的 1 条
+    for (let i = 0; i < 3; i++) {
+      runtime().codeRequests.clear(); // 跳过同一号码 60 秒一次的限制
+      expect((await post(requestCode.POST, { phone: "13800000002", inviteCode: code })).status).toBe(429);
+    }
+    env.SMS_HOURLY_LIMIT = "100";
+    runtime().codeRequests.clear();
+    expect((await post(requestCode.POST, { phone: "13800000002", inviteCode: code })).status).toBe(200);
+  });
+
+  it("校验时 email 字段也要是邮箱:手机号字符串不能走邮箱的路", async () => {
+    const r = await post(verify.POST, { email: "+8613800000003", code: "123456" });
+    expect(r.status).toBe(400);
+    expect(((await r.json()) as { error: { code: string } }).error.code).toBe("bad_request");
+  });
+});
+
+describe("评审第三轮:预售与兑换码", () => {
+  const req = (body: unknown, cookie?: string) =>
+    new Request("http://x/api", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.88", ...(cookie && { cookie }) } });
+  const cookieOf = (res: Response) => /^(fde_session=[^;]+)/.exec(res.headers.get("set-cookie") ?? "")?.[1];
+
+  it("在第三方平台买了兑换码、没有邀请码的人:第一次登录用兑换码代替邀请码,注册的同时兑换给他", async () => {
+    const store = await getStore();
+    const [code] = await store.createRedeemCodes("sprint", 1);
+    const r1 = await requestCode.POST(req({ email: "buyer@example.com", inviteCode: code }));
+    expect(r1.status).toBe(200);
+    const { devCode } = (await r1.json()) as { devCode: string };
+    const r2 = await verify.POST(req({ email: "buyer@example.com", code: devCode, inviteCode: code }));
+    expect(r2.status).toBe(200);
+    const user = (await store.getUserByEmail("buyer@example.com"))!;
+    expect((await store.getRedeemCode(code!))?.redeemedBy).toBe(user.id);
+    // 登录后跳回 /redeem?code=…:自己已经兑换过的码照样成功
+    const cookie = cookieOf(r2)!;
+    await consentRoute.POST(req({}, cookie));
+    const again = await redeemRoute.POST(req({ code }, cookie));
+    expect(again.status).toBe(200);
+    // 同一个码不能再给第二个人当邀请码
+    expect((await requestCode.POST(req({ email: "second@example.com", inviteCode: code }))).status).toBe(400);
+  });
+
+  it("兑换失败的限频:同时发一批错码也最多试 10 次", async () => {
+    const store = await getStore();
+    const [invite] = await store.createInvites(1, 1);
+    const r1 = await requestCode.POST(req({ email: "guesser@example.com", inviteCode: invite }));
+    const { devCode } = (await r1.json()) as { devCode: string };
+    const r2 = await verify.POST(req({ email: "guesser@example.com", code: devCode, inviteCode: invite }));
+    const cookie = cookieOf(r2)!;
+    await consentRoute.POST(req({}, cookie));
+    const all = await Promise.all(Array.from({ length: 30 }, (_, i) => redeemRoute.POST(req({ code: `ZZZZ-ZZZZ-${String(i).padStart(4, "Z")}` }, cookie))));
+    expect(all.filter((r) => r.status === 400)).toHaveLength(10);
+    expect(all.filter((r) => r.status === 429)).toHaveLength(20);
+  });
+
+  it("复盘与商品说明的 Markdown:\"/\\evil.com\" 不渲染成站内链接", () => {
+    const html = renderMarkdown("[看这里](/\\evil.com) [站内](/me)");
+    expect(html).not.toContain('href="/\\evil.com"');
+    expect(html).toContain('href="/me"');
+  });
+});

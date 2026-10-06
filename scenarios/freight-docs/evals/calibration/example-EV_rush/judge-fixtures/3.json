@@ -1,0 +1,117 @@
+{
+  "claims": [
+    {
+      "text": "问题是人工录入，需要识别系统",
+      "source": "J1"
+    }
+  ],
+  "T": [
+    {
+      "id": "T1",
+      "verdict": "contradict",
+      "evidence": [
+        "J1"
+      ],
+      "note": "认定识别是主要问题，与 T1 相反"
+    },
+    {
+      "id": "T2",
+      "verdict": "miss",
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "id": "T3",
+      "verdict": "miss",
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "id": "T4",
+      "verdict": "miss",
+      "evidence": [],
+      "note": ""
+    },
+    {
+      "id": "T5",
+      "verdict": "miss",
+      "evidence": [],
+      "note": ""
+    }
+  ],
+  "S": [
+    {
+      "id": "S1",
+      "mentioned_in_judgment": true,
+      "evidence": [
+        "J3"
+      ]
+    },
+    {
+      "id": "S2",
+      "mentioned_in_judgment": false,
+      "evidence": []
+    },
+    {
+      "id": "S3",
+      "mentioned_in_judgment": false,
+      "evidence": []
+    },
+    {
+      "id": "S4",
+      "mentioned_in_judgment": false,
+      "evidence": []
+    },
+    {
+      "id": "S5",
+      "mentioned_in_judgment": false,
+      "evidence": []
+    }
+  ],
+  "W": [
+    {
+      "id": "W1",
+      "met": false,
+      "evidence": []
+    },
+    {
+      "id": "W2",
+      "met": true,
+      "evidence": [
+        "J3"
+      ]
+    },
+    {
+      "id": "W3",
+      "met": false,
+      "evidence": []
+    },
+    {
+      "id": "W4",
+      "met": false,
+      "evidence": []
+    },
+    {
+      "id": "W5",
+      "met": false,
+      "evidence": []
+    }
+  ],
+  "key_moments": [
+    {
+      "turn": "U3",
+      "type": "bad",
+      "what": "没看任何资料就报了工期和价格",
+      "knew": "只有周总的开场白",
+      "did_not_know": "错误分布、上次工具为什么失败、系统不开放接口"
+    },
+    {
+      "turn": "U4",
+      "type": "bad",
+      "what": "保证了识别准确率",
+      "knew": "同上",
+      "did_not_know": "图片来料只占 17%"
+    }
+  ],
+  "npc_inconsistencies": []
+}

@@ -1,0 +1,2248 @@
+{
+  "version": 1,
+  "sessionId": "calib-EV_good",
+  "scenarioId": "freight-docs",
+  "variant": "A",
+  "phase": "debrief",
+  "turn": 23,
+  "minutesUsed": 320,
+  "currentRole": "zhou",
+  "discovered": [
+    "zhou",
+    "lin",
+    "wang",
+    "liu",
+    "chen"
+  ],
+  "exchanges": {
+    "zhou": 7,
+    "lin": 3,
+    "chen": 5,
+    "liu": 5,
+    "wang": 3
+  },
+  "phaseExchanges": {},
+  "trust": {
+    "liu": 1,
+    "chen": 2
+  },
+  "trustPlusUsed": {
+    "chen": [
+      "肯去现场看",
+      "说明来意不是追责"
+    ],
+    "liu": [
+      "说明来意不是追责"
+    ]
+  },
+  "flags": {
+    "auth_ops": true,
+    "auth_finance": true,
+    "seen_any_artifact": true
+  },
+  "facts": {
+    "S2": {
+      "level": "L2",
+      "turn": 1,
+      "source": "zhou"
+    },
+    "S1": {
+      "level": "L2",
+      "turn": 2,
+      "source": "zhou"
+    },
+    "K7": {
+      "level": "L2",
+      "turn": 2,
+      "source": "zhou"
+    },
+    "K1": {
+      "level": "L2",
+      "turn": 8,
+      "source": "lin"
+    },
+    "S3": {
+      "level": "L2",
+      "turn": 5,
+      "source": "zhou"
+    },
+    "K4": {
+      "level": "L2",
+      "turn": 7,
+      "source": "lin"
+    },
+    "P7": {
+      "level": "L3",
+      "turn": 8,
+      "source": "via:A1"
+    },
+    "P3": {
+      "level": "L3",
+      "turn": 11,
+      "source": "chen"
+    },
+    "P6": {
+      "level": "L2",
+      "turn": 8,
+      "source": "via:site_visit"
+    },
+    "K2": {
+      "level": "L2",
+      "turn": 13,
+      "source": "chen"
+    },
+    "P4": {
+      "level": "L3",
+      "turn": 10,
+      "source": "chen"
+    },
+    "P5": {
+      "level": "L2",
+      "turn": 12,
+      "source": "chen"
+    },
+    "P1": {
+      "level": "L3",
+      "turn": 15,
+      "source": "liu"
+    },
+    "RH1": {
+      "level": "L3",
+      "turn": 18,
+      "source": "via:A2"
+    },
+    "S4": {
+      "level": "L2",
+      "turn": 18,
+      "source": "liu"
+    },
+    "K5": {
+      "level": "L2",
+      "turn": 18,
+      "source": "via:A2"
+    },
+    "C1": {
+      "level": "L2",
+      "turn": 19,
+      "source": "wang"
+    },
+    "C2": {
+      "level": "L3",
+      "turn": 20,
+      "source": "wang"
+    },
+    "C3": {
+      "level": "L3",
+      "turn": 21,
+      "source": "via:X3"
+    },
+    "P2": {
+      "level": "L3",
+      "turn": 21,
+      "source": "via:X3"
+    },
+    "K6": {
+      "level": "L2",
+      "turn": 22,
+      "source": "zhou"
+    }
+  },
+  "roleTold": {
+    "zhou": {
+      "S2": "L2",
+      "S1": "L2",
+      "K7": "L2",
+      "K1": "L1",
+      "S3": "L2",
+      "K6": "L2"
+    },
+    "lin": {
+      "K4": "L2",
+      "K1": "L2"
+    },
+    "chen": {
+      "P4": "L3",
+      "P3": "L3",
+      "P5": "L2",
+      "K2": "L2"
+    },
+    "liu": {
+      "P1": "L3",
+      "RH1": "L1",
+      "K1": "L2",
+      "S3": "L2",
+      "S4": "L2"
+    },
+    "wang": {
+      "C1": "L2",
+      "C2": "L3",
+      "C3": "L2"
+    }
+  },
+  "artifacts": {
+    "A1": {
+      "obtainedTurn": 6,
+      "openedTurn": 8
+    },
+    "A8": {
+      "obtainedTurn": 8
+    },
+    "A7": {
+      "obtainedTurn": 8
+    },
+    "A6": {
+      "obtainedTurn": 10,
+      "openedTurn": 13
+    },
+    "A5": {
+      "obtainedTurn": 11,
+      "openedTurn": 13
+    },
+    "A2": {
+      "obtainedTurn": 15,
+      "openedTurn": 18
+    },
+    "A4": {
+      "obtainedTurn": 20,
+      "openedTurn": 21
+    }
+  },
+  "experiments": {
+    "X3": {
+      "turn": 21
+    }
+  },
+  "actionsDone": {
+    "site_visit": {
+      "turn": 8
+    }
+  },
+  "traps": {
+    "TR1": {
+      "turn": 2
+    },
+    "TR3": {
+      "turn": 3
+    },
+    "TR5": {
+      "turn": 10
+    },
+    "TR4": {
+      "turn": 14
+    },
+    "TR6": {
+      "turn": 22
+    }
+  },
+  "ledger": [],
+  "transcript": [
+    {
+      "ref": "N1",
+      "turn": 0,
+      "speaker": "npc",
+      "text": "我们单据太多了,装箱单、发票、提单、报关资料,全靠人工录入,老出错。听说你们 AI 能搞定,你就给我做个能自动识别单据的系统。下个月行业大会我要拿出来讲。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U1",
+      "turn": 1,
+      "speaker": "user",
+      "text": "周总您好。系统的事先放一放,我想先搞清楚:为什么是现在想做这件事?最近是出过什么事,还是哪个客户让您特别担心?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N2",
+      "turn": 1,
+      "speaker": "npc",
+      "text": "具体是这样:最大客户拓浪(占营收 18%)Q3 两次因申报问题被查验延误,放话要把三成货量转走",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U2",
+      "turn": 2,
+      "speaker": "user",
+      "text": "下个月大会您想在台上讲什么?讲给谁听?演示成什么样您觉得算成功?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N3",
+      "turn": 2,
+      "speaker": "npc",
+      "text": "演示到底什么时候能给我?大会可不等人。具体是这样:峰会上周总有 15 分钟分享,已对同行放话要讲「AI 单证」;他要的是现场能演示具体是这样:周总想象的演示是「拍一张单子,几秒出结果」",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U3",
+      "turn": 3,
+      "speaker": "user",
+      "text": "演示日期我今天下午给您一个准话,我得先看看数据和现场再说。之前有没有试过类似的工具?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N4",
+      "turn": 3,
+      "speaker": "npc",
+      "text": "人家同行说两周就上线了,你这边怎么还没个准话?之前弄过一个,不好用",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U4",
+      "turn": 4,
+      "speaker": "user",
+      "text": "接下来我想找操作部和财务的人聊聊,看看出错的记录和损失的数字。您能跟他们打个招呼吗?钱和损失这块是谁在管?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N5",
+      "turn": 4,
+      "speaker": "npc",
+      "text": "这个你得问王会计。这个你得问刘姐。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U5",
+      "turn": 5,
+      "speaker": "user",
+      "text": "人手这块现在压力大吗?操作部是不是一直在要人?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N6",
+      "turn": 5,
+      "speaker": "npc",
+      "text": "具体是这样:操作部申请加 4 个单证员,周总没批;他想靠系统顶住",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "S1",
+      "turn": 5,
+      "speaker": "system",
+      "text": "你去找了小林(周总助理)。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "U6",
+      "turn": 6,
+      "speaker": "user",
+      "text": "小林你好,周总说样本单据在你这儿,能给我看看吗?",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "N7",
+      "turn": 6,
+      "speaker": "npc",
+      "text": "具体是这样:把「样本单据包(14 份)」交给对方",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "U7",
+      "turn": 7,
+      "speaker": "user",
+      "text": "这 14 份是怎么挑出来的?跟平时的来料比,大概占多大比例?",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "N8",
+      "turn": 7,
+      "speaker": "npc",
+      "text": "具体是这样:样本包是周总吩咐「挑些难认的」,14 份里 9 份是照片或扫描件",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "U8",
+      "turn": 8,
+      "speaker": "user",
+      "text": "前年买的那个工具,当时是怎么采购的?合同和验收单还在吗?",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "N9",
+      "turn": 8,
+      "speaker": "npc",
+      "text": "具体是这样:前年花 6.8 万买过 OCR 录单工具,3 个月弃用——识别完还得人工核对,再手工录进 FMS,比直接录还慢",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "S2",
+      "turn": 8,
+      "speaker": "system",
+      "text": "你花了 15 分钟看「样本单据包(14 份)」。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "S3",
+      "turn": 8,
+      "speaker": "system",
+      "text": "(你在操作部待了半小时。)\n\n单证组十几个工位挨着,屏幕上大多开着三个窗口:微信、Excel 和运链通 FMS。一位年轻的单证员——同事叫她小陈——正把客户在微信群里发来的表格一格一格对着抄进 FMS。你看她处理了十几份客户资料:大部分是客户自己做的 Excel,有几份电子版 PDF,手机拍的照片只有两三张。\n\n她录得不慢。真正慢的是录之前:发票上的件数和装箱单对不上,她在群里问客户\"到底是多少\",等了二十分钟才有人回;另一票客户说\"昨晚改过了\",她又去翻聊天记录找最新的那一版。半小时里,她打字的时间不到三分之一,其余时间都在核对和追问。\n\n你注意到 FMS 的录单界面右上角有一个\"Excel 批量导入\"按钮,旁边贴着一张打印的导入模板说明。你随口问能不能直接对接,她摇摇头:\"这个系统好像只能这样导。\"\n\n临走时小陈抬头看了你一眼,小声说:\"你是周总请来的吧?\"",
+      "phase": "discovery"
+    },
+    {
+      "ref": "S4",
+      "turn": 8,
+      "speaker": "system",
+      "text": "你去找了小陈(单证员,2 年)。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "U9",
+      "turn": 9,
+      "speaker": "user",
+      "text": "刚才在旁边看了一会儿,辛苦。我不是来追责的,也不会点名。想请教一下,客户改单一般怎么处理?谁通知谁?",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "N10",
+      "turn": 9,
+      "speaker": "npc",
+      "text": "(上下打量你)你之前做过这行吗?具体是这样:客户夜里在微信群改单;系统改了,报关行手里还是旧邮件版本,仓库按旧箱数打板",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "U10",
+      "turn": 10,
+      "speaker": "user",
+      "text": "能给我看一个最近的改单例子吗?比如微信群里的截图,还有发给报关行的邮件。",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "N11",
+      "turn": 10,
+      "speaker": "npc",
+      "text": "上了系统,我们是不是要被裁?具体是这样:客户夜里在微信群改单;系统改了,报关行手里还是旧邮件版本,仓库按旧箱数打板",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "U11",
+      "turn": 11,
+      "speaker": "user",
+      "text": "不会裁人。我要做的是让你们少返工、少半夜追客户。客户资料一般是什么格式?能帮我数一下你下载文件夹里上周各类文件有多少吗?",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "N12",
+      "turn": 11,
+      "speaker": "npc",
+      "text": "具体是这样:来料 62% 是 Excel、21% 是电子 PDF,只有 17% 是照片或扫描件",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "U12",
+      "turn": 12,
+      "speaker": "user",
+      "text": "HS 编码和申报品名平时是怎么定的?",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "N13",
+      "turn": 12,
+      "speaker": "npc",
+      "text": "具体是这样:HS 编码靠单证员各自的 Excel 小抄(历史品名对照),新品靠问报关行,没人统一维护",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "U13",
+      "turn": 13,
+      "speaker": "user",
+      "text": "系统这边能不能批量导入,或者跟别的系统对接?",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "N14",
+      "turn": 13,
+      "speaker": "npc",
+      "text": "具体是这样:运链通 FMS 不开放接口,只支持 Excel 模板批量导入;供应商说开接口另收 5 万加年费",
+      "phase": "discovery",
+      "roleId": "chen"
+    },
+    {
+      "ref": "S5",
+      "turn": 13,
+      "speaker": "system",
+      "text": "你花了 15 分钟看「近一周来料文件统计(1512 个文件)」。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "S6",
+      "turn": 13,
+      "speaker": "system",
+      "text": "你花了 15 分钟看「微信群改单截图与报关行旧邮件(3 张)」。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "S7",
+      "turn": 13,
+      "speaker": "system",
+      "text": "你去找了刘姐(操作部主管,8 年)。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "U14",
+      "turn": 14,
+      "speaker": "user",
+      "text": "刘姐您好,我刚在下面看了半天,大家确实辛苦。我不是来追责的。想问问,出了错有没有地方记?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "N15",
+      "turn": 14,
+      "speaker": "npc",
+      "text": "(上下打量你)你之前做过这行吗?说白了,就是那几个新人不认真。有个表在记,记得不全就是那几个新人不认真",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "U15",
+      "turn": 15,
+      "speaker": "user",
+      "text": "新人的情况我记下了,我想先看看整体。能把异常登记表导一份给我吗?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "N16",
+      "turn": 15,
+      "speaker": "npc",
+      "text": "具体是这样:操作部有一张手工维护的《异常登记表》,Q3 共 428 条",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "U16",
+      "turn": 16,
+      "speaker": "user",
+      "text": "之前那个识别工具,为什么没用下去?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "N17",
+      "turn": 16,
+      "speaker": "npc",
+      "text": "具体是这样:前年花 6.8 万买过 OCR 录单工具,3 个月弃用——识别完还得人工核对,再手工录进 FMS,比直接录还慢",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "U17",
+      "turn": 17,
+      "speaker": "user",
+      "text": "现在团队人手够用吗?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "N18",
+      "turn": 17,
+      "speaker": "npc",
+      "text": "具体是这样:操作部申请加 4 个单证员,周总没批;他想靠系统顶住",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "U18",
+      "turn": 18,
+      "speaker": "user",
+      "text": "如果上新系统,最后是谁在用、谁对结果负责?上次那个工具大家用下来什么感受?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "N19",
+      "turn": 18,
+      "speaker": "npc",
+      "text": "具体是这样:系统最终是刘姐的部门在用;她对上一个工具有怨气,她不点头就推不动",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "S8",
+      "turn": 18,
+      "speaker": "system",
+      "text": "你花了 15 分钟看「异常登记表 Q3(428 行)」。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "S9",
+      "turn": 18,
+      "speaker": "system",
+      "text": "你去找了王会计(财务)。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "U19",
+      "turn": 19,
+      "speaker": "user",
+      "text": "王会计您好,周总让我来了解一下出错带来的费用。出一次错,一般会产生哪些费用?",
+      "phase": "discovery",
+      "roleId": "wang"
+    },
+    {
+      "ref": "N20",
+      "turn": 19,
+      "speaker": "npc",
+      "text": "具体是这样:出错的代价包括改单费、查验费、滞港仓储、罚款和对客户的延误赔付",
+      "phase": "discovery",
+      "roleId": "wang"
+    },
+    {
+      "ref": "U20",
+      "turn": 20,
+      "speaker": "user",
+      "text": "能给我看一下上季度异常费用的汇总吗?",
+      "phase": "discovery",
+      "roleId": "wang"
+    },
+    {
+      "ref": "N21",
+      "turn": 20,
+      "speaker": "npc",
+      "text": "具体是这样:Q3 直接损失约 49.8 万,分类明细见费用汇总",
+      "phase": "discovery",
+      "roleId": "wang"
+    },
+    {
+      "ref": "U21",
+      "turn": 21,
+      "speaker": "user",
+      "text": "按类别看,哪类最花钱?",
+      "phase": "discovery",
+      "roleId": "wang"
+    },
+    {
+      "ref": "N22",
+      "turn": 21,
+      "speaker": "npc",
+      "text": "具体是这样:按金额排,HS 与申报类最贵(21.2 万,43%),改单类第二(14.85 万,30%),录入类只有 2.74 万",
+      "phase": "discovery",
+      "roleId": "wang"
+    },
+    {
+      "ref": "S10",
+      "turn": 21,
+      "speaker": "system",
+      "text": "你花了 15 分钟看「Q3 异常费用汇总(财务)」。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "S11",
+      "turn": 21,
+      "speaker": "system",
+      "text": "你花了 45 分钟做「把异常记录和财务损失按类别对上」。结果:先按原因归类(件数同 X2),再对上损失——HS 与申报 21.2 万、改单 14.85 万、资料矛盾 6.18 万、缺资料 3.86 万、录入 2.74 万、其他 0.97 万。件数排序和金额排序不一样。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "S12",
+      "turn": 21,
+      "speaker": "system",
+      "text": "下午,会议室。你把判断整理好,去向周总汇报。",
+      "phase": "report"
+    },
+    {
+      "ref": "N23",
+      "turn": 21,
+      "speaker": "npc",
+      "text": "(皱眉)说吧,到底怎么回事?要多少钱,多久能在大会上演示?",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U22",
+      "turn": 22,
+      "speaker": "user",
+      "text": "周总,结论先说:单据识别不是主要问题,出错主要在单据对不上和改单没同步,最花钱的是申报类。大会上可以演示拍单识别加自动比对标红;第一期做一致性校验和改单同步,先做两周小验证。预算这块,您心里有个范围吗?",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N24",
+      "turn": 22,
+      "speaker": "npc",
+      "text": "(皱眉)顺便把报价和对账也做了吧。上次那个才六万八,你这个凭什么要这么多?具体是这样:周总没有明确预算;上次 6.8 万打了水漂,这次想先花小钱试,心理上限约 10 万,能上大会愿意多出",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U23",
+      "turn": 23,
+      "speaker": "user",
+      "text": "报价和对账这次不放进来,先把一致性校验做扎实。两周验证的费用我按工作量给您一个范围,验证结果出来再谈正式合同。",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N25",
+      "turn": 23,
+      "speaker": "npc",
+      "text": "(皱眉)",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "S13",
+      "turn": 23,
+      "speaker": "system",
+      "text": "你收工了。",
+      "phase": "debrief"
+    }
+  ],
+  "turns": [
+    {
+      "turn": 1,
+      "role": "zhou",
+      "userText": "周总您好。系统的事先放一放,我想先搞清楚:为什么是现在想做这件事?最近是出过什么事,还是哪个客户让您特别担心?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "S2@zhou:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "S2@zhou:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 8
+    },
+    {
+      "turn": 2,
+      "role": "zhou",
+      "userText": "下个月大会您想在台上讲什么?讲给谁听?演示成什么样您觉得算成功?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "S1@zhou:L2",
+            "confidence": 0.9
+          },
+          {
+            "id": "K7@zhou:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": true,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。",
+        "beat": "催问演示什么时候能给",
+        "trapId": "TR1",
+        "fallback": "演示到底什么时候能给我?大会可不等人。"
+      },
+      "reveals": [
+        "S1@zhou:L2",
+        "K7@zhou:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 16
+    },
+    {
+      "turn": 3,
+      "role": "zhou",
+      "userText": "演示日期我今天下午给您一个准话,我得先看看数据和现场再说。之前有没有试过类似的工具?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "K1@zhou:L1",
+            "confidence": 0.9
+          },
+          {
+            "id": "TR3@zhou",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "beat",
+        "instruction": "按下面要求说出指定的话或做出指定的动作。",
+        "beat": "搬出同行——人家说两周就上线了",
+        "trapId": "TR3",
+        "fallback": "人家同行说两周就上线了,你这边怎么还没个准话?"
+      },
+      "reveals": [
+        "K1@zhou:L1"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 24
+    },
+    {
+      "turn": 4,
+      "role": "zhou",
+      "userText": "接下来我想找操作部和财务的人聊聊,看看出错的记录和损失的数字。您能跟他们打个招呼吗?钱和损失这块是谁在管?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask",
+          "request_permission"
+        ],
+        "matched_triggers": [
+          {
+            "id": "perm:auth_ops",
+            "confidence": 0.9
+          },
+          {
+            "id": "perm:auth_finance",
+            "confidence": 0.9
+          },
+          {
+            "id": "find:wang",
+            "confidence": 0.9
+          },
+          {
+            "id": "P1@liu:L3",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 2,
+          "evidence_ask": true
+        }
+      },
+      "directive": {
+        "stance": "deflect",
+        "instruction": "这事你说不清楚。直说不清楚,并指给该问的人。",
+        "redirectTo": "wang"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 32
+    },
+    {
+      "turn": 5,
+      "role": "zhou",
+      "userText": "人手这块现在压力大吗?操作部是不是一直在要人?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "S3@zhou:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "S3@zhou:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 40
+    },
+    {
+      "turn": 6,
+      "role": "lin",
+      "userText": "小林你好,周总说样本单据在你这儿,能给我看看吗?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask",
+          "request_artifact"
+        ],
+        "matched_triggers": [
+          {
+            "id": "A1@lin:L3",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": true
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "A1@lin:L3"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 55
+    },
+    {
+      "turn": 7,
+      "role": "lin",
+      "userText": "这 14 份是怎么挑出来的?跟平时的来料比,大概占多大比例?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "K4@lin:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": true,
+          "follow_up": true,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "K4@lin:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 60
+    },
+    {
+      "turn": 8,
+      "role": "lin",
+      "userText": "前年买的那个工具,当时是怎么采购的?合同和验收单还在吗?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "K1@lin:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": true
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "K1@lin:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 65
+    },
+    {
+      "turn": 9,
+      "role": "chen",
+      "userText": "刚才在旁边看了一会儿,辛苦。我不是来追责的,也不会点名。想请教一下,客户改单一般怎么处理?谁通知谁?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P4@chen:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [
+          {
+            "dir": "plus",
+            "what": "说明来意不是追责"
+          }
+        ],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "test_user",
+        "instruction": "第一次见面,先反问一句考验对方,比如问对方懂不懂这行、来干什么的。"
+      },
+      "reveals": [
+        "P4@chen:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 135
+    },
+    {
+      "turn": 10,
+      "role": "chen",
+      "userText": "能给我看一个最近的改单例子吗?比如微信群里的截图,还有发给报关行的邮件。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask",
+          "request_artifact"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P4@chen:L3",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": true,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": true
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。",
+        "beat": "问上了系统是不是要裁人",
+        "trapId": "TR5",
+        "fallback": "上了系统,我们是不是要被裁?"
+      },
+      "reveals": [
+        "P4@chen:L3"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 140
+    },
+    {
+      "turn": 11,
+      "role": "chen",
+      "userText": "不会裁人。我要做的是让你们少返工、少半夜追客户。客户资料一般是什么格式?能帮我数一下你下载文件夹里上周各类文件有多少吗?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P3@chen:L3",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": true,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 2,
+          "evidence_ask": true
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "P3@chen:L3"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 145
+    },
+    {
+      "turn": 12,
+      "role": "chen",
+      "userText": "HS 编码和申报品名平时是怎么定的?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P5@chen:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "P5@chen:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 150
+    },
+    {
+      "turn": 13,
+      "role": "chen",
+      "userText": "系统这边能不能批量导入,或者跟别的系统对接?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "K2@chen:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "K2@chen:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 155
+    },
+    {
+      "turn": 14,
+      "role": "liu",
+      "userText": "刘姐您好,我刚在下面看了半天,大家确实辛苦。我不是来追责的。想问问,出了错有没有地方记?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P1@liu:L1",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [
+          {
+            "dir": "plus",
+            "what": "说明来意不是追责"
+          }
+        ],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "test_user",
+        "instruction": "第一次见面,先反问一句考验对方,比如问对方懂不懂这行、来干什么的。",
+        "beat": "把问题归到新人不认真(红鲱鱼 RH1)",
+        "trapId": "TR4",
+        "fallback": "说白了,就是那几个新人不认真。"
+      },
+      "reveals": [
+        "P1@liu:L1",
+        "RH1@liu:L1"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 200
+    },
+    {
+      "turn": 15,
+      "role": "liu",
+      "userText": "新人的情况我记下了,我想先看看整体。能把异常登记表导一份给我吗?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask",
+          "request_artifact"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P1@liu:L3",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": true
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "P1@liu:L3"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 205
+    },
+    {
+      "turn": 16,
+      "role": "liu",
+      "userText": "之前那个识别工具,为什么没用下去?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "K1@liu:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": true,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "K1@liu:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 210
+    },
+    {
+      "turn": 17,
+      "role": "liu",
+      "userText": "现在团队人手够用吗?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "S3@liu:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "S3@liu:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 215
+    },
+    {
+      "turn": 18,
+      "role": "liu",
+      "userText": "如果上新系统,最后是谁在用、谁对结果负责?上次那个工具大家用下来什么感受?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "S4@liu:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 2,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "S4@liu:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 220
+    },
+    {
+      "turn": 19,
+      "role": "wang",
+      "userText": "王会计您好,周总让我来了解一下出错带来的费用。出一次错,一般会产生哪些费用?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "C1@wang:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "C1@wang:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 250
+    },
+    {
+      "turn": 20,
+      "role": "wang",
+      "userText": "能给我看一下上季度异常费用的汇总吗?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask",
+          "request_artifact"
+        ],
+        "matched_triggers": [
+          {
+            "id": "C2@wang:L3",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": true,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": true
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "C2@wang:L3"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 255
+    },
+    {
+      "turn": 21,
+      "role": "wang",
+      "userText": "按类别看,哪类最花钱?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "C3@wang:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": true,
+          "follow_up": true,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "C3@wang:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 260
+    },
+    {
+      "turn": 22,
+      "role": "zhou",
+      "userText": "周总,结论先说:单据识别不是主要问题,出错主要在单据对不上和改单没同步,最花钱的是申报类。大会上可以演示拍单识别加自动比对标红;第一期做一致性校验和改单同步,先做两周小验证。预算这块,您心里有个范围吗?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask",
+          "propose_solution"
+        ],
+        "matched_triggers": [
+          {
+            "id": "K6@zhou:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "push_back",
+        "instruction": "质疑对方的方案或要求,压价、压时间,问凭什么。",
+        "beat": "范围蔓延(顺便把报价和对账也做了)加压价(上次那个才六万八)",
+        "trapId": "TR6",
+        "fallback": "顺便把报价和对账也做了吧。上次那个才六万八,你这个凭什么要这么多?"
+      },
+      "reveals": [
+        "K6@zhou:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 320
+    },
+    {
+      "turn": 23,
+      "role": "zhou",
+      "userText": "报价和对账这次不放进来,先把一致性校验做扎实。两周验证的费用我按工作量给您一个范围,验证结果出来再谈正式合同。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "propose_solution"
+        ],
+        "matched_triggers": [],
+        "commitments": [
+          {
+            "type": "price",
+            "value_text": "给一个范围",
+            "firm": false
+          }
+        ],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "push_back",
+        "instruction": "质疑对方的方案或要求,压价、压时间,问凭什么。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 320
+    }
+  ],
+  "events": [
+    {
+      "turn": 1,
+      "type": "unlock",
+      "payload": {
+        "fact": "S2",
+        "level": "L2",
+        "source": "zhou"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "unlock",
+      "payload": {
+        "fact": "S1",
+        "level": "L2",
+        "source": "zhou"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "unlock",
+      "payload": {
+        "fact": "K7",
+        "level": "L2",
+        "source": "zhou"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "trap",
+      "payload": {
+        "trap": "TR1",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "unlock",
+      "payload": {
+        "fact": "K1",
+        "level": "L1",
+        "source": "zhou"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "trap",
+      "payload": {
+        "trap": "TR3",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 4,
+      "type": "auth_grant",
+      "payload": {
+        "flag": "auth_ops",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 4,
+      "type": "auth_grant",
+      "payload": {
+        "flag": "auth_finance",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 4,
+      "type": "discover",
+      "payload": {
+        "role": "wang",
+        "why": "ask:find:wang"
+      }
+    },
+    {
+      "turn": 4,
+      "type": "redirect",
+      "payload": {
+        "from": "zhou",
+        "to": "liu",
+        "trigger": "P1@liu:L3"
+      }
+    },
+    {
+      "turn": 4,
+      "type": "discover",
+      "payload": {
+        "role": "liu",
+        "why": "redirect:P1@liu:L3"
+      }
+    },
+    {
+      "turn": 5,
+      "type": "unlock",
+      "payload": {
+        "fact": "S3",
+        "level": "L2",
+        "source": "zhou"
+      }
+    },
+    {
+      "turn": 5,
+      "type": "switch_role",
+      "payload": {
+        "from": "zhou",
+        "to": "lin"
+      }
+    },
+    {
+      "turn": 5,
+      "type": "phase_change",
+      "payload": {
+        "from": "kickoff",
+        "to": "discovery"
+      }
+    },
+    {
+      "turn": 6,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A1",
+        "from": "lin"
+      }
+    },
+    {
+      "turn": 7,
+      "type": "unlock",
+      "payload": {
+        "fact": "K4",
+        "level": "L2",
+        "source": "lin"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "unlock",
+      "payload": {
+        "fact": "K1",
+        "level": "L2",
+        "source": "lin"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A8",
+        "from": "lin"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "artifact_open",
+      "payload": {
+        "artifact": "A1"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "unlock",
+      "payload": {
+        "fact": "P7",
+        "level": "L3",
+        "source": "via:A1"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "action",
+      "payload": {
+        "action": "site_visit"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "unlock",
+      "payload": {
+        "fact": "P3",
+        "level": "L2",
+        "source": "via:site_visit"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "unlock",
+      "payload": {
+        "fact": "P6",
+        "level": "L2",
+        "source": "via:site_visit"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "unlock",
+      "payload": {
+        "fact": "K2",
+        "level": "L1",
+        "source": "via:site_visit"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A7",
+        "from": "site_visit"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "discover",
+      "payload": {
+        "role": "chen",
+        "why": "action:site_visit"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "trust_change",
+      "payload": {
+        "role": "chen",
+        "from": 0,
+        "to": 1,
+        "why": "action:site_visit"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "switch_role",
+      "payload": {
+        "from": "lin",
+        "to": "chen"
+      }
+    },
+    {
+      "turn": 9,
+      "type": "trust_change",
+      "payload": {
+        "role": "chen",
+        "from": 1,
+        "to": 2,
+        "moves": [
+          "plus:说明来意不是追责"
+        ]
+      }
+    },
+    {
+      "turn": 9,
+      "type": "unlock",
+      "payload": {
+        "fact": "P4",
+        "level": "L2",
+        "source": "chen"
+      }
+    },
+    {
+      "turn": 10,
+      "type": "unlock",
+      "payload": {
+        "fact": "P4",
+        "level": "L3",
+        "source": "chen"
+      }
+    },
+    {
+      "turn": 10,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A6",
+        "from": "chen"
+      }
+    },
+    {
+      "turn": 10,
+      "type": "trap",
+      "payload": {
+        "trap": "TR5",
+        "by": "chen"
+      }
+    },
+    {
+      "turn": 11,
+      "type": "unlock",
+      "payload": {
+        "fact": "P3",
+        "level": "L3",
+        "source": "chen"
+      }
+    },
+    {
+      "turn": 11,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A5",
+        "from": "chen"
+      }
+    },
+    {
+      "turn": 12,
+      "type": "unlock",
+      "payload": {
+        "fact": "P5",
+        "level": "L2",
+        "source": "chen"
+      }
+    },
+    {
+      "turn": 13,
+      "type": "unlock",
+      "payload": {
+        "fact": "K2",
+        "level": "L2",
+        "source": "chen"
+      }
+    },
+    {
+      "turn": 13,
+      "type": "artifact_open",
+      "payload": {
+        "artifact": "A5"
+      }
+    },
+    {
+      "turn": 13,
+      "type": "artifact_open",
+      "payload": {
+        "artifact": "A6"
+      }
+    },
+    {
+      "turn": 13,
+      "type": "switch_role",
+      "payload": {
+        "from": "chen",
+        "to": "liu"
+      }
+    },
+    {
+      "turn": 14,
+      "type": "trust_change",
+      "payload": {
+        "role": "liu",
+        "from": 0,
+        "to": 1,
+        "moves": [
+          "plus:说明来意不是追责"
+        ]
+      }
+    },
+    {
+      "turn": 14,
+      "type": "unlock",
+      "payload": {
+        "fact": "P1",
+        "level": "L1",
+        "source": "liu"
+      }
+    },
+    {
+      "turn": 14,
+      "type": "trap",
+      "payload": {
+        "trap": "TR4",
+        "by": "liu"
+      }
+    },
+    {
+      "turn": 14,
+      "type": "unlock",
+      "payload": {
+        "fact": "RH1",
+        "level": "L1",
+        "source": "liu"
+      }
+    },
+    {
+      "turn": 15,
+      "type": "unlock",
+      "payload": {
+        "fact": "P1",
+        "level": "L3",
+        "source": "liu"
+      }
+    },
+    {
+      "turn": 15,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A2",
+        "from": "liu"
+      }
+    },
+    {
+      "turn": 18,
+      "type": "unlock",
+      "payload": {
+        "fact": "S4",
+        "level": "L2",
+        "source": "liu"
+      }
+    },
+    {
+      "turn": 18,
+      "type": "artifact_open",
+      "payload": {
+        "artifact": "A2"
+      }
+    },
+    {
+      "turn": 18,
+      "type": "unlock",
+      "payload": {
+        "fact": "K5",
+        "level": "L2",
+        "source": "via:A2"
+      }
+    },
+    {
+      "turn": 18,
+      "type": "unlock",
+      "payload": {
+        "fact": "RH1",
+        "level": "L3",
+        "source": "via:A2"
+      }
+    },
+    {
+      "turn": 18,
+      "type": "switch_role",
+      "payload": {
+        "from": "liu",
+        "to": "wang"
+      }
+    },
+    {
+      "turn": 19,
+      "type": "unlock",
+      "payload": {
+        "fact": "C1",
+        "level": "L2",
+        "source": "wang"
+      }
+    },
+    {
+      "turn": 20,
+      "type": "unlock",
+      "payload": {
+        "fact": "C2",
+        "level": "L3",
+        "source": "wang"
+      }
+    },
+    {
+      "turn": 20,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A4",
+        "from": "wang"
+      }
+    },
+    {
+      "turn": 21,
+      "type": "unlock",
+      "payload": {
+        "fact": "C3",
+        "level": "L2",
+        "source": "wang"
+      }
+    },
+    {
+      "turn": 21,
+      "type": "artifact_open",
+      "payload": {
+        "artifact": "A4"
+      }
+    },
+    {
+      "turn": 21,
+      "type": "experiment",
+      "payload": {
+        "experiment": "X3"
+      }
+    },
+    {
+      "turn": 21,
+      "type": "unlock",
+      "payload": {
+        "fact": "P2",
+        "level": "L3",
+        "source": "via:X3"
+      }
+    },
+    {
+      "turn": 21,
+      "type": "unlock",
+      "payload": {
+        "fact": "C3",
+        "level": "L3",
+        "source": "via:X3"
+      }
+    },
+    {
+      "turn": 21,
+      "type": "judgment_submit",
+      "payload": {
+        "filled": [
+          "J1",
+          "J2",
+          "J3",
+          "J4",
+          "J5"
+        ]
+      }
+    },
+    {
+      "turn": 21,
+      "type": "phase_change",
+      "payload": {
+        "from": "discovery",
+        "to": "report"
+      }
+    },
+    {
+      "turn": 22,
+      "type": "unlock",
+      "payload": {
+        "fact": "K6",
+        "level": "L2",
+        "source": "zhou"
+      }
+    },
+    {
+      "turn": 22,
+      "type": "trap",
+      "payload": {
+        "trap": "TR6",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 23,
+      "type": "phase_change",
+      "payload": {
+        "from": "report",
+        "to": "debrief"
+      }
+    }
+  ],
+  "ledgerRecalled": false,
+  "judgment": {
+    "J1": "1) 主因不是识别:按异常登记表重新归类,资料矛盾和改单未同步合计占 57%,录入只占 13.6%(损失 5.5%),图片来料只有 17%。2) 按金额最贵的是 HS 与申报类(43%),靠单证员各自的小抄。3) 上次 OCR 工具死在识别后还要核对、且写不回 FMS。4) 样本包是挑难认的,不能代表日常来料。",
+    "J2": "异常登记表 + 财务费用汇总按类别对上的验证(X3);小陈的来料统计和改单截图;现场观察;刘姐讲的上次工具;小林讲的样本怎么挑。",
+    "J3": "大会上能现场演示、留住拓浪(别再因申报被查验)、年底前不加人。刘姐的部门要愿意用。",
+    "J4": "第一步:两周小验证,做三单一致性校验和改单同步提醒,通过 FMS 的 Excel 模板导入写回。验收:试点客户的不一致在出货前拦下 90% 以上,单证员核对时间减少三成。大会演示:拍一张单据识别后与装箱单、提单自动比对并标红,演示不等于上线。不做:报价、对账、HS 自动归类(放第二期)。前提:刘姐指定 2 位单证员配合,周总确认客户资料能否发给外部模型。",
+    "J5": "拓浪 HS 问题的具体编码与申报要素;改单在报关行那边的真实丢失率;FMS 供应商开接口的报价。"
+  },
+  "endedReason": "user"
+}

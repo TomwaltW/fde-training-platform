@@ -1,0 +1,60 @@
+{% extends "_base.html.j2" %}
+{# 手写单据:文具店买的通用单据本(印刷的红色格线),内容手写。手写效果用逐字随机旋转/位移模拟(七成像即可)。 #}
+{% block style %}
+.page { padding: 56px 54px; background: #fdfcf7; }
+.stub { position: absolute; left: 18px; top: 60px; bottom: 60px; width: 14px;
+        background: repeating-linear-gradient(#fdfcf7 0 9px, #d9d2c3 9px 11px); }
+.form { border: 2px solid #c0392b; padding: 18px 20px 14px; color: #c0392b; height: 760px; position: relative; }
+.ttl { text-align: center; font-size: 30px; letter-spacing: 18px; font-weight: bold; }
+.ttl small { display: block; font-size: 13px; letter-spacing: 4px; font-weight: normal; }
+.no { position: absolute; right: 22px; top: 22px; font-size: 15px; font-family: "Liberation Mono", monospace; color: #c0392b; }
+.no b { color: #b01c1c; font-size: 19px; letter-spacing: 2px; }
+.head { display: flex; gap: 26px; margin: 16px 0 10px; font-size: 14px; }
+.head .fld { flex: 1; border-bottom: 1px solid #c0392b; height: 34px; display: flex; align-items: flex-end; gap: 8px; }
+.head .fld .hw { font-size: 21px; margin-bottom: 2px; }
+table.t { width: 100%; font-size: 13px; }
+table.t th { border: 1px solid #c0392b; padding: 6px 4px; font-weight: normal; }
+table.t td { border: 1px solid #c0392b; height: 46px; padding: 2px 6px; vertical-align: middle; }
+table.t td .hw { font-size: 21px; }
+.foot { display: flex; justify-content: space-between; margin-top: 14px; font-size: 14px; }
+.foot .fld { border-bottom: 1px solid #c0392b; min-width: 190px; height: 34px; display: flex; align-items: flex-end; gap: 8px; }
+.foot .hw { font-size: 21px; }
+.note { position: absolute; left: 30px; bottom: 74px; transform: rotate(-4deg); }
+.note .hw { font-size: 23px; }
+.copy { margin-top: 10px; text-align: right; font-size: 12px; color: #c0392b; }
+.below { margin-top: 26px; color: #555; font-size: 12px; }
+{% endblock %}
+{% block body %}
+<div class="page">
+  <div class="stub"></div>
+  <div class="form">
+    <div class="no">No. <b>{{ form_no }}</b></div>
+    <div class="ttl">{{ form_title }}<small>{{ form_subtitle }}</small></div>
+    <div class="head">
+      <div class="fld">客户:{{ customer | hw('c' ~ key) }}</div>
+      <div class="fld" style="flex:.7">日期:{{ date | hw('d' ~ key) }}</div>
+    </div>
+    <div class="head" style="margin-top:0">
+      <div class="fld">运单号:{{ ref | hw('r' ~ key) }}</div>
+      <div class="fld" style="flex:.7">目的仓:{{ dest | hw('f' ~ key) }}</div>
+    </div>
+    <table class="t">
+      <thead><tr>{% for h in columns %}<th style="width:{{ h.w }}">{{ h.label }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>{% for c in r %}<td class="{{ 'num' if loop.index > 1 else '' }}">{{ c | hw(key ~ loop.index ~ '-' ~ c) }}</td>{% endfor %}</tr>
+        {% endfor %}
+        {% for _ in range(blank_rows) %}<tr>{% for h in columns %}<td></td>{% endfor %}</tr>{% endfor %}
+        <tr>{% for c in total_row %}<td class="{{ 'num' if loop.index > 1 else '' }}">{% if loop.first %}合计{% endif %}{% if c %}{{ c | hw(key ~ 'tot' ~ loop.index) }}{% endif %}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+    <div class="foot">
+      <div class="fld">{{ amount_label }}{{ amount_text | hw('a' ~ key) }}</div>
+      <div class="fld">经手人:{{ signer | hw('s' ~ key) }}</div>
+    </div>
+    <div class="copy">第二联 · 客户联</div>
+    {% if note %}<div class="note">{{ note | hw('n' ~ key, 'red') }}</div>{% endif %}
+  </div>
+  <div class="below">{{ seller_line }}</div>
+</div>
+{% endblock %}

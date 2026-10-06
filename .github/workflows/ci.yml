@@ -1,0 +1,135 @@
+# CI:推到 main 和每个 PR 都跑三个 job(说明、本地怎么跑见 docs/ci.md)。
+#   checks  类型检查、单元测试、场景校验、回归评测、标定工具自检、fixtures 是否最新
+#   docgen  合成单据自检(Python:check_truth.py、check_docs.py)
+#   web     生产构建、前端 mock e2e、真后端 e2e;失败时上传 Playwright 报告
+#
+# runner 固定 ubuntu-24.04(与开发镜像同一版本):check_docs.py 按像素核对图片上的标识牌,要用同一份
+# 文泉驿正黑(apt 包 fonts-wqy-zenhei)重画一遍再比;换系统版本前先确认字体包没变。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 只读代码,不需要任何写权限
+permissions:
+  contents: read
+
+# 同一个 PR(或同一个分支)有新的提交时,取消还在跑的旧运行
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  checks:
+    name: 检查(类型、单元测试、场景、回归评测、fixtures)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # pnpm 版本取根 package.json 的 packageManager(pnpm@10.x)
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      - name: 类型检查
+        run: pnpm typecheck
+      - name: 单元测试
+        run: pnpm test
+      - name: 场景校验
+        run: pnpm validate
+      - name: 回归评测(离线,10 个脚本化玩家)
+        run: pnpm evals
+      - name: 裁判标定工具自检
+        run: pnpm calibrate --mock
+      - name: fixtures 是否最新
+        id: fixtures
+        run: pnpm ci:fixtures
+      - name: fixtures 过期的处理办法
+        if: failure() && steps.fixtures.outcome == 'failure'
+        run: echo "::error title=fixtures 不是最新的::契约或引擎改了,但 packages/contracts/fixtures 没有重新生成。本地跑 pnpm fixtures,检查改动后把 packages/contracts/fixtures 一起提交(见 docs/ci.md)。"
+
+  docgen:
+    name: 合成单据自检(Python)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tools/docgen/requirements.txt
+      # 渲染好的单据已经提交在仓库里,两个检查脚本只读不写,不需要 Chromium;
+      # 但 check_docs.py 要用文泉驿正黑重画右下角的标识牌来做像素核对(degrade.py 的 FONT_PATH)
+      - name: 安装中文字体
+        run: |
+          sudo apt-get update
+          # libfribidi0:Pillow 的 Raqm 排版要用它,缺了会退回基础排版,标识牌的像素就对不上
+          sudo apt-get install -y --no-install-recommends fonts-wqy-zenhei libfribidi0
+          test -f /usr/share/fonts/truetype/wqy/wqy-zenhei.ttc
+      - name: 安装依赖
+        run: python -m pip install -r tools/docgen/requirements.txt
+      - name: 真值与 Excel 自检
+        run: python tools/docgen/check_truth.py
+      - name: 合成单据自检
+        run: python tools/docgen/check_docs.py
+
+  web:
+    name: 网页(构建、mock e2e、真后端 e2e)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Next.js 的构建缓存(Turbopack 持久缓存);没有它 next build 在 CI 上会提示 "No build cache found"
+      - uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/**/*.ts', 'apps/web/**/*.tsx', 'apps/web/**/*.css', 'packages/*/src/**/*.ts') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+      - name: 构建
+        id: build
+        run: pnpm build:web
+      # runner 上没有 /opt/pw-browsers,两个 Playwright 配置会改用这里装的浏览器
+      - name: 安装 Playwright 的 Chromium(含系统依赖)
+        run: pnpm --filter @fde/web exec playwright install --with-deps chromium
+      - name: 前端 mock e2e
+        run: pnpm test:e2e:mock
+      # mock e2e 失败也照跑(两份报告一起看);上一步的 next dev 只写 .next/dev,不动构建产物,
+      # 所以直接复用"构建"那一步的 standalone 产物,不再构建一次
+      - name: 真后端 e2e
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: pnpm test:e2e:real
+        env:
+          E2E_SKIP_BUILD: "1"
+      - name: 上传 Playwright 报告
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/test-results/mock-report/
+            apps/web/test-results/real-report/
+          if-no-files-found: ignore
+          retention-days: 14

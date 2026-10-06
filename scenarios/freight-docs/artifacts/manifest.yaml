@@ -1,103 +1,527 @@
 # scenarios/freight-docs/artifacts/manifest.yaml
-# 由 tools/docgen/render_xlsx.py 生成,请勿手改;改数据请改 scenario.yaml / gen_truth.py 后重跑。
-# 用途(方案 4.1 步骤 7):每份资料对应哪些票、藏了哪条线索;裁判据此判断用户是否自己从资料里发现了线索。
-schema_version: 0.1
+# 由 tools/docgen/manifest.py 生成(render_xlsx.py、render_docs.py 都会调用),请勿手改;
+# 改数据请改 scenario.yaml / gen_truth.py 后依次重跑 gen_truth.py → render_xlsx.py → render_docs.py。
+# 用途(方案 4.1 步骤 7):每个文件对应哪份资料、哪一票、藏了哪条线索;裁判据此判断用户是否自己从资料里发现了线索。
+schema_version: 0.2
 scenario: freight-docs
-notice: "合成样本·训练用 · 公司与数据均为虚构"
+notice: 合成样本·训练用 · 公司与数据均为虚构
 truth:
   dir: truth/
   meta: truth/meta.json
-  params_source: "scenarios/freight-docs/scenario.yaml"
+  params_source: scenarios/freight-docs/scenario.yaml
+  docs: [truth/products.csv, truth/doc_lines.csv, truth/doc_facts.csv]
+label: {text: 合成样本·训练用, visible: 图片右下角;PDF 页脚;Excel 单元格, implicit: PNG tEXt/iTXt AIGC;JPEG EXIF ImageDescription;PDF
+    Subject;xlsx 工作簿 description}
 artifacts:
-  - id: A2
-    title: 异常登记表 Q3(428 行)
-    holder: liu
-    files:
-      - path: artifacts/A2/exceptions_q3.xlsx
-        sha256: 7a051c4efd6553b777434d83b099081f62f05e35e75c787b7df767743fcba432
-        sheets:
-          - name: 异常登记
-            header_row: 2
-            rows: 428
-            columns: [日期, 运单号, 客户, 经手人, 发现环节, 异常描述, 处理方式, 是否产生费用]
-            source: truth/exceptions.csv(只含 8 个可见列;category、image_source、loss 等真值列不出现)
-          - name: 经手票量
-            header_row: 2
-            rows: 14
-            columns: [经手人, 入职时间, 7月, 8月, 9月, Q3合计]
-            source: truth/handler_volume.csv
-    waybills: 见 truth/exceptions.csv 的 运单号 列(与 truth/shipments.csv 不重叠)
-    supports: {facts: [P1, K5, RH1, S2], experiments: [X2, X5], diagnosis: [T1, T2]}
-    clues:
-      - {fact: P1, where: 「异常登记」共 428 行}
-      - {fact: K5, where: "「异常描述」是自由文本、口径不一:同一根因有多种说法(如「改单没同步」「客户改了没跟报关行说」「仓库按老箱数打的板」),要自己重新归类"}
-      - {fact: RH1, where: "「经手票量」里 5 名入职不满 6 个月的新人经手 6138/19800=31% 的票;「异常登记」里新人经手 146/428=34%,差别不大"}
-      - {fact: S2, where: "拓浪(客户列写作「拓浪科技」或「拓浪」)有 2 行 发现环节=海关查验:LT2608-4834、LT2609-0533"}
-      - {experiment: X2, where: "按「异常描述」重新归类得到 132/113/71/58/37/17(录入类中描述提到照片/扫描/手写等的 21 件)"}
-  - id: A4
-    title: Q3 异常费用汇总(财务)
-    holder: wang
-    files:
-      - path: artifacts/A4/loss_q3.xlsx
-        sha256: 4ca8d3d63d73ddaf49add92f63844cd84f829191a196eb9fe2109b3c861c3806
-        sheets:
-          - name: 汇总
-            header_row: 4
-            rows: 6
-            columns: [费用类型, 7月, 8月, 9月, 合计, 笔数, 占比]
-            note: 按费用类型归集,不按原因;要得到按原因的金额必须和 A2 按运单号对上(X3)
-          - name: 明细
-            header_row: 2
-            rows: 454
-            columns: [日期, 运单号, 客户, 费用类型, 金额, 备注]
-            source: truth/loss.csv
-    supports: {facts: [C1, C2], experiments: [X3, X5]}
-    clues:
-      - {fact: C2, where: "「汇总」合计 498,000 元"}
-      - {fact: C1, where: "费用类型:改单费、查验费、滞港/仓储费、罚款、客户赔付、其他"}
-      - {fact: S2, where: 「明细」里拓浪的两笔查验费}
-  - id: A5
-    title: 近一周来料文件统计(1512 个文件)
-    holder: chen
-    files:
-      - path: artifacts/A5/intake_week.xlsx
-        sha256: 030b1ea05c56c917f108dfc31b15dcc8d77e36930043a304bdd9049b1f0b4f9e
-        role: data_source        # scenario.yaml 里 A5 的正式文件是 intake_week.png,之后由本表渲染
-        sheets:
-          - name: 来料统计
-            header_row: 4
-            source: truth/intake_week.csv
-      - path: artifacts/A5/intake_week.png
-        status: pending          # 图片渲染不在本周范围
-    supports: {facts: [P3], diagnosis: [T1]}
-    clues:
-      - {fact: P3, where: "Excel 937、电子PDF 318、图片/扫描件 257,合计 1512;占比 62%/21%/17%"}
+- id: A1
+  title: 样本单据包(14 份)
+  holder: lin
+  pattern: artifacts/A1/*
+  files:
+  - path: artifacts/A1/LT2609-0387_invoice_photo.jpg
+    sha256: d6ce7b024a81f5c38ae0ec82c055d43d1db42d9e911ea4d026b8c8385184a0ea
+    key: A1-01
+    title: LT2609-0387 发票(照片)
+    doc: 发票
+    form: 照片
+    waybill: LT2609-0387
+    customer: 青禾跨境
+    shows: 发票合计 1200 件、USD 990.00
+    numbers: {pieces: 1200, amount_usd: '990.00'}
+    clue_refs: [P7, K4]
+    source_sha256: 2af426a823c278472497bbe2c2dce42cf784c00a3e3ef053bf7bfd40d7e02d32
+    degrade:
+      mode: 手机拍照
+      rotate_deg: -4.2
+      blur: 1.0
+      jpeg_quality: 80
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 透视变形, 不均匀光照, 纸张投影, 桌面背景, 折痕]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-0387_packing-list.xlsx
+    sha256: 8e7c55570f928667b62fe349cddbe063d22a7a6085d9126b8376d840294c1d01
+    key: A1-02
+    title: LT2609-0387 装箱单(Excel)
+    doc: 装箱单
+    form: Excel
+    waybill: LT2609-0387
+    customer: 青禾跨境
+    version: 原版
+    shows: 装箱单(原版)合计 23 箱、1150 件、毛重 206.2 KG、体积 1.35 CBM
+    numbers: {cartons: 23, pieces: 1150, gross_kg: '206.2', cbm: '1.35', version: 原版}
+    clue_refs: [P7]
+    label: {visible: 页面/表格内「合成样本·训练用 · 公司与数据均为虚构」, implicit: 工作簿属性 description + 单元格显式标识}
+  - path: artifacts/A1/LT2609-0412_packing-list_rev2.pdf
+    sha256: 65848fbe9d5221fa29cb71ad77fd53337c634765f742960d2aca04fedbdb5c1c
+    key: A1-03
+    title: LT2609-0412 装箱单(改2)(电子PDF)
+    doc: 装箱单
+    form: 电子PDF
+    waybill: LT2609-0412
+    customer: 栖木家居
+    version: 改2
+    shows: 装箱单(改2)合计 46 箱、276 件、毛重 667.0 KG、体积 5.06 CBM
+    numbers: {cartons: 46, pieces: 276, gross_kg: '667.0', cbm: '5.06', version: 改2}
+    clue_refs: [P4]
+    source_sha256: da208948139c3e0ce927964a2054149ff6a9313137bc052a8e7a6bac234f8a66
+    label: {visible: 页面/表格内「合成样本·训练用 · 公司与数据均为虚构」, implicit: PDF 元数据 Subject=合成样本·训练用}
+  - path: artifacts/A1/LT2609-0412_bill-of-lading_scan.jpg
+    sha256: 14679fc06e51275b926af13ae08ab9ca93a04817cc9dba58aa2667e7664c42f2
+    key: A1-04
+    title: LT2609-0412 提单(扫描件)
+    doc: 提单
+    form: 扫描件
+    waybill: LT2609-0412
+    customer: 栖木家居
+    version: 原版
+    shows: 提单(副本)40 箱、毛重 580.0 KG、体积 4.40 CBM
+    numbers: {cartons: 40, gross_kg: '580.0', cbm: '4.40'}
+    clue_refs: [P4, K4]
+    source_sha256: ccda3e57a293d7084a0976069364597812ac8c8cb1258115453630e3efe2045d
+    degrade:
+      mode: 扫描/复印
+      rotate_deg: 1.6
+      blur: 0.8
+      jpeg_quality: 78
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 扫描边缘阴影, 不均匀光照, 去饱和与灰底, 墨点, 折痕, 水印(COPY)]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-0446_invoice_photo.jpg
+    sha256: 4ba146f5a8d874e6b542c90919a3b0a8a905f128af7f989321088ffad74573ff
+    key: A1-05
+    title: LT2609-0446 发票(照片)
+    doc: 发票
+    form: 照片
+    waybill: LT2609-0446
+    customer: 拓浪科技
+    shows: 发票合计 120 件、USD 11,520.00
+    numbers: {pieces: 120, amount_usd: '11520.00'}
+    clue_refs: [P5, K4]
+    source_sha256: b2ff32f175e725c3a2a90730de065a23ad6d4e5543112a42d2b2b19339b1e853
+    degrade:
+      mode: 手机拍照
+      rotate_deg: 6.4
+      blur: 1.2
+      jpeg_quality: 80
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 透视变形, 不均匀光照, 纸张投影, 桌面背景]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-0446_customs-draft_scan.jpg
+    sha256: da1b0a35a61554d54231d2151bb9bceaa3589d8ea44aeba24d240b3d02505c31
+    key: A1-06
+    title: LT2609-0446 报关草单(扫描件)
+    doc: 报关草单
+    form: 扫描件
+    waybill: LT2609-0446
+    customer: 拓浪科技
+    shows: 报关草单申报品名「电子配件」,60 箱 120 件,USD 11,520.00
+    numbers: {declared_name: 电子配件, cartons: 60, pieces: 120, amount_usd: '11520.00', gross_kg: '528.0'}
+    clue_refs: [P5, K4]
+    source_sha256: 63922f9a1395b27249c67fe3da5ef83c9aed3ce244f7716befa283d91e2f2e68
+    degrade:
+      mode: 扫描/复印
+      rotate_deg: -2.3
+      blur: 0.9
+      jpeg_quality: 78
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 扫描边缘阴影, 不均匀光照, 去饱和与灰底, 墨点, 水印(仅供报关使用)]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-2589_invoice_handwritten.jpg
+    sha256: 9f0138ef047dfd0c27e8c47933a35cd1153867a8da30fa4c1f1ff900ee68158a
+    key: A1-07
+    title: LT2609-2589 发票(手写)
+    doc: 发票
+    form: 手写
+    waybill: LT2609-2589
+    customer: 稻禾健康
+    shows: 发票合计 128 件、USD 2,432.00
+    numbers: {pieces: 128, amount_usd: '2432.00'}
+    clue_refs: [K4]
+    source_sha256: bf53c98ad3829de3eeca92e477ad596a12ed2ce4c81048ef65bd26acd1a9a682
+    degrade:
+      mode: 手机拍照
+      rotate_deg: 3.1
+      blur: 1.0
+      jpeg_quality: 80
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 透视变形, 不均匀光照, 纸张投影, 桌面背景, 折痕]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-2589_packing-list_handwritten.jpg
+    sha256: f41036a8b061d6dd81cb91ef0c3b9d78d6c48049f6bd1106491b800ab02b8f79
+    key: A1-08
+    title: LT2609-2589 装箱单(手写)
+    doc: 装箱单
+    form: 手写
+    waybill: LT2609-2589
+    customer: 稻禾健康
+    version: 原版
+    shows: 装箱单(原版)合计 16 箱、128 件、毛重 168.0 KG、体积 0.80 CBM
+    numbers: {cartons: 16, pieces: 128, gross_kg: '168.0', cbm: '0.80', version: 原版}
+    clue_refs: [K4]
+    source_sha256: 2718c99879e65a5c22148afff65840bda95c7e284db6bda7f8b17f9bedaa46a2
+    degrade:
+      mode: 手机拍照
+      rotate_deg: -5.6
+      blur: 1.1
+      jpeg_quality: 80
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 透视变形, 不均匀光照, 纸张投影, 桌面背景, 折痕]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-3749_packing-list_photo.jpg
+    sha256: 688c3cd5836872417bc37ceb186345e49def81ffa472d3228e5d3c136464e524
+    key: A1-09
+    title: LT2609-3749 装箱单(照片)
+    doc: 装箱单
+    form: 照片
+    waybill: LT2609-3749
+    customer: 野径户外
+    version: 原版
+    shows: 装箱单(原版)合计 38 箱、2280 件、毛重 304.0 KG、体积 1.52 CBM
+    numbers: {cartons: 38, pieces: 2280, gross_kg: '304.0', cbm: '1.52', version: 原版}
+    clue_refs: [K4]
+    source_sha256: 99ebe62a70ccb640f06f4119d72c30bf455f0ead81cf04adac1436298c8015c3
+    degrade:
+      mode: 手机拍照
+      rotate_deg: 2.2
+      blur: 1.6
+      jpeg_quality: 78
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 透视变形, 不均匀光照, 纸张投影, 桌面背景]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-3749_shipping-mark_photo.jpg
+    sha256: 99327c8f9315702300992e2e82dc6c27d840d0737f28a8ef57ad56bff1cc82ed
+    key: A1-10
+    title: LT2609-3749 箱唛(照片)
+    doc: 箱唛
+    form: 照片
+    waybill: LT2609-3749
+    customer: 野径户外
+    shows: 箱唛:每箱 60 件、毛重 8.0 KG,共 38 箱
+    numbers: {cartons: 38, pcs_per_ctn: 60, kg_per_ctn: '8.0'}
+    clue_refs: [K4]
+    source_sha256: 9f9512a7ac5e3d9af897a496c42427b9a784996cb30f5387b9373f36da016848
+    degrade:
+      mode: 手机拍照
+      rotate_deg: -3.6
+      blur: 1.2
+      jpeg_quality: 80
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 透视变形, 不均匀光照, 纸张投影, 地面背景]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-5047_invoice.pdf
+    sha256: f49e1c21b67119703afb57dbe3ce57283528a9ce231c6f20021c1c38f6f2471d
+    key: A1-11
+    title: LT2609-5047 发票(电子PDF)
+    doc: 发票
+    form: 电子PDF
+    waybill: LT2609-5047
+    customer: 栖木家居
+    shows: 发票合计 214 件、USD 1,773.80
+    numbers: {pieces: 214, amount_usd: '1773.80'}
+    clue_refs: []
+    source_sha256: 10779b4720aaf6986cbe49acd6a1e6bd479a81bbc56ecff753e5dd144b6562f1
+    label: {visible: 页面/表格内「合成样本·训练用 · 公司与数据均为虚构」, implicit: PDF 元数据 Subject=合成样本·训练用}
+  - path: artifacts/A1/LT2609-5047_packing-list_rev1_scan.jpg
+    sha256: 0728718c46e85317f39b87bdfef872f09b7370f65c702f375787024b59ee9910
+    key: A1-12
+    title: LT2609-5047 装箱单(改1)(扫描件)
+    doc: 装箱单
+    form: 扫描件
+    waybill: LT2609-5047
+    customer: 栖木家居
+    version: 改1
+    shows: 装箱单(改1)合计 40 箱、214 件、毛重 547.5 KG、体积 4.21 CBM
+    numbers: {cartons: 40, pieces: 214, gross_kg: '547.5', cbm: '4.21', version: 改1}
+    clue_refs: [K4]
+    source_sha256: ebd0b7555423452689b8237cac1794cf264986eac6d887711e82d0ee15dbfdbd
+    degrade:
+      mode: 扫描/复印
+      rotate_deg: 1.1
+      blur: 0.7
+      jpeg_quality: 78
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 扫描边缘阴影, 不均匀光照, 去饱和与灰底, 墨点, 折痕]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  - path: artifacts/A1/LT2609-6506_invoice.xlsx
+    sha256: 4f64155d88a8a2bdfd61049a35597c25fc051f5636ec8a10aab6d38ee1ccf5dd
+    key: A1-13
+    title: LT2609-6506 发票(Excel)
+    doc: 发票
+    form: Excel
+    waybill: LT2609-6506
+    customer: 星渚照明
+    shows: 发票合计 3600 件、USD 11,880.00
+    numbers: {pieces: 3600, amount_usd: '11880.00'}
+    clue_refs: []
+    label: {visible: 页面/表格内「合成样本·训练用 · 公司与数据均为虚构」, implicit: 工作簿属性 description + 单元格显式标识}
+  - path: artifacts/A1/LT2609-6506_packing-list.pdf
+    sha256: 9d282bfa9c74bb797e7a5e76a67e4b066471c1415fedddf5ed27c69e1279d98b
+    key: A1-14
+    title: LT2609-6506 装箱单(电子PDF)
+    doc: 装箱单
+    form: 电子PDF
+    waybill: LT2609-6506
+    customer: 星渚照明
+    version: 原版
+    shows: 装箱单(原版)合计 36 箱、3600 件、毛重 367.2 KG、体积 1.62 CBM
+    numbers: {cartons: 36, pieces: 3600, gross_kg: '367.2', cbm: '1.62', version: 原版}
+    clue_refs: []
+    source_sha256: c5b1f5964dd1436bf7263a2ea4a9ddb2198941a5be18f83109e39a9767fca067
+    label: {visible: 页面/表格内「合成样本·训练用 · 公司与数据均为虚构」, implicit: PDF 元数据 Subject=合成样本·训练用}
+  supports:
+    facts: [K4, P7, P4, P5]
+    experiments: [X1, X4]
+    diagnosis: [T5, T2]
+  composition:
+    docs: 14
+    images: 9
+    electronic: 5
+    by_form: {照片: 4, 扫描件: 3, 手写: 2, 电子PDF: 3, Excel: 2}
+  clues:
+  - {fact: K4, where: 14 份里 9 份是照片/扫描件/手写(LT2609-0387_invoice_photo.jpg、LT2609-0412_bill-of-lading_scan.jpg、LT2609-0446_invoice_photo.jpg、LT2609-0446_customs-draft_scan.jpg、LT2609-2589_invoice_handwritten.jpg、LT2609-2589_packing-list_handwritten.jpg、LT2609-3749_packing-list_photo.jpg、LT2609-3749_shipping-mark_photo.jpg、LT2609-5047_packing-list_rev1_scan.jpg);日常来料图片只占
+      17%(A5)}
+  - {fact: P7, waybill: LT2609-0387, where: LT2609-0387_invoice_photo.jpg 发票合计 1200 件 vs LT2609-0387_packing-list.xlsx
+      装箱单合计 1150 件(同一货号发票与装箱单件数不同)}
+  - {fact: P4, waybill: LT2609-0412, where: LT2609-0412_packing-list_rev2.pdf 装箱单「改2」46 箱 / 667.0 KG vs LT2609-0412_bill-of-lading_scan.jpg
+      提单 40 箱 / 580.0 KG}
+  - {fact: P5, waybill: LT2609-0446, where: 'LT2609-0446_invoice_photo.jpg 发票写明内置锂离子电池;LT2609-0446_customs-draft_scan.jpg
+      报关草单申报品名只写「电子配件」、未体现带电;HS 编码为占位符,具体编码与申报要素留给作者补'}
+  x4_support: truth/shipments.csv 的 x4_sample / x4_issue / x4_caught_stage 列(30 票、7 票不一致、5 票出货前、2 票报关环节);样本包里 LT2609-0387、LT2609-0412
+    两票在其中
+- id: A2
+  title: 异常登记表 Q3(428 行)
+  holder: liu
+  files:
+  - path: artifacts/A2/exceptions_q3.xlsx
+    sha256: 7a051c4efd6553b777434d83b099081f62f05e35e75c787b7df767743fcba432
+    sheets:
+    - name: 异常登记
+      header_row: 2
+      rows: 428
+      columns: [日期, 运单号, 客户, 经手人, 发现环节, 异常描述, 处理方式, 是否产生费用]
+      source: truth/exceptions.csv(只含 8 个可见列;category、image_source、loss 等真值列不出现)
+    - name: 经手票量
+      header_row: 2
+      rows: 14
+      columns: [经手人, 入职时间, 7月, 8月, 9月, Q3合计]
+      source: truth/handler_volume.csv
+  waybills: 见 truth/exceptions.csv 的 运单号 列(与 truth/shipments.csv 不重叠)
+  supports:
+    facts: [P1, K5, RH1, S2]
+    experiments: [X2, X5]
+    diagnosis: [T1, T2]
+  clues:
+  - {fact: P1, where: 「异常登记」共 428 行}
+  - {fact: K5, where: '「异常描述」是自由文本、口径不一:同一根因有多种说法(如「改单没同步」「客户改了没跟报关行说」「仓库按老箱数打的板」),要自己重新归类'}
+  - {fact: RH1, where: '「经手票量」里 5 名入职不满 6 个月的新人经手 6138/19800=31% 的票;「异常登记」里新人经手 146/428=34%,差别不大'}
+  - {fact: S2, where: '拓浪(客户列写作「拓浪科技」或「拓浪」)有 2 行 发现环节=海关查验:LT2608-4834、LT2609-0533'}
+  - {experiment: X2, where: 按「异常描述」重新归类得到 132/113/71/58/37/17(录入类中描述提到照片/扫描/手写等的 21 件)}
+- id: A3
+  title: 小陈的 Excel 小抄(客户字段映射、历史品名对照)
+  holder: chen
+  pattern: artifacts/A3/cheatsheet.png
+  files:
+  - path: artifacts/A3/cheatsheet.png
+    sha256: 9069f45788b1b5d15e572ac6bb9622ec77fdc626250ed1ab6be5fe5ab58d66bd
+    key: A3-01
+    title: 小陈的 Excel 小抄(截图)
+    doc: 小抄截图
+    form: 截图
+    shows: 「品名对照」18 行:同一品名两种编码、作废的老码、储能电源仍写「电子配件」、多处「问报关行」;下方「客户字段对照」6 家客户各自的写法。HS 编码一律为占位符
+    numbers:
+      rows: 18
+      pcs_per_ctn: {TL-E12: 100, TL-PB10: 40, TL-PS300: 2, TL-CB01: 200, TL-HD05: 100, QH-ZN20: 50, QH-YJ15: 50,
+        SM-ST02: 6, SM-SH11: 4, DH-MG30: 8, YJ-HL01: 60, XZ-ST50: 100, XZ-DL08: 24, YZ-HB07: 50, LK-CH65: 50, QP-CM03: 20,
+        XS-DR12: 6, JF-LT02: 40}
+    clue_refs: [P5]
+    source_sha256: 35538d6d49427e6555622f3de4744a7b311b7b48e82406f38c5cb60b7ed98659
+    label: {visible: 右下角「合成样本·训练用」, implicit: PNG 文本块 AIGC=合成样本·训练用(tEXt + iTXt)}
+  supports:
+    facts: [P5]
+    diagnosis: [T3]
+  clues:
+  - {fact: P5, where: '「品名对照」靠个人整理:同一货号两人报两种编码、今年作废的老码划掉还留着、多处「问报关行」;储能电源一栏申报品名仍写「电子配件」(与样本包 LT2609-0446_customs-draft_scan.jpg
+      一致)。HS 编码一律为占位符 XXXX.XX-序号'}
+- id: A4
+  title: Q3 异常费用汇总(财务)
+  holder: wang
+  files:
+  - path: artifacts/A4/loss_q3.xlsx
+    sha256: 4ca8d3d63d73ddaf49add92f63844cd84f829191a196eb9fe2109b3c861c3806
+    sheets:
+    - name: 汇总
+      header_row: 4
+      rows: 6
+      columns: [费用类型, 7月, 8月, 9月, 合计, 笔数, 占比]
+      note: 按费用类型归集,不按原因;要得到按原因的金额必须和 A2 按运单号对上(X3)
+    - name: 明细
+      header_row: 2
+      rows: 454
+      columns: [日期, 运单号, 客户, 费用类型, 金额, 备注]
+      source: truth/loss.csv
+  supports:
+    facts: [C1, C2]
+    experiments: [X3, X5]
+  clues:
+  - {fact: C2, where: '「汇总」合计 498,000 元'}
+  - {fact: C1, where: '费用类型:改单费、查验费、滞港/仓储费、罚款、客户赔付、其他'}
+  - {fact: S2, where: 「明细」里拓浪的两笔查验费}
+- id: A5
+  title: 近一周来料文件统计(1512 个文件)
+  holder: chen
+  pattern: artifacts/A5/intake_week.png
+  files:
+  - path: artifacts/A5/intake_week.png
+    sha256: 490c23bc821cb2a6c6de91f6377a0edc5d4390a1fa53d9a766734d42e9e9fade
+    key: A5-01
+    title: 近一周来料文件统计
+    doc: 统计图
+    form: 截图
+    shows: Excel 937、电子PDF 318、图片/扫描件 257,合计 1512;占比 62%/21%/17%
+    numbers: {xlsx: 937, pdf: 318, image: 257, total: 1512, share_pct: 62/21/17}
+    clue_refs: [P3]
+    source_sha256: 2edde443ec763b7fb5bdb52b8513d614888cafb6a5d9368e985912b43a782f03
+    label: {visible: 右下角「合成样本·训练用」, implicit: PNG 文本块 AIGC=合成样本·训练用(tEXt + iTXt)}
+  - path: artifacts/A5/intake_week.xlsx
+    sha256: 030b1ea05c56c917f108dfc31b15dcc8d77e36930043a304bdd9049b1f0b4f9e
+    role: data_source
+    note: scenario.yaml 里 A5 的正式文件是 intake_week.png,由本表同一份数据(truth/intake_week.csv)渲染
+    sheets:
+    - {name: 来料统计, header_row: 4, source: truth/intake_week.csv}
+  supports:
+    facts: [P3]
+    diagnosis: [T1]
+  clues:
+  - {fact: P3, where: 'Excel 937、电子PDF 318、图片/扫描件 257,合计 1512;占比 62%/21%/17%'}
+- id: A6
+  title: 微信群改单截图与报关行旧邮件(3 张)
+  holder: chen
+  pattern: artifacts/A6/*
+  files:
+  - path: artifacts/A6/01_group-chat_LT2609-0412.png
+    sha256: b6b2044e8f907329dda6585a6b9bd2cdc77bf5285ecb1402e0d5c74a7e4c809f
+    key: A6-01
+    title: 客户群改单截图(LT2609-0412)
+    doc: 群聊截图
+    form: 截图
+    waybill: LT2609-0412
+    customer: 栖木家居
+    shows: 9月1日 23:41 客户在群里加 6 箱,改成 46 箱(改2);次日 08:52 小陈只回「系统里已改」,没有同步仓库与报关行
+    numbers: {original_cartons: 40, revised_cartons: 46, added_cartons: 6, version: 改2}
+    clue_refs: [P4]
+    source_sha256: 48440287b0e7258581547983912cae059b101e279173e3872e3c15ce6fad7681
+    label: {visible: 右下角「合成样本·训练用」, implicit: PNG 文本块 AIGC=合成样本·训练用(tEXt + iTXt)}
+  - path: artifacts/A6/02_warehouse-chat_LT2609-0412.png
+    sha256: 8a1ec5cf9cc0cd3e8f4ea185c03d2bba2b7dbd2b0dcd972e91ddf4406f5b306e
+    key: A6-02
+    title: 仓库群截图(LT2609-0412)
+    doc: 群聊截图
+    form: 截图
+    waybill: LT2609-0412
+    customer: 栖木家居
+    shows: 仓库实收 46 箱、按旧单 40 箱打了板;报关行用的是邮件里的原版 40 箱
+    numbers: {original_cartons: 40, revised_cartons: 46, added_cartons: 6, version: 改2}
+    clue_refs: [P4]
+    source_sha256: 8666e05fadecbbd6cfb3a903724944d41fce9abd2250484bc59bfea9734be634
+    label: {visible: 右下角「合成样本·训练用」, implicit: PNG 文本块 AIGC=合成样本·训练用(tEXt + iTXt)}
+  - path: artifacts/A6/03_email-to-broker_LT2609-0412.png
+    sha256: cb782b81f9c3428df7a4d8fa804c391fb443175fe3aba7ee0543d8074b7d3c8e
+    key: A6-03
+    title: 发给报关行的旧邮件(LT2609-0412)
+    doc: 邮件截图
+    form: 截图
+    waybill: LT2609-0412
+    customer: 栖木家居
+    shows: 9月1日 16:20 发给报关行的是原版 40 箱 / 580.0 KG;报关行次日按此申报;此后没有改单邮件
+    numbers: {original_cartons: 40, original_pieces: 240, gross_kg: '580.0', cbm: '4.40'}
+    clue_refs: [P4]
+    source_sha256: d1694c911152cbc70668052efcd6f943c12b15f285f5310bf7add35eccee66a8
+    label: {visible: 右下角「合成样本·训练用」, implicit: PNG 文本块 AIGC=合成样本·训练用(tEXt + iTXt)}
+  supports:
+    facts: [P4]
+    diagnosis: [T2]
+  clues:
+  - {fact: P4, waybill: LT2609-0412, where: '01_group-chat_LT2609-0412.png:2026-09-01 23:41 客户在群里加 6 箱、改成 46 箱(改2),小陈次日只回「系统里已改」;02_warehouse-chat_LT2609-0412.png:仓库按
+      40 箱打了板;03_email-to-broker_LT2609-0412.png:2026-09-01 16:20 发给报关行的是原版 40 箱,报关行据此申报,此后没有改单邮件'}
+- id: A7
+  title: FMS 录单界面与 Excel 导入模板
+  holder: chen
+  pattern: artifacts/A7/*
+  files:
+  - path: artifacts/A7/fms_order-entry.png
+    sha256: 00345329308331e409d0014ae78a904bb562810fcac9a54f7c966ac5c7766e1a
+    key: A7-01
+    title: 运链通 FMS 录单界面(截图)
+    doc: 系统截图
+    form: 截图
+    waybill: LT2609-0412
+    customer: 栖木家居
+    shows: 录单界面:LT2609-0412 已按改2改成 46 箱;「API 对接」按钮灰色(未开通,增值服务);批量录入只能「导入Excel」
+    numbers: {cartons: 46, pieces: 276, gross_kg: '667.0', cbm: '5.06', version: 改2}
+    clue_refs: [K2, P4]
+    source_sha256: 6ca138fcec7cecf574ec77790c138cc465d47f23d44fca9af936deb9b5b641ee
+    label: {visible: 右下角「合成样本·训练用」, implicit: PNG 文本块 AIGC=合成样本·训练用(tEXt + iTXt)}
+  - path: artifacts/A7/fms_import-template.xlsx
+    sha256: 76413522216440ee595126ea3726afdc9afa2ce5a303b28719be9cceddc2c820
+    key: A7-02
+    title: 运链通 FMS Excel 导入模板
+    doc: 导入模板
+    form: Excel
+    shows: 「导入数据」表头 19 列(带 * 必填);「填写说明」写明系统不提供外部数据接口、改单只能在界面逐票修改;「示例」3 行取自样本包两票电子来料
+    numbers:
+      example_rows: 3
+      example_waybills: [LT2609-5047, LT2609-6506]
+    clue_refs: [K2]
+    label: {visible: 页面/表格内「合成样本·训练用 · 公司与数据均为虚构」, implicit: 工作簿属性 description + 单元格显式标识}
+  supports:
+    facts: [K2]
+    diagnosis: [T4]
+  clues:
+  - {fact: K2, where: 'fms_order-entry.png:「API 对接」按钮灰色、提示「数据接口为增值服务,当前版本未开通」;fms_import-template.xlsx「填写说明」:系统不提供外部数据接口,批量数据只能按模板导入,改单只能在界面逐票修改'}
+- id: A8
+  title: 旧 OCR 工具的合同首页与验收单
+  holder: lin
+  pattern: artifacts/A8/*
+  files:
+  - path: artifacts/A8/ocr_contract_page1.pdf
+    sha256: d7f0fea8a86c05c5530f5bd36f2d5122b56a3dfac255aecf4409e2c7594463ce
+    key: A8-01
+    title: 票据识别助手采购合同(首页)
+    doc: 合同首页
+    form: 电子PDF
+    shows: 合同金额 ¥68,000(陆万捌仟元整),2024-03-18 签;第二条写明「不含与运链通 FMS(虚构)的接口对接、数据写回」;验收标准是乙方标准样张
+    numbers: {amount_cny: 68000, first_cny: 34000, final_cny: 34000, sign_date: '2024-03-18'}
+    clue_refs: [K1]
+    source_sha256: a64b8f6f197d583ff6ca1eec97e4f7b692ac6b6155de221e6b3eedea5b08fd2f
+    label: {visible: 页面/表格内「合成样本·训练用 · 公司与数据均为虚构」, implicit: PDF 元数据 Subject=合成样本·训练用}
+  - path: artifacts/A8/ocr_acceptance_scan.jpg
+    sha256: 37f8ad954e9234e79404115899831b605ce774d0c4678f324c74316ef7f214f2
+    key: A8-02
+    title: 票据识别助手验收单(扫描件)
+    doc: 验收单
+    form: 扫描件
+    shows: 2024-04-22 同意验收(乙方样张);「与 FMS 对接」一栏写「不在合同范围」;手写批注「7月起停用:识别完还得一张张核对,再手工录进FMS」
+    numbers: {acceptance_date: '2024-04-22', stop_month: 2024-07, abandon_after_months: 3}
+    clue_refs: [K1]
+    source_sha256: e4bb04d37282dbadebaecd3318db232a9523dd1105b17a332a25ae4f168863d0
+    degrade:
+      mode: 扫描/复印
+      rotate_deg: -1.4
+      blur: 0.7
+      jpeg_quality: 80
+      effects: [旋转, 模糊, JPEG 压缩, 噪点, 扫描边缘阴影, 不均匀光照, 去饱和与灰底, 墨点, 折痕]
+    label: {visible: 右下角「合成样本·训练用」, implicit: JPEG EXIF ImageDescription=合成样本·训练用}
+  supports:
+    facts: [K1]
+    diagnosis: [T4]
+  clues:
+  - {fact: K1, where: 'ocr_contract_page1.pdf:合同金额人民币 68,000 元(2024-03-18 签),第二条写明不含与运链通 FMS 的接口对接、数据写回,验收按乙方标准样张;ocr_acceptance_scan.jpg:2024-04-22
+      同意验收,手写批注 2024-07 起停用(识别完还要核对、再手工录进 FMS)'}
 joins:
-  - id: A2xA4
-    artifacts: [A2, A4]
-    key: 运单号
-    rule: A4「明细」的每个运单号都在 A2 且 是否产生费用=是;A2 里 是否产生费用=是 的每个运单号在 A4 至少有一行
-    supports: {facts: [C3, P2], experiments: [X3, X5], diagnosis: [T1, T3]}
-    expected_loss_by_cause:
-      E_INCONSIST: {count: 132, loss: 61800}
-      E_CHANGE: {count: 113, loss: 148500}
-      E_HS: {count: 71, loss: 212000}
-      E_KEYIN: {count: 58, loss: 27400}
-      E_MISSING: {count: 37, loss: 38600}
-      E_OTHER: {count: 17, loss: 9700}
-    expected_key_customer: {name: 拓浪科技, rows: 60, hs_rows: 19, hs_loss: 86000, inspections: 2}
-pending:
-  # A1 样本包尚未渲染;线索已写进 truth/shipments.csv(clue_ids、a1_docs、x4_* 列)
-  - id: A1
-    truth: truth/shipments.csv
-    planned_docs: 14
-    clues:
-      - {fact: P7, waybill: LT2609-0387, note: "发票 QH-ZN20×600 + QH-YJ15×600 = 1200 件;装箱单 QH-YJ15 只有 550 件(11 箱),合计 1150 件"}
-      - {fact: P4, waybill: LT2609-0412, note: "客户夜里在群里加了 6 箱,装箱单改2 版 46 箱;提单(与报关行手里的旧邮件版)仍按原版 40 箱"}
-      - {fact: P5, waybill: LT2609-0446, note: "发票写明内置锂电池,报关草单品名只写「电子配件」、未体现带电;具体 HS 编码与申报要素留给作者按真实经验补"}
-      - {fact: K4, note: "样本包计划 14 份,其中 9 份照片/扫描件/手写(见 a1_docs 列)"}
-    x4_support: truth/shipments.csv 的 x4_sample / x4_issue / x4_caught_stage 列(30 票、7 票不一致、5 票出货前、2 票报关环节)
-  - {id: A3, status: pending}
-  - {id: A6, status: pending}
-  - {id: A7, status: pending}
-  - {id: A8, status: pending}
+- id: A2xA4
+  artifacts: [A2, A4]
+  key: 运单号
+  rule: A4「明细」的每个运单号都在 A2 且 是否产生费用=是;A2 里 是否产生费用=是 的每个运单号在 A4 至少有一行
+  supports:
+    facts: [C3, P2]
+    experiments: [X3, X5]
+    diagnosis: [T1, T3]
+  expected_loss_by_cause:
+    E_INCONSIST: {count: 132, loss: 61800}
+    E_CHANGE: {count: 113, loss: 148500}
+    E_HS: {count: 71, loss: 212000}
+    E_KEYIN: {count: 58, loss: 27400}
+    E_MISSING: {count: 37, loss: 38600}
+    E_OTHER: {count: 17, loss: 9700}
+  expected_key_customer: {name: 拓浪科技, rows: 60, hs_rows: 19, hs_loss: 86000, inspections: 2}

@@ -1,0 +1,9 @@
+{
+  "user": {
+    "id": "u-fixture-2",
+    "email": "author@example.com",
+    "phone": null,
+    "isAdmin": true,
+    "consentAt": "2026-10-05T08:00:00.000Z"
+  }
+}

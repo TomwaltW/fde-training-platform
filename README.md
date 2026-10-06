@@ -2,7 +2,14 @@
 
 给想做 FDE 的人一个可以翻车的客户现场:AI 扮演的老板、主管、一线和财务各说各的,你去问、去要数据、去做判断,最后拿到一份逐轮指出问题的复盘。
 
-产品与开发方案见 [`FDE训练平台-产品与开发方案-v1.md`](./FDE训练平台-产品与开发方案-v1.md)。本仓库按方案第 5.2 节的里程碑推进,当前完成的是 **W0 的数据部分 + W1 引擎核心 + W2 的裁判与算分**(命令行可玩,回归评测可跑);网页、登录、部署(W4)还没开始。
+产品与开发方案见 [`FDE训练平台-产品与开发方案-v1.md`](./FDE训练平台-产品与开发方案-v1.md)。本仓库按方案第 5.2 节的里程碑推进,当前完成的是 **W0–W7 的工程部分**:
+
+- 引擎与算分(命令行可玩,回归评测可跑)、合成单据、裁判标定工具;
+- 网页:对局、复盘、我的对局、管理页;邀请码 + 邮箱验证码登录,手机号 + 短信验证码登录(配好短信才开放);
+- 内测与增长要用的:候补名单(W0「候补表单」、W5–W7「分批邀请」)、方案 6.3 继续/转向/放弃指标的看板(自建事件表)、预售页与兑换码核销(7.3「站内不收款」);
+- 部署与合规材料、CI。
+
+上线前还需要人工完成的事见文末「上线前还要做的」。
 
 ## 快速开始
 
@@ -12,8 +19,24 @@ pnpm validate          # 场景校验(方案 4.3 的检查项)
 pnpm test              # 单元测试
 pnpm evals             # 回归评测:10 个脚本化玩家,离线、确定性
 pnpm play --offline    # 命令行试玩(关键词闸门 + 模板台词,只用来调规则)
-pnpm check             # 以上全部
+pnpm check             # 类型检查 + 单元测试 + 场景校验 + 回归评测
 ```
+
+网页(Next.js,离线引擎 + 内存库,不需要数据库和模型 Key):
+
+```bash
+FDE_DEV_LOGIN_CODES=1 ADMIN_EMAILS=you@example.com pnpm dev:web
+# 打开 http://localhost:3000/login,用 ADMIN_EMAILS 里的邮箱登录(验证码直接显示在页面上,不需要邀请码),
+# 在 /admin 生成邀请码给别人。数据落在 .data/dev-store.json。
+# 再加 FDE_DEV_SMS_LOGIN=1 可以在本地试手机号登录(不真发短信,验证码同样显示在页面上)。
+pnpm build:web         # 生产构建(standalone 产物,Docker 镜像用的就是它)
+pnpm test:e2e:mock     # 前端 e2e:拦截接口返回 fixtures,手机和电脑两个视口
+pnpm test:e2e:real     # 真后端 e2e:构建 standalone 产物并启动,从登录走到复盘
+```
+
+接口与存储的契约在 `packages/contracts/`(冻结);`pnpm fixtures` 用离线引擎重新生成前端 e2e 用的接口样例。
+
+CI(`.github/workflows/ci.yml`)在每个 PR 上跑三组:类型检查与单元测试与回归评测、合成单据自检、网页构建与两套 e2e。本地一键跑第一组:`pnpm ci:local`;各组怎么在本地复现见 [`docs/ci.md`](./docs/ci.md)。
 
 接真模型(需要百炼和 DeepSeek 的 API Key):
 
@@ -21,7 +44,12 @@ pnpm check             # 以上全部
 cp .env.example .env   # 填 DASHSCOPE_API_KEY、DEEPSEEK_API_KEY
 pnpm play              # 闸门、演员、裁判、复盘都走 config/models.yaml
 pnpm evals --live      # 闸门和演员用真模型跑回归,报告闸门命中率和花费
+pnpm calibrate --live  # 裁判标定:稳定性(3 次极差 ≤ 6)与人工标注一致性(≥ 80%),见 docs/calibration.md
 ```
+
+不调模型时 `pnpm calibrate --mock` 回放仓库里的示例用例,用来检查工具本身。
+
+部署(阿里云 ECS + Docker Compose + Caddy + PostgreSQL 16)见 [`docs/deploy.md`](./docs/deploy.md),上线前的合规清单(备案、算法与模型公示、AIGC 标识、个人信息保护)见 [`docs/compliance-checklist.md`](./docs/compliance-checklist.md)。所有环境变量列在 `.env.example`,`infra/test` 会检查代码里读到的每个变量都在里面。
 
 合成数据(Python,离线工具,不进线上):
 
@@ -29,8 +57,21 @@ pnpm evals --live      # 闸门和演员用真模型跑回归,报告闸门命中
 python3 -m venv tools/docgen/.venv && tools/docgen/.venv/bin/pip install -r tools/docgen/requirements.txt
 tools/docgen/.venv/bin/python tools/docgen/gen_truth.py
 tools/docgen/.venv/bin/python tools/docgen/render_xlsx.py
+tools/docgen/.venv/bin/python tools/docgen/render_docs.py   # 单据图片与 PDF(需要无头 Chromium 和中文字体)
 tools/docgen/.venv/bin/python tools/docgen/check_truth.py   # 113 项自洽检查
+tools/docgen/.venv/bin/python tools/docgen/check_docs.py    # 合成单据自检(线索、标识、可读性)
 ```
+
+每份合成单据都有可见的「合成样本·训练用」标识和元数据里的 AIGC 标识;单据上的公司、人名、单号都是虚构的。详见 [`tools/docgen/README.md`](./tools/docgen/README.md)。
+
+## 内测运营
+
+都在 `/admin` 页面底部(各自展开后才加载):
+
+- **候补名单**:没有邀请码的人在落地页或 `/waitlist` 留邮箱。发内容时把链接写成 `https://<域名>/waitlist?from=xhs`(或 `/?from=jike`),来源会记下来。管理页里按登记顺序或勾选发邀请码;配了 SMTP 会发邀请邮件(链接自动填好邮箱和邀请码),没配就在页面上复制。可导出 CSV。邀请码在对方验证通过时才消耗,输错邮箱不会作废。
+- **继续 / 转向 / 放弃(方案 6.3)**:三关指标按时间范围算,门槛在 `config/gates.yaml`(数值照抄方案,按你的粉丝基数校准一次)。完成者在线时长按事件间隔算(空闲超过 10 分钟按 10 分钟计);"新用户从落地页到第一句话"的秒数也在这里。
+- **兑换码**:商品在 `config/products.yaml`(默认两个商品都没上架,价格待定)。线下成交或企业试点时给任意商品生成兑换码,对方在 `/redeem` 兑换;上架商品后预售页 `/presale` 才出现,站内只核销兑换码、不收款。
+- **手机号登录**:短信签名和模板审核通过后,按 [`docs/sms.md`](./docs/sms.md) 填四个 `ALIYUN_SMS_*`,登录页就会出现手机号入口。
 
 ## 目录
 
@@ -45,18 +86,33 @@ packages/engine/      引擎(纯 TypeScript,不依赖任何模型 SDK)
   src/debrief.ts      复盘数据与文稿(附录 C)
   src/engine.ts       把闸门 → 导演 → 演员 → 守卫串起来;收工后裁判 → 算分 → 复盘
   src/offline/        不接模型的实现:关键词闸门、模板演员(测试与调试用)
+  src/view.ts         给浏览器的视图(PublicView / PublicReport):只有已出现的人、已拿到的资料
 packages/llm/         模型网关:OpenAI 兼容协议、按环节选模型、重试、计费日志
+packages/contracts/   接口与存储契约(api.ts、store.ts)和接口样例 fixtures
+packages/store/       存储:MemoryStore(开发、测试)与 PgStore(线上),共用一套一致性测试
+apps/web/             网页:Next.js 16(App Router)
+  app/api/            接口(登录、对局、资料文件、复盘、反馈、管理)
+  app/                页面:落地页、登录、对局、复盘、我的对局、管理页、协议页
+  lib/server/         服务端:鉴权、限频、引擎接入、资料下发
+  content/legal/      用户协议、隐私政策、AI 说明(草稿,须法务审阅)
+  e2e/mock/           前端 e2e(拦截接口)
+  e2e/real/           真后端 e2e(standalone 产物 + 离线引擎 + 内存库)
 apps/cli/             命令行:play(试玩)、validate(场景校验)
-tools/evals/          回归评测运行器
-tools/docgen/         合成数据:先造账(真值表、异常表、费用表),再出 Excel
+tools/evals/          回归评测运行器;src/calibration/ 是裁判标定工具
+tools/docgen/         合成数据:先造账(真值表、异常表、费用表),再出 Excel 和单据图片、PDF
 scenarios/freight-docs/
   scenario.yaml       场景一:货代公司的「单据识别」
   truth/              真值表(只给导演、裁判和数据脚本用)
   artifacts/          资料文件(经鉴权接口下发,不打包进前端)
   narratives/         现场观察、参考路径、现实对照(预先写好,不由模型生成)
   evals/players/      10 个脚本化玩家
+  evals/calibration/  标定用例(现有两个是示例,正式标定时删掉)
 config/models.yaml    线上模型配置
-infra/db/             数据表(W4 启用)
+config/gates.yaml     方案 6.3 的指标门槛
+config/products.yaml  商品、免费场景、预售开关
+infra/                Dockerfile、docker-compose、Caddyfile、备份脚本;db/ 是建表脚本
+docs/                 部署、合规清单、标定流程、短信、CI、各轮开发规格
+.github/workflows/    CI
 ```
 
 ## 引擎的几条硬约束
@@ -98,9 +154,15 @@ infra/db/             数据表(W4 启用)
 
 写不成表达式的压力时刻条件(TR2、TR3)由闸门识别,校验器会列出来。
 
-## 还没做的(按方案里程碑)
+## 上线前还要做的
 
-- **W3** 合成单据的渲染与劣化(A1 样本包、A3/A5/A6/A7/A8 的图片);目前只有 A2、A4、A5 的 Excel。`real_world.md` 是占位,需要作者按 4.2 的流程写。
-- **W2 剩余** 用真模型做标定:20 份对话的人工标注、裁判三次运行波动 ≤ ±3(3.4.4)。
-- **W4** 网页(Next.js)、邀请码与验证码登录、管理页、部署、合规标识与模型公示。
-- 变体 B、C:引擎已按 `variant` 读取场景并支持 `overlay`,数据还没写。
+工程上能做的都做了,下面这些需要人来做:
+
+- **模型 Key 与标定**:填 `DASHSCOPE_API_KEY`、`DEEPSEEK_API_KEY`,跑 `pnpm evals --live` 看闸门命中率;按 [`docs/calibration.md`](./docs/calibration.md) 人工标注 20 份对话,跑 `pnpm calibrate --live` 过两道门槛。
+- **备案与公示**:ICP 备案号、公安备案号、模型公示文字(`SITE_ICP_NUMBER`、`SITE_PUBLIC_SECURITY_NUMBER`、`SITE_MODEL_DISCLOSURE`),逐项对照 [`docs/compliance-checklist.md`](./docs/compliance-checklist.md)。
+- **协议文本**:`apps/web/content/legal/` 下三份是草稿,不构成法律意见,须法务审阅后替换。
+- **发信**:配置 `SMTP_URL`、`MAIL_FROM`(阿里云邮件推送)。没配 SMTP 时线上发不出验证码,用户无法登录;不要用开发模式的验证码回显代替(生产环境默认也不会生效)。
+- **短信**:提交短信签名和模板;通过后按 `docs/sms.md` 开通手机号登录。开放前请法务看一下隐私政策里手机号那一行。
+- **商品与指标**:在 `config/products.yaml` 定价、写购买方式和真人复盘的预约方式,再把要卖的商品设成 `available: true`;按方案 6.3 的说明在 W0 末校准一次 `config/gates.yaml` 的门槛。
+- **场景内容**:`narratives/real_world.md` 仍是占位,需要作者按方案 4.2 的流程写;单据里的虚构公司名上线前再查一遍重名;LT2609-0446「电子配件」的 HS 编码按真实归类规则复核。
+- **变体 B、C**:引擎已按 `variant` 读取场景并支持 `overlay`,数据还没写。

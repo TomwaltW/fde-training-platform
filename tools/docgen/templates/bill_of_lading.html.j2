@@ -1,0 +1,80 @@
+{% extends "_base.html.j2" %}
+{# 提单(副本)。虚构承运人,版式参照常见海运提单的格子布局,不含任何真实公司标识。 #}
+{% block style %}
+.page { padding: 34px 40px; font-family: "Liberation Sans", "WenQuanYi Zen Hei", sans-serif; }
+.grid { width: 100%; border: 1.5px solid #222; font-size: 10.5px; }
+.grid td { border: 1px solid #444; vertical-align: top; padding: 4px 6px; }
+.lab { font-size: 8.5px; color: #333; text-transform: uppercase; letter-spacing: .3px; }
+.val { font-size: 11.5px; margin-top: 2px; line-height: 1.35; }
+.carrier { text-align: center; }
+.carrier .nm { font-size: 18px; font-weight: bold; letter-spacing: 2px; }
+.carrier .cn { font-size: 12px; }
+.carrier .doc { font-size: 22px; font-weight: bold; letter-spacing: 6px; margin-top: 10px; }
+.carrier .nn { font-size: 11px; font-weight: bold; color: #333; margin-top: 4px; letter-spacing: 2px; }
+.cargo td { height: 300px; }
+.cargo .hdr td { height: auto; background: #f0f0f0; font-size: 8.5px; text-transform: uppercase; }
+.small { font-size: 8.5px; line-height: 1.3; color: #333; }
+.big { font-size: 13px; font-weight: bold; }
+{% endblock %}
+{% block body %}
+<div class="page">
+  <table class="grid">
+    <tr>
+      <td style="width:55%;height:92px"><div class="lab">Shipper 托运人</div><div class="val">{% for l in shipper %}{{ l }}<br>{% endfor %}</div></td>
+      <td rowspan="3" class="carrier">
+        <div class="lab" style="text-align:right">B/L No. <span class="big">{{ bl_no }}</span></div>
+        <div style="margin-top:26px" class="nm">{{ carrier.en }}</div>
+        <div class="cn">{{ carrier.cn }}</div>
+        <div class="doc">BILL OF LADING</div>
+        <div class="nn">NON-NEGOTIABLE COPY 副本</div>
+        <div class="small" style="margin-top:18px;text-align:left">RECEIVED in apparent good order and condition except as otherwise noted the total number of
+          containers or other packages or units enumerated below for transportation from the place of receipt to the place of
+          delivery subject to the terms hereof. (Sample text for training. 合成样本条款,无法律效力。)</div>
+      </td>
+    </tr>
+    <tr><td style="height:92px"><div class="lab">Consignee 收货人</div><div class="val">{% for l in consignee %}{{ l }}<br>{% endfor %}</div></td></tr>
+    <tr><td style="height:72px"><div class="lab">Notify Party 通知人</div><div class="val">{% for l in notify %}{{ l }}<br>{% endfor %}</div></td></tr>
+  </table>
+  <table class="grid" style="border-top:none">
+    <tr>
+      <td style="width:28%"><div class="lab">Pre-carriage by</div><div class="val">—</div></td>
+      <td style="width:27%"><div class="lab">Place of Receipt 收货地</div><div class="val">{{ receipt }}</div></td>
+      <td style="width:22%"><div class="lab">Booking No. 订舱号</div><div class="val">{{ booking_no }}</div></td>
+      <td><div class="lab">Shipped on Board 装船日期</div><div class="val">{{ onboard_date }}</div></td>
+    </tr>
+    <tr>
+      <td><div class="lab">Ocean Vessel / Voy. 船名航次</div><div class="val">{{ vessel }} / {{ voyage }}</div></td>
+      <td><div class="lab">Port of Loading 装货港</div><div class="val">{{ pol }}</div></td>
+      <td><div class="lab">Port of Discharge 卸货港</div><div class="val">{{ pod }}</div></td>
+      <td><div class="lab">Place of Delivery 交货地</div><div class="val">{{ delivery }}</div></td>
+    </tr>
+  </table>
+  <table class="grid cargo" style="border-top:none">
+    <tr class="hdr">
+      <td style="width:24%">Container / Seal No. · Marks &amp; Nos.<br>箱号 / 封号 · 唛头</td>
+      <td style="width:14%">No. of Pkgs<br>件数</td>
+      <td>Description of Goods 货物描述</td>
+      <td style="width:13%">Gross Weight<br>毛重 (KGS)</td>
+      <td style="width:12%">Measurement<br>体积 (CBM)</td>
+    </tr>
+    <tr>
+      <td><div class="val">{{ container }}<br>SEAL: {{ seal }}<br>1 X 40'HQ (LCL PART)<br><br>{% for m in marks %}{{ m }}<br>{% endfor %}</div></td>
+      <td><div class="val big">{{ packages }} CTNS</div></td>
+      <td><div class="val">SAID TO CONTAIN:<br><b>{{ packages }} CARTONS</b><br>{% for d in desc %}{{ d }}<br>{% endfor %}<br>FREIGHT {{ freight }}<br><br>SHIPPER'S LOAD, COUNT AND SEAL</div></td>
+      <td><div class="val big">{{ gw | kg }}</div></td>
+      <td><div class="val big">{{ cbm }}</div></td>
+    </tr>
+  </table>
+  <table class="grid" style="border-top:none">
+    <tr>
+      <td style="width:55%"><div class="lab">Total No. of Packages (in words) 件数大写</div><div class="val"><b>SAY {{ pkg_words }} ({{ packages }}) CARTONS ONLY</b></div></td>
+      <td><div class="lab">Place and Date of Issue 签发地点与日期</div><div class="val">{{ issue_place }} {{ issue_date }}</div></td>
+    </tr>
+    <tr>
+      <td style="height:96px"><div class="lab">Freight &amp; Charges</div><div class="val">{{ freight }}<br>No. of Original B(s)/L: 0 (THIS IS A COPY)</div></td>
+      <td><div class="lab">Signed for the Carrier 承运人签字</div><div class="val" style="margin-top:34px">AS AGENT FOR THE CARRIER<br><span class="small">(合成样本,不含签章)</span></div></td>
+    </tr>
+  </table>
+  {% if pdf %}<div class="pdfmark">{{ mark }}</div>{% endif %}
+</div>
+{% endblock %}

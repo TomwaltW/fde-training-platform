@@ -1,0 +1,23 @@
+{
+  "scenarios": [
+    {
+      "id": "freight-docs",
+      "title": "货代公司的「单据识别」",
+      "access": "free",
+      "difficulty": 2,
+      "estMinutes": 35,
+      "skillFocus": [
+        "挖需求",
+        "找对人拿数据",
+        "不过早承诺",
+        "定义做成"
+      ],
+      "disclaimer": "公司、人物、数据均为虚构;单据为合成样本",
+      "opening": {
+        "speakerName": "周总",
+        "speakerTitle": "老板,销售出身",
+        "text": "我们单据太多了,装箱单、发票、提单、报关资料,全靠人工录入,老出错。听说你们 AI 能搞定,你就给我做个能自动识别单据的系统。下个月行业大会我要拿出来讲。"
+      }
+    }
+  ]
+}

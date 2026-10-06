@@ -1,0 +1,207 @@
+{
+  "view": {
+    "sessionId": "s-fixture-0001",
+    "scenario": {
+      "id": "freight-docs",
+      "title": "货代公司的「单据识别」",
+      "disclaimer": "公司、人物、数据均为虚构;单据为合成样本"
+    },
+    "briefing": {
+      "youAre": "你是独立 FDE,经朋友介绍,今天第一次到客户现场。",
+      "company": "深圳澜途国际货运代理有限公司(虚构),约 60 人,日均约 300 票,客户主要是跨境电商卖家(FBA 头程,海运与空派)。",
+      "goal": "搞清楚这家公司真正卡在哪,以及「做成」对周总意味着什么;下午向周总汇报并谈下一步。",
+      "rulesShown": [
+        "想找谁聊,直接说或点人物。每句话、每次走动都花时间,今天一共 6 小时。",
+        "可以要资料、去现场看、做小验证。",
+        "觉得清楚了,点「我的判断是…」;随时可以「收工」看复盘。"
+      ]
+    },
+    "phase": "debrief",
+    "minutesLeft": 274,
+    "minutesTotal": 360,
+    "currentRole": "zhou",
+    "people": [
+      {
+        "id": "zhou",
+        "name": "周总",
+        "title": "老板,销售出身",
+        "current": true,
+        "exchanges": 2
+      },
+      {
+        "id": "lin",
+        "name": "小林",
+        "title": "周总助理",
+        "current": false,
+        "exchanges": 1
+      },
+      {
+        "id": "liu",
+        "name": "刘姐",
+        "title": "操作部主管,8 年",
+        "current": false,
+        "exchanges": 0
+      },
+      {
+        "id": "chen",
+        "name": "小陈",
+        "title": "单证员,2 年",
+        "current": false,
+        "exchanges": 0
+      }
+    ],
+    "artifacts": [
+      {
+        "id": "A1",
+        "title": "样本单据包(14 份)",
+        "opened": true,
+        "reviewCostMin": 15
+      },
+      {
+        "id": "A7",
+        "title": "FMS 录单界面与 Excel 导入模板",
+        "opened": false,
+        "reviewCostMin": 15
+      }
+    ],
+    "actions": [
+      {
+        "id": "site_visit",
+        "title": "去操作部现场看半小时",
+        "costMin": 40,
+        "done": true,
+        "available": false
+      }
+    ],
+    "experiments": [
+      {
+        "id": "X1",
+        "title": "用样本包做一次识别测试",
+        "costMin": 45,
+        "done": false
+      },
+      {
+        "id": "X4",
+        "title": "抽 30 票做发票、装箱单、提单交叉核对",
+        "costMin": 45,
+        "done": false
+      }
+    ],
+    "lockedExperiments": 3,
+    "transcript": [
+      {
+        "ref": "N1",
+        "turn": 0,
+        "speaker": "npc",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "我们单据太多了,装箱单、发票、提单、报关资料,全靠人工录入,老出错。听说你们 AI 能搞定,你就给我做个能自动识别单据的系统。下个月行业大会我要拿出来讲。"
+      },
+      {
+        "ref": "U1",
+        "turn": 1,
+        "speaker": "user",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "周总您好。为什么现在想做这件事?最近出过什么事吗?"
+      },
+      {
+        "ref": "N2",
+        "turn": 1,
+        "speaker": "npc",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "具体是这样:最大客户拓浪(占营收 18%)Q3 两次因申报问题被查验延误,放话要把三成货量转走"
+      },
+      {
+        "ref": "U2",
+        "turn": 2,
+        "speaker": "user",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "能跟操作部打个招呼吗?出错的记录在谁那儿?"
+      },
+      {
+        "ref": "N3",
+        "turn": 2,
+        "speaker": "npc",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "演示到底什么时候能给我?大会可不等人。这个你得问刘姐。"
+      },
+      {
+        "ref": "S1",
+        "turn": 2,
+        "speaker": "system",
+        "text": "你去找了小林(周总助理)。"
+      },
+      {
+        "ref": "U3",
+        "turn": 3,
+        "speaker": "user",
+        "roleId": "lin",
+        "roleName": "小林",
+        "text": "小林你好,周总说样本单据在你这儿,能给我看看吗?"
+      },
+      {
+        "ref": "N4",
+        "turn": 3,
+        "speaker": "npc",
+        "roleId": "lin",
+        "roleName": "小林",
+        "text": "具体是这样:把「样本单据包(14 份)」交给对方"
+      },
+      {
+        "ref": "S2",
+        "turn": 3,
+        "speaker": "system",
+        "text": "你花了 15 分钟看「样本单据包(14 份)」。"
+      },
+      {
+        "ref": "S3",
+        "turn": 3,
+        "speaker": "system",
+        "text": "(你在操作部待了半小时。)\n\n单证组十几个工位挨着,屏幕上大多开着三个窗口:微信、Excel 和运链通 FMS。一位年轻的单证员——同事叫她小陈——正把客户在微信群里发来的表格一格一格对着抄进 FMS。你看她处理了十几份客户资料:大部分是客户自己做的 Excel,有几份电子版 PDF,手机拍的照片只有两三张。\n\n她录得不慢。真正慢的是录之前:发票上的件数和装箱单对不上,她在群里问客户\"到底是多少\",等了二十分钟才有人回;另一票客户说\"昨晚改过了\",她又去翻聊天记录找最新的那一版。半小时里,她打字的时间不到三分之一,其余时间都在核对和追问。\n\n你注意到 FMS 的录单界面右上角有一个\"Excel 批量导入\"按钮,旁边贴着一张打印的导入模板说明。你随口问能不能直接对接,她摇摇头:\"这个系统好像只能这样导。\"\n\n临走时小陈抬头看了你一眼,小声说:\"你是周总请来的吧?\""
+      },
+      {
+        "ref": "S4",
+        "turn": 3,
+        "speaker": "system",
+        "text": "下午,会议室。你把判断整理好,去向周总汇报。"
+      },
+      {
+        "ref": "N5",
+        "turn": 3,
+        "speaker": "npc",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "(皱眉)说吧,到底怎么回事?要多少钱,多久能在大会上演示?"
+      }
+    ],
+    "judgmentForm": [
+      {
+        "id": "J1",
+        "label": "真正的问题是什么(按重要性排)"
+      },
+      {
+        "id": "J2",
+        "label": "你的证据(哪份资料、谁说的)"
+      },
+      {
+        "id": "J3",
+        "label": "「做成」对周总意味着什么"
+      },
+      {
+        "id": "J4",
+        "label": "建议的第一步、验收指标、明确不做什么"
+      },
+      {
+        "id": "J5",
+        "label": "还不确定、需要再查的"
+      }
+    ],
+    "judgmentSubmitted": true,
+    "ended": true,
+    "aiNotice": "对话内容由 AI 生成"
+  }
+}

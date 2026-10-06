@@ -1,0 +1,94 @@
+{% extends "_base.html.j2" %}
+{# 装箱单。theme:qimu(栖木,素净中文风,带版本号)、yejing(野径,户外品牌风)、xingzhu(星渚,蓝色表格风) #}
+{% block style %}
+.page { --accent: {{ {'qimu': '#7a5a3a', 'yejing': '#c2571a', 'xingzhu': '#1f5fa8'}[theme] }}; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; }
+.co-cn { font-size: 19px; font-weight: bold; color: var(--accent); }
+.co-en { font-size: 11.5px; font-weight: bold; letter-spacing: .5px; }
+.addr { font-size: 10.5px; color: #555; }
+.ver { border: 2px solid #b3261e; color: #b3261e; padding: 4px 10px; font-size: 15px; font-weight: bold; text-align: center;
+       transform: rotate(-3deg); margin-top: 4px; }
+.ver small { display: block; font-size: 10px; font-weight: normal; }
+.title { text-align: center; font-size: 20px; font-weight: bold; letter-spacing: 3px; margin: 18px 0 12px;
+         {% if theme == 'yejing' %}background: var(--accent); color: #fff; padding: 6px 0;{% endif %} }
+.title small { display: block; font-size: 11.5px; letter-spacing: 2px; font-weight: normal;
+               color: {{ '#fff' if theme == 'yejing' else '#444' }}; }
+.info { width: 100%; font-size: 11.5px; margin-bottom: 12px; }
+.info td { padding: 3px 6px; }
+.info .k { color: #555; white-space: nowrap; width: 1%; }
+.items { width: 100%; font-size: 11.5px; }
+.items th { background: {{ {'qimu': '#f1ece6', 'yejing': '#fbe7dc', 'xingzhu': '#dfeaf7'}[theme] }};
+            border: 1px solid #8f8f8f; padding: 6px 5px; line-height: 1.3; }
+.items td { border: 1px solid #a3a3a3; padding: 7px 5px; }
+.items tr.tot td { font-weight: bold; background: #f4f4f4; }
+.items .en { color: #555; font-size: 10.5px; }
+.marks { margin-top: 16px; display: flex; gap: 24px; font-size: 11px; }
+.marks .box { border: 1px dashed #888; padding: 8px 12px; min-width: 210px; line-height: 1.6; }
+.notes { margin-top: 12px; font-size: 11px; color: #333; }
+.sign { position: absolute; right: 60px; bottom: 100px; width: 220px; text-align: center; font-size: 11px; }
+.sign .line { border-top: 1px solid #333; margin-top: 40px; padding-top: 4px; }
+{% endblock %}
+{% block body %}
+<div class="page">
+  <div class="top">
+    <div>
+      <div class="co-cn">{{ seller.cn }}</div>
+      <div class="co-en">{{ seller.en }}</div>
+      <div class="addr">{{ seller.addr }}</div>
+    </div>
+    {% if version and version != '原版' %}
+    <div class="ver">{{ version }}<small>修订 {{ rev_date }}</small></div>
+    {% endif %}
+  </div>
+  <div class="title">装 箱 单<small>PACKING LIST</small></div>
+  <table class="info">
+    <tr><td class="k">收货人 Consignee:</td><td>{{ buyer.name }}</td><td class="k">单号 P/L No.:</td><td>{{ pl_no }}</td></tr>
+    <tr><td class="k">目的仓 Destination:</td><td>FBA {{ fba }} · {{ pod }}</td><td class="k">日期 Date:</td><td>{{ date }}</td></tr>
+    <tr><td class="k">起运 From:</td><td>{{ pol }}</td><td class="k">运单号 Ref.:</td><td><b>{{ ref }}</b></td></tr>
+  </table>
+  <table class="items">
+    <thead>
+      <tr>
+        <th style="width:5%">No.</th>
+        <th style="width:12%">货号<br>Item No.</th>
+        <th>品名<br>Description</th>
+        <th style="width:9%">箱数<br>CTNS</th>
+        <th style="width:10%">每箱件数<br>PCS/CTN</th>
+        <th style="width:10%">件数<br>QTY (PCS)</th>
+        <th style="width:12%">毛重<br>G.W. (KG)</th>
+        <th style="width:10%">体积<br>CBM</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ln in lines %}
+      <tr>
+        <td class="ctr">{{ ln.no }}</td>
+        <td>{{ ln.sku }}</td>
+        <td>{{ ln.name }}<div class="en">{{ ln.en }}</div></td>
+        <td class="num">{{ ln.ctn | qty }}</td>
+        <td class="num">{{ ln.ppc | qty }}</td>
+        <td class="num">{{ ln.pcs | qty }}</td>
+        <td class="num">{{ ln.gw | kg }}</td>
+        <td class="num">{{ ln.cbm }}</td>
+      </tr>
+      {% endfor %}
+      {% for _ in range(blank_rows) %}<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>{% endfor %}
+      <tr class="tot">
+        <td colspan="3" class="num">合计 TOTAL</td>
+        <td class="num">{{ total_ctn | qty }}</td>
+        <td></td>
+        <td class="num">{{ total_pcs | qty }}</td>
+        <td class="num">{{ total_gw | kg }}</td>
+        <td class="num">{{ total_cbm }}</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="marks">
+    <div class="box"><b>唛头 Shipping Marks</b><br>{% for m in marks %}{{ m }}<br>{% endfor %}</div>
+    <div class="box"><b>包装 Packing</b><br>{{ total_ctn }} 纸箱 CARTONS<br>SAY TOTAL {{ total_words }} ONLY</div>
+  </div>
+  <div class="notes">{% for n in notes %}<div>{{ n }}</div>{% endfor %}</div>
+  <div class="sign">{{ seller.en }}<div class="line">Authorized Signature 签字</div></div>
+  {% if pdf %}<div class="pdfmark">{{ mark }}</div>{% endif %}
+</div>
+{% endblock %}

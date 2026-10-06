@@ -1,0 +1,62 @@
+{% extends "_base.html.j2" %}
+{# A6 群聊截图:通用手机聊天界面(不含任何真实产品的图标或商标)。截图来自小陈的手机,她自己的消息在右侧。 #}
+{% block style %}
+html, body { width: 390px; height: 844px; overflow: hidden; background: #ededed; }
+body { font-family: "WenQuanYi Zen Hei", "Liberation Sans", sans-serif; font-size: 14.5px; }
+.status { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px 0 26px;
+          font-size: 14px; font-weight: bold; background: #ededed; }
+.status .bat { display: inline-block; width: 24px; height: 11px; border: 1.5px solid #222; border-radius: 3px; position: relative; margin-left: 6px; }
+.status .bat::after { content: ""; position: absolute; left: 1px; top: 1px; bottom: 1px; width: 62%; background: #222; border-radius: 1px; }
+.nav { height: 44px; display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid #d6d6d6; background: #ededed; }
+.nav .back { font-size: 22px; width: 24px; }
+.nav .ttl { flex: 1; text-align: center; font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav .more { width: 24px; text-align: right; font-weight: bold; letter-spacing: 1px; }
+.list { padding: 6px 12px 0; height: {{ 844 - 44 - 44 - 58 }}px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+.time { text-align: center; color: #9a9a9a; font-size: 12px; margin: 8px 0 4px; }
+.row { display: flex; gap: 8px; margin: 6px 0; align-items: flex-start; }
+.row.r { flex-direction: row-reverse; }
+.av { width: 36px; height: 36px; border-radius: 5px; color: #fff; font-size: 17px; display: flex; align-items: center; justify-content: center; flex: none; }
+.col { max-width: 262px; display: flex; flex-direction: column; }
+.row.r .col { align-items: flex-end; }
+.name { font-size: 11.5px; color: #8a8a8a; margin: 0 0 3px 2px; }
+.bub { background: #fff; border-radius: 6px; padding: 7px 10px; line-height: 1.45; word-break: break-all; position: relative; }
+.row.r .bub { background: #a6e27c; }
+.file { background: #fff; border-radius: 6px; padding: 8px 10px; width: 252px; display: flex; gap: 10px; align-items: center; }
+.file .fn { flex: 1; font-size: 13px; line-height: 1.35; word-break: break-all; }
+.file .fn small { display: block; color: #9a9a9a; font-size: 11px; margin-top: 4px; }
+.file .ic { width: 30px; height: 36px; background: #e2553f; color: #fff; font-size: 10px; font-weight: bold; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px; border-radius: 3px; flex: none; }
+.img { width: 170px; height: 112px; border-radius: 6px; background: linear-gradient(180deg, #8d8f91 0 30%, #6e6a64 30% 100%); position: relative; overflow: hidden; }
+.img .box { position: absolute; width: 34px; height: 26px; background: #c39a68; border: 1px solid #8a6a44; }
+.img .wrap { position: absolute; left: 14px; bottom: 10px; width: 78px; height: 82px; background: rgba(220,230,235,.45); border: 1px solid rgba(255,255,255,.6); }
+.input { position: absolute; left: 0; right: 0; bottom: 0; height: 58px; background: #f6f6f6; border-top: 1px solid #d6d6d6; display: flex; align-items: center; gap: 10px; padding: 0 12px 10px; }
+.input .bx { flex: 1; height: 36px; background: #fff; border-radius: 5px; }
+.input .ci { width: 28px; height: 28px; border: 1.6px solid #333; border-radius: 50%; }
+{% endblock %}
+{% block body %}
+<div class="status"><span>{{ clock }}</span><span>5G<span class="bat"></span></span></div>
+<div class="nav"><div class="back">‹</div><div class="ttl">{{ group }}</div><div class="more">···</div></div>
+<div class="list">
+  {% for it in items %}
+    {% if it.kind == 'time' %}
+    <div class="time">{{ it.text }}</div>
+    {% else %}
+    <div class="row {{ it.side }}">
+      <div class="av" style="background:{{ it.who.color }}">{{ it.who.avatar }}</div>
+      <div class="col">
+        {% if it.side == 'l' %}<div class="name">{{ it.who.name }}</div>{% endif %}
+        {% if it.text %}<div class="bub">{{ it.text }}</div>{% endif %}
+        {% if it.file %}<div class="file"><div class="fn">{{ it.file }}<small>PDF 文件</small></div><div class="ic">PDF</div></div>{% endif %}
+        {% if it.image %}
+        <div class="img">
+          {% for i in range(it.image.cartons) %}<div class="box" style="left:{{ 104 + (i % 2) * 30 }}px; bottom:{{ 8 + (i // 2) * 24 }}px"></div>{% endfor %}
+          <div class="wrap"></div>
+          {% for i in range(6) %}<div class="box" style="left:{{ 18 + (i % 2) * 36 }}px; bottom:{{ 12 + (i // 2) * 26 }}px"></div>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+<div class="input"><div class="ci"></div><div class="bx"></div><div class="ci"></div><div class="ci"></div></div>
+{% endblock %}

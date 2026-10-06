@@ -1,0 +1,491 @@
+{
+  "view": {
+    "sessionId": "s-fixture-0001",
+    "scenario": {
+      "id": "freight-docs",
+      "title": "货代公司的「单据识别」",
+      "disclaimer": "公司、人物、数据均为虚构;单据为合成样本"
+    },
+    "briefing": {
+      "youAre": "你是独立 FDE,经朋友介绍,今天第一次到客户现场。",
+      "company": "深圳澜途国际货运代理有限公司(虚构),约 60 人,日均约 300 票,客户主要是跨境电商卖家(FBA 头程,海运与空派)。",
+      "goal": "搞清楚这家公司真正卡在哪,以及「做成」对周总意味着什么;下午向周总汇报并谈下一步。",
+      "rulesShown": [
+        "想找谁聊,直接说或点人物。每句话、每次走动都花时间,今天一共 6 小时。",
+        "可以要资料、去现场看、做小验证。",
+        "觉得清楚了,点「我的判断是…」;随时可以「收工」看复盘。"
+      ]
+    },
+    "phase": "debrief",
+    "minutesLeft": 274,
+    "minutesTotal": 360,
+    "currentRole": "zhou",
+    "people": [
+      {
+        "id": "zhou",
+        "name": "周总",
+        "title": "老板,销售出身",
+        "current": true,
+        "exchanges": 2
+      },
+      {
+        "id": "lin",
+        "name": "小林",
+        "title": "周总助理",
+        "current": false,
+        "exchanges": 1
+      },
+      {
+        "id": "liu",
+        "name": "刘姐",
+        "title": "操作部主管,8 年",
+        "current": false,
+        "exchanges": 0
+      },
+      {
+        "id": "chen",
+        "name": "小陈",
+        "title": "单证员,2 年",
+        "current": false,
+        "exchanges": 0
+      }
+    ],
+    "artifacts": [
+      {
+        "id": "A1",
+        "title": "样本单据包(14 份)",
+        "opened": true,
+        "reviewCostMin": 15
+      },
+      {
+        "id": "A7",
+        "title": "FMS 录单界面与 Excel 导入模板",
+        "opened": false,
+        "reviewCostMin": 15
+      }
+    ],
+    "actions": [
+      {
+        "id": "site_visit",
+        "title": "去操作部现场看半小时",
+        "costMin": 40,
+        "done": true,
+        "available": false
+      }
+    ],
+    "experiments": [
+      {
+        "id": "X1",
+        "title": "用样本包做一次识别测试",
+        "costMin": 45,
+        "done": false
+      },
+      {
+        "id": "X4",
+        "title": "抽 30 票做发票、装箱单、提单交叉核对",
+        "costMin": 45,
+        "done": false
+      }
+    ],
+    "lockedExperiments": 3,
+    "transcript": [
+      {
+        "ref": "N1",
+        "turn": 0,
+        "speaker": "npc",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "我们单据太多了,装箱单、发票、提单、报关资料,全靠人工录入,老出错。听说你们 AI 能搞定,你就给我做个能自动识别单据的系统。下个月行业大会我要拿出来讲。"
+      },
+      {
+        "ref": "U1",
+        "turn": 1,
+        "speaker": "user",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "周总您好。为什么现在想做这件事?最近出过什么事吗?"
+      },
+      {
+        "ref": "N2",
+        "turn": 1,
+        "speaker": "npc",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "具体是这样:最大客户拓浪(占营收 18%)Q3 两次因申报问题被查验延误,放话要把三成货量转走"
+      },
+      {
+        "ref": "U2",
+        "turn": 2,
+        "speaker": "user",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "能跟操作部打个招呼吗?出错的记录在谁那儿?"
+      },
+      {
+        "ref": "N3",
+        "turn": 2,
+        "speaker": "npc",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "演示到底什么时候能给我?大会可不等人。这个你得问刘姐。"
+      },
+      {
+        "ref": "S1",
+        "turn": 2,
+        "speaker": "system",
+        "text": "你去找了小林(周总助理)。"
+      },
+      {
+        "ref": "U3",
+        "turn": 3,
+        "speaker": "user",
+        "roleId": "lin",
+        "roleName": "小林",
+        "text": "小林你好,周总说样本单据在你这儿,能给我看看吗?"
+      },
+      {
+        "ref": "N4",
+        "turn": 3,
+        "speaker": "npc",
+        "roleId": "lin",
+        "roleName": "小林",
+        "text": "具体是这样:把「样本单据包(14 份)」交给对方"
+      },
+      {
+        "ref": "S2",
+        "turn": 3,
+        "speaker": "system",
+        "text": "你花了 15 分钟看「样本单据包(14 份)」。"
+      },
+      {
+        "ref": "S3",
+        "turn": 3,
+        "speaker": "system",
+        "text": "(你在操作部待了半小时。)\n\n单证组十几个工位挨着,屏幕上大多开着三个窗口:微信、Excel 和运链通 FMS。一位年轻的单证员——同事叫她小陈——正把客户在微信群里发来的表格一格一格对着抄进 FMS。你看她处理了十几份客户资料:大部分是客户自己做的 Excel,有几份电子版 PDF,手机拍的照片只有两三张。\n\n她录得不慢。真正慢的是录之前:发票上的件数和装箱单对不上,她在群里问客户\"到底是多少\",等了二十分钟才有人回;另一票客户说\"昨晚改过了\",她又去翻聊天记录找最新的那一版。半小时里,她打字的时间不到三分之一,其余时间都在核对和追问。\n\n你注意到 FMS 的录单界面右上角有一个\"Excel 批量导入\"按钮,旁边贴着一张打印的导入模板说明。你随口问能不能直接对接,她摇摇头:\"这个系统好像只能这样导。\"\n\n临走时小陈抬头看了你一眼,小声说:\"你是周总请来的吧?\""
+      },
+      {
+        "ref": "S4",
+        "turn": 3,
+        "speaker": "system",
+        "text": "下午,会议室。你把判断整理好,去向周总汇报。"
+      },
+      {
+        "ref": "N5",
+        "turn": 3,
+        "speaker": "npc",
+        "roleId": "zhou",
+        "roleName": "周总",
+        "text": "(皱眉)说吧,到底怎么回事?要多少钱,多久能在大会上演示?"
+      }
+    ],
+    "judgmentForm": [
+      {
+        "id": "J1",
+        "label": "真正的问题是什么(按重要性排)"
+      },
+      {
+        "id": "J2",
+        "label": "你的证据(哪份资料、谁说的)"
+      },
+      {
+        "id": "J3",
+        "label": "「做成」对周总意味着什么"
+      },
+      {
+        "id": "J4",
+        "label": "建议的第一步、验收指标、明确不做什么"
+      },
+      {
+        "id": "J5",
+        "label": "还不确定、需要再查的"
+      }
+    ],
+    "judgmentSubmitted": true,
+    "ended": true,
+    "aiNotice": "对话内容由 AI 生成"
+  },
+  "userEmail": "player@example.com",
+  "events": [
+    {
+      "turn": 1,
+      "type": "unlock",
+      "payload": {
+        "fact": "S2",
+        "level": "L2",
+        "source": "zhou"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "auth_grant",
+      "payload": {
+        "flag": "auth_ops",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "redirect",
+      "payload": {
+        "from": "zhou",
+        "to": "liu",
+        "trigger": "P1@liu:L3"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "discover",
+      "payload": {
+        "role": "liu",
+        "why": "redirect:P1@liu:L3"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "trap",
+      "payload": {
+        "trap": "TR1",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "switch_role",
+      "payload": {
+        "from": "zhou",
+        "to": "lin"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "phase_change",
+      "payload": {
+        "from": "kickoff",
+        "to": "discovery"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A1",
+        "from": "lin"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "artifact_open",
+      "payload": {
+        "artifact": "A1"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "unlock",
+      "payload": {
+        "fact": "P7",
+        "level": "L3",
+        "source": "via:A1"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "action",
+      "payload": {
+        "action": "site_visit"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "unlock",
+      "payload": {
+        "fact": "P3",
+        "level": "L2",
+        "source": "via:site_visit"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "unlock",
+      "payload": {
+        "fact": "P6",
+        "level": "L2",
+        "source": "via:site_visit"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "unlock",
+      "payload": {
+        "fact": "K2",
+        "level": "L1",
+        "source": "via:site_visit"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "artifact_obtain",
+      "payload": {
+        "artifact": "A7",
+        "from": "site_visit"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "discover",
+      "payload": {
+        "role": "chen",
+        "why": "action:site_visit"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "trust_change",
+      "payload": {
+        "role": "chen",
+        "from": 0,
+        "to": 1,
+        "why": "action:site_visit"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "judgment_submit",
+      "payload": {
+        "filled": [
+          "J1",
+          "J2",
+          "J3",
+          "J4",
+          "J5"
+        ]
+      }
+    },
+    {
+      "turn": 3,
+      "type": "phase_change",
+      "payload": {
+        "from": "discovery",
+        "to": "report"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "phase_change",
+      "payload": {
+        "from": "report",
+        "to": "debrief"
+      }
+    }
+  ],
+  "ledger": [],
+  "report": {
+    "sessionId": "s-fixture-0001",
+    "scenarioTitle": "货代公司的「单据识别」",
+    "total": 22,
+    "band": "接了一个会翻车的单",
+    "badges": [],
+    "dimensions": [
+      {
+        "id": "D1",
+        "name": "关键事实覆盖",
+        "score": 5.1,
+        "max": 20,
+        "details": [
+          "覆盖事实权重 12 / 满分线 47.2(L2 及以上)"
+        ]
+      },
+      {
+        "id": "D2",
+        "name": "证据质量",
+        "score": 2,
+        "max": 15,
+        "details": [
+          "A1 +2"
+        ]
+      },
+      {
+        "id": "D3",
+        "name": "提问与访谈质量",
+        "score": 5,
+        "max": 15,
+        "details": [
+          "前 3 问开放式占 33%",
+          "quantifying 0 次",
+          "followup 0 次",
+          "evidence_asks 0 次",
+          "一次只问一件事 100%"
+        ]
+      },
+      {
+        "id": "D4",
+        "name": "诊断准确度",
+        "score": 0,
+        "max": 20,
+        "details": [
+          "T1 miss +0",
+          "T2 miss +0",
+          "T3 miss +0",
+          "T4 miss +0",
+          "T5 miss +0"
+        ]
+      },
+      {
+        "id": "D5",
+        "name": "成功定义与干系人",
+        "score": 0,
+        "max": 10,
+        "details": []
+      },
+      {
+        "id": "D6",
+        "name": "预期与承诺管理",
+        "score": 10,
+        "max": 10,
+        "details": []
+      },
+      {
+        "id": "D7",
+        "name": "范围与下一步",
+        "score": 0,
+        "max": 10,
+        "details": []
+      }
+    ],
+    "caps": [],
+    "markdown": "# 复盘:货代公司的「单据识别」\n\n## 结论\n\n**22 分 · 接了一个会翻车的单**\n\n| 维度 | 得分 | 说明 |\n|---|---|---|\n| D1 关键事实覆盖 | 5.1 / 20 | 覆盖事实权重 12 / 满分线 47.2(L2 及以上) |\n| D2 证据质量 | 2 / 15 | A1 +2 |\n| D3 提问与访谈质量 | 5 / 15 | 前 3 问开放式占 33%;quantifying 0 次;followup 0 次;evidence_asks 0 次;一次只问一件事 100% |\n| D4 诊断准确度 | 0 / 20 | T1 miss +0;T2 miss +0;T3 miss +0;T4 miss +0;T5 miss +0 |\n| D5 成功定义与干系人 | 0 / 10 |  |\n| D6 预期与承诺管理 | 10 / 10 |  |\n| D7 范围与下一步 | 0 / 10 |  |\n\n## 关键时刻\n\n(裁判没有给出关键时刻)\n\n## 承诺账本\n\n你没有给出坚决的工期、报价或准确率承诺。\n\n## 你没见的人、没拿到的资料\n\n- 知道但没去谈的人:刘姐、小陈\n- 没有发现的人:王会计(财务)\n- 没拿到的资料:异常登记表 Q3(428 行)、小陈的 Excel 小抄(客户字段映射、历史品名对照)、Q3 异常费用汇总(财务)、近一周来料文件统计(1512 个文件)、微信群改单截图与报关行旧邮件(3 张)、旧 OCR 工具的合同首页与验收单\n- 拿到但没看的资料:FMS 录单界面与 Excel 导入模板\n\n## 真相\n\n按件数:\n\n- 客户资料自相矛盾(发票、装箱单、箱唛对不上):132 件(30.8%)\n- 客户改单后未同步(系统、报关行、仓库版本不一致):113 件(26.4%)\n- HS 编码、品名归类、申报要素错误:71 件(16.6%)\n- 录入手误或看错(其中 21 件来自图片或扫描件):58 件(13.6%)\n- 资料缺失或迟交:37 件(8.6%)\n- 其他(地址、仓代码、标签):17 件(4%)\n\n按金额:\n\n- HS 编码、品名归类、申报要素错误:21.2 万(42.6%)\n- 客户改单后未同步(系统、报关行、仓库版本不一致):14.85 万(29.8%)\n- 客户资料自相矛盾(发票、装箱单、箱唛对不上):6.18 万(12.4%)\n- 资料缺失或迟交:3.86 万(7.8%)\n- 录入手误或看错(其中 21 件来自图片或扫描件):2.74 万(5.5%)\n- 其他(地址、仓代码、标签):9700 元(1.9%)\n\n老板真正要的:\n\n- 大会上能现场演示(面子与获客)\n- 拓浪的货别再因申报问题被查验延误(保收入)\n- 年底前不加人(操作部申请的 4 个编制没批)\n\n## 参考路径\n\n一位有经验的 FDE 在这 6 小时里大致这样走(约 320 分钟,预算 360 分钟):\n\n| 步骤 | 动作 | 耗时(分钟) | 拿到什么 |\n|---|---|---|---|\n| 1 | 和周总谈 5 轮:为什么是现在、大会想讲什么、之前试过什么、我能找谁、能看哪些数据 | 40 | 大会诉求、拓浪的压力、上次工具不好用的印象、演示画面、两项授权 |\n| 2 | 找小林 3 轮,看样本包 | 40 | 样本包,以及\"样本是挑难认的\"这件事;从样本里自己发现两单对不上 |\n| 3 | 去操作部现场看半小时 | 40 | 来料格式、时间花在哪、系统只能 Excel 导入;认识小陈 |\n| 4 | 和小陈谈 5 轮,看来料统计和改单截图 | 65 | 改单怎么丢的、HS 靠小抄、系统对接的限制 |\n| 5 | 和刘姐谈 5 轮,看异常登记表 | 50 | 428 条异常、上次工具为什么死、编制、谁来用 |\n| 6 | 找王会计 3 轮,看费用汇总 | 40 | 出错都花在哪、季度损失 |\n| 7 | 做验证:异常记录和财务损失按类别对上 | 45 | 件数排序和金额排序不一样 |\n\n几个取舍:\n\n- **先问\"为什么是现在\"和\"之前试过什么\"。** 这两个问题成本最低,决定了后面往哪挖。\n- **先拿数据,再给数字。** 上午不报工期、不报价;被催的时候给的是\"今天下午给你一个能落地的下一步\"。\n- **按件数排一次,按金额排一次。** 资料矛盾件数最多,HS 与申报类最花钱,录入类两样都不高。\n- **两头都接住。** 大会上演示\"拍一张单据,识别出来,再和装箱单、提单自动比对并当场标红\";第一期落在一致性校验和改单同步,HS 辅助放第二步。\n- **没做的事也是选择。** 这条路径没看小陈的小抄,也没做三单交叉核对:时间不够,必须取舍。\n\n## 下次直接照做\n\n1. 第一个小时内就开口要记录和台账,不要只听说法。\n2. 老板之外,至少见一位一线和一位管钱的人。\n3. 同时按件数和按金额排一次问题,再下结论。\n\n---\n本复盘由 AI 生成,仅供训练参考。",
+    "shareCard": {
+      "title": "货代公司的「单据识别」",
+      "total": 22,
+      "badges": [],
+      "line": "接了一个会翻车的单"
+    },
+    "aiNotice": "本复盘由 AI 生成,仅供训练参考。"
+  },
+  "feedback": [
+    {
+      "sessionId": "s-fixture-0001",
+      "userEmail": "player@example.com",
+      "rating": 8,
+      "text": "周总记账那段很真实",
+      "dispute": {
+        "dimension": "D3",
+        "reason": "我问了很多量化问题"
+      },
+      "wantNext": true,
+      "createdAt": "2026-10-05T08:35:00.000Z"
+    }
+  ],
+  "llmCalls": [
+    {
+      "at": "2026-10-05T08:00:00.000Z",
+      "stage": "actor",
+      "model": "qwen-plus",
+      "tokensIn": 3012,
+      "tokensOut": 96,
+      "costYuan": 0.0026,
+      "latencyMs": 1830,
+      "ok": true
+    }
+  ]
+}
