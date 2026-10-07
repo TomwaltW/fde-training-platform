@@ -61,16 +61,19 @@ export function webStoreTarget(env: Env, repoRoot: string): StoreTarget {
   return { kind: "memory", file: file ? resolve(webDir(repoRoot), file) : defaultStoreFile(env, repoRoot) };
 }
 
-/** 给人看的来源说明;PostgreSQL 只显示主机和库名,不显示用户名和密码。 */
+/**
+ * 给人看的来源说明;PostgreSQL 只显示主机和库名,不显示用户名和密码。
+ * 协议不是 postgres: / postgresql: / socket: 的一律只说 PostgreSQL(DATABASE_URL):漏写 postgres:// 的
+ * "fde:secret@db:5432/fde" new URL 也解析得了(协议成了 fde:),密码会落在路径里。主机留空的写法也不细说(new URL 解析不了)。
+ * 这行在检查连接串之前就打印,所以这里自己也要把关。
+ */
 export function describeTarget(t: StoreTarget): string {
   if (t.kind === "memory") return `内存库 ${t.file}`;
-  try {
-    const u = new URL(t.url);
-    const db = u.pathname.replace(/^\//, "");
-    return `PostgreSQL ${u.hostname}${u.port ? `:${u.port}` : ""}${db ? `/${db}` : ""}`;
-  } catch {
-    return "PostgreSQL(DATABASE_URL)";
-  }
+  if (!URL.canParse(t.url)) return "PostgreSQL(DATABASE_URL)";
+  const u = new URL(t.url);
+  if (!PG_PROTOCOLS.has(u.protocol)) return "PostgreSQL(DATABASE_URL)";
+  const db = u.pathname.replace(/^\//, "");
+  return `PostgreSQL ${u.hostname}${u.port ? `:${u.port}` : ""}${db ? `/${db}` : ""}`;
 }
 
 /**
@@ -95,13 +98,26 @@ function rawErrorText(e: unknown): string {
 /**
  * DATABASE_URL 写错了是配置错误(退出码 2),不是连不上库。驱动(pg-connection-string)按 new URL(串, "postgres://base") 解析:
  * 解析不了时 new pg.Client() 直接抛 "Invalid URL";"not a url"、libpq 的 "host=… dbname=…" 这种不是绝对地址的串还会被当成相对路径、
- * 去连一台叫 base 的主机。所以这里要求是绝对 URL,驱动认的另外两种写法照样放行:"/" 开头的 Unix socket 路径,
- * 和主机留空的 postgres://用户@/库名(驱动先补一个占位主机再解析)。报错不带连接串本身(里面有密码)。
+ * 去连一台叫 base 的主机。漏写 postgres:// 的 "fde:secret@db:5432/fde"、"localhost:5432/fde" 倒是绝对 URL,只是协议成了
+ * fde: / localhost:、主机为空,驱动会悄悄去连默认的 localhost:5432。所以这里要求是协议为 postgres: / postgresql: / socket: 的
+ * 绝对 URL,驱动认的另外两种写法照样放行:"/" 开头的 Unix socket 路径,和主机留空的 postgres://用户@/库名
+ * (和驱动一样:直接解析不了时才补一个占位主机再解析)。报错不带连接串本身(里面有密码)。
  */
 export function checkPgUrl(url: string): void {
-  if (!url.startsWith("/") && !URL.canParse(url) && !URL.canParse(url.replace("@/", "@___DUMMY___/"))) {
+  if (!url.startsWith("/") && !isPgUrl(url)) {
     throw new SourceConfigError("DATABASE_URL 不是合法的连接串,应该形如 postgres://用户:密码@主机:5432/库名(密码里的 @ : / # 等字符要写成 %40 这样的转义)");
   }
+}
+
+/** 驱动认的 URL 协议。 */
+const PG_PROTOCOLS = new Set(["postgres:", "postgresql:", "socket:"]);
+
+/** 照驱动的顺序解析:先直接解析,解析不了再把 "@/" 换成占位主机;解析得了的那一次说了算,协议要是 PG_PROTOCOLS 之一。 */
+function isPgUrl(url: string): boolean {
+  for (const s of [url, url.replace("@/", "@___DUMMY___/")]) {
+    if (URL.canParse(s)) return PG_PROTOCOLS.has(new URL(s).protocol);
+  }
+  return false;
 }
 
 /** 把这个连接设成只读:之后的事务一律只读,误调写方法时数据库直接拒绝。 */

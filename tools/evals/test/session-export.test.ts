@@ -118,6 +118,10 @@ describe("选库:和网页后端一样", () => {
   it("来源说明不带用户名和密码", () => {
     expect(describeTarget({ kind: "pg", url: "postgres://fde:secret@db:5432/fde" })).toBe("PostgreSQL db:5432/fde");
     expect(describeTarget({ kind: "pg", url: "not a url" })).toBe("PostgreSQL(DATABASE_URL)");
+    // 漏写 postgres:// 的串 new URL 也解析得了(协议成了 fde:),不能把路径里的密码打出来
+    expect(describeTarget({ kind: "pg", url: "fde:secret@db:5432/fde" })).toBe("PostgreSQL(DATABASE_URL)");
+    expect(describeTarget({ kind: "pg", url: "localhost:5432/fde" })).toBe("PostgreSQL(DATABASE_URL)");
+    expect(describeTarget({ kind: "pg", url: "postgres://fde@/fde?host=/var/run/postgresql" })).toBe("PostgreSQL(DATABASE_URL)");
     expect(describeTarget({ kind: "memory", file: "/x/dev-store.json" })).toBe("内存库 /x/dev-store.json");
   });
 
@@ -131,8 +135,16 @@ describe("选库:和网页后端一样", () => {
     ]) {
       expect(() => checkPgUrl(ok), ok).not.toThrow();
     }
-    // 端口不是数字(驱动会抛 Invalid URL);不是绝对地址的串(驱动会去连一台叫 base 的主机);libpq 的 key=value 写法
-    for (const bad of ["postgres://fde:secret@db:notaport/fde", "not a url", "host=localhost dbname=fde"]) {
+    // 端口不是数字(驱动会抛 Invalid URL);不是绝对地址的串(驱动会去连一台叫 base 的主机);libpq 的 key=value 写法;
+    // 漏写 postgres:// 的串(new URL 把 fde: / localhost: 当协议,主机为空,驱动悄悄去连默认的 localhost:5432)
+    for (const bad of [
+      "postgres://fde:secret@db:notaport/fde",
+      "not a url",
+      "host=localhost dbname=fde",
+      "fde:secret@db:5432/fde",
+      "localhost:5432/fde",
+      "fde:secret@/fde",
+    ]) {
       expect(() => checkPgUrl(bad), bad).toThrow(SourceConfigError);
     }
     const open = openSessionSource({ kind: "pg", url: "postgres://fde:secret@db:notaport/fde" }, root);
@@ -318,7 +330,8 @@ describe("命令行", () => {
 
   it("DATABASE_URL 写错了:退出码 2,不打印连接串;连不上库:退出码 1,说清楚连的哪里、被拒了", async () => {
     const dotenv = emptyEnvFile(tmp());
-    for (const url of ["postgres://fde:secret@db:notaport/fde", "not a url"]) {
+    // 漏写 postgres:// 的串:来源说明在检查连接串之前就打印了,也不能带出密码
+    for (const url of ["postgres://fde:secret@db:notaport/fde", "not a url", "fde:secret@db:5432/fde"]) {
       const bad = run(["--list", "--dotenv", dotenv], { DATABASE_URL: url });
       expect(bad.code, url).toBe(2);
       expect(bad.err).toContain("DATABASE_URL 不是合法的连接串");
