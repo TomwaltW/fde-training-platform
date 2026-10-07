@@ -4,9 +4,16 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@fde/contracts": "workspace:*",
     "@fde/engine": "workspace:*",
     "@fde/llm": "workspace:*",
+    "@fde/store": "workspace:*",
+    "pg": "^8.16.0",
     "yaml": "^2.9.1",
     "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@types/pg": "^8.15.0"
   }
 }
