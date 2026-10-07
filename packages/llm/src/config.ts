@@ -42,7 +42,10 @@ export function loadModelsConfig(path: string): ModelsConfig {
   return r.data;
 }
 
-/** 元:按 [输入, 输出] 元/百万 token 计。没登记价格的模型记 0 并在日志里标出。 */
+/**
+ * 元:按 [输入, 输出] 元/百万 token 计。没登记价格的模型返回 undefined:网关日志里记 null,
+ * pnpm evals / calibrate 汇总时按 0 计,不会另外提示 —— 所以 pnpm models:check 把缺价格报成失败。
+ */
 export function costYuan(cfg: ModelsConfig, model: string, tokensIn: number, tokensOut: number): number | undefined {
   const p = cfg.prices[model];
   if (!p) return undefined;
