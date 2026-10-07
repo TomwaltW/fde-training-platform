@@ -1,6 +1,6 @@
 // 模型预检(pnpm models:check,方案 2.3「固定模型快照」):Key 填进 .env 之后第一个要跑的命令。
-//   静态检查(--no-network 也跑):每个模型都在 prices 里登记了价格;百炼的模型名是带日期的快照名;
-//     DeepSeek 没有快照、旧名字会被转给新模型,提醒上游一变就重跑回归。
+//   静态检查(--no-network 也跑):每个模型都在 prices 里登记了价格;百炼的模型名是带日期的快照名(不是就警告);
+//     DeepSeek 没有快照、旧名字会被转给新模型,给一条提示(不算警告,--strict 也不因它失败):上游一变就重跑回归。
 //   在线检查:每个环节经网关发一次最小请求。参数用该环节自己的配置(extra、json 模式照带),只把 max_tokens 压小;
 //     JSON 环节要求回复能解析成 JSON 对象;报告耗时和网关记下的 token、花费(即 llm_calls 的一行)。
 // 本文件不读 process.env(infra 测试会扫这个目录里读到的变量),环境变量由调用方传进来。
@@ -8,7 +8,8 @@ import { costYuan, STAGES, type ModelsConfig, type Stage, type StageConfig } fro
 import { createGateway, DEFAULT_TIMEOUT_MS, LlmError, type ChatMessage, type LlmCallLog } from "./gateway.ts";
 
 export interface PreflightFinding {
-  level: "fail" | "warn";
+  /** fail 失败;warn 警告,--strict 下也算失败;note 提示,只是提醒,不影响结论(--strict 也不算) */
+  level: "fail" | "warn" | "note";
   /** 用到这个模型的环节(同一个模型被几个环节共用时只报一次) */
   stages: Stage[];
   message: string;
@@ -105,9 +106,11 @@ export function staticFindings(cfg: ModelsConfig, stages: readonly Stage[] = STA
           `到百炼的模型列表里找它的快照版换上,补上同名价格,再跑 pnpm evals --live(见 docs/models.md)`,
       });
     }
+    // 提示而不是警告:DeepSeek 没有快照可钉,配置里没有能改的地方,对策只有上游一变就重跑回归;
+    // 想消掉它只能把裁判换到别家,又和方案「演员、裁判用不同厂商」的建议相悖。所以 --strict 不因它失败
     if (vendor === "deepseek") {
       out.push({
-        level: "warn",
+        level: "note",
         stages: ss,
         message:
           `${who}:DeepSeek 没有带日期的快照,旧模型名的请求会被转给新模型。` +
@@ -143,7 +146,17 @@ const PROBE_TEXT: ChatMessage[] = [
   { role: "user", content: "收到请回复。" },
 ];
 
-/** 把配置里各供应商 Key 的原文从要打印的文字里抹掉(供应商的 401 报错有时会回显 Key)。 */
+/** 截断处残留的 Key 片段至少这么长才抹:更短的拼不回 Key,和普通文字撞上的概率也大 */
+export const KEY_FRAGMENT_MIN = 8;
+
+/**
+ * 把配置里各供应商 Key 的原文从要打印的文字里抹掉(供应商的 401 报错有时会回显 Key)。
+ * 先抹完整的 Key,再抹截断处残留的片段:结尾是某个 Key 的前缀、开头是某个 Key 的后缀(至少 KEY_FRAGMENT_MIN 个字符)。
+ * 结尾、开头的截断处有三种:回复预览截到 80 字(preview)、网关把报错正文截到 300 字(在报错末尾)、模型回复被 max_tokens 截断。
+ * 要截断的文字得先整段抹、截完再抹一次:先截后抹的话,跨在截断处的 Key 只剩前半截,整段匹配认不出来。
+ * 还有一处截断不在两头,片段匹配管不到:响应体不是 JSON 时,V8 的解析报错里带着响应体的一小段(见 dropBodySnippet),
+ * 那一段在抹 Key 之前就整段去掉(probeStage 里的 redactErr)。
+ */
 function redactor(cfg: ModelsConfig, env: Record<string, string | undefined>): (s: string) => string {
   const secrets = [
     ...new Set(
@@ -152,16 +165,48 @@ function redactor(cfg: ModelsConfig, env: Record<string, string | undefined>): (
         .filter((v): v is string => !!v && v.length >= 4),
     ),
   ];
-  return (s) => secrets.reduce((t, k) => t.split(k).join("***"), s);
+  const fragments = (s: string): string => {
+    for (const k of secrets) {
+      // 从长到短找:抹掉能对上的最长一段
+      for (let n = k.length - 1; n >= KEY_FRAGMENT_MIN; n--) {
+        if (s.endsWith(k.slice(0, n))) {
+          s = `${s.slice(0, -n)}***`;
+          break;
+        }
+      }
+      for (let n = k.length - 1; n >= KEY_FRAGMENT_MIN; n--) {
+        if (s.startsWith(k.slice(-n))) {
+          s = `***${s.slice(n)}`;
+          break;
+        }
+      }
+    }
+    return s;
+  };
+  return (s) => fragments(secrets.reduce((t, k) => t.split(k).join("***"), s));
 }
 
-const preview = (s: string) => {
-  const one = s.replace(/\s+/g, " ").trim();
-  return one.length > 80 ? `${one.slice(0, 80)}…` : one;
-};
+/**
+ * 回复预览:整段抹 Key(压空白之前:Key 里混了换行的也认得出)→ 压空白 → 再抹一次结尾(片段后面跟着空白的)
+ * → 截到 80 字 → 截完再抹一次截断处,最后才加省略号(加了省略号结尾就对不上 Key 的前缀了)。
+ */
+function preview(s: string, redact: (s: string) => string): string {
+  const one = redact(redact(s).replace(/\s+/g, " ").trim());
+  return one.length > 80 ? `${redact(one.slice(0, 80))}…` : one;
+}
 
-function explain(e: unknown, sc: StageConfig, keyEnv: string, baseUrl: string): string {
-  const msg = e instanceof Error ? e.message : String(e);
+/**
+ * 响应体不是 JSON 时,V8 的报错形如 Unexpected token 'X', "Xsk-abcdef"... is not valid JSON:引号里是响应体的一小段
+ * (约 10~20 个字符,可能从中间开窗,前面带 ...),两头都可能切在 Key 中间,残片后面还跟着 "...,结尾、开头的片段匹配认不出来。
+ * 这一段对排查没多大用(说明里已经讲了返回的不是 JSON),整段去掉;其余报错原样返回。
+ */
+function dropBodySnippet(msg: string): string {
+  return msg.replace(/(Unexpected token '.+?'), (?:\.\.\.)?".*"(?:\.\.\.)? (is not valid JSON)/su, "$1, (响应体片段已略去) $2");
+}
+
+/** 返回的文字已脱敏:报错原文(网关截到 300 字的报错正文在它末尾)先抹 Key,再接说明 —— 接上说明之后,截断处就不在结尾了。 */
+function explain(e: unknown, sc: StageConfig, keyEnv: string, baseUrl: string, redact: (s: string) => string): string {
+  const msg = redact(e instanceof Error ? e.message : String(e));
   if (e instanceof LlmError && e.status !== undefined) {
     const s = e.status;
     const hint =
@@ -234,6 +279,8 @@ export async function probeStage(cfg: ModelsConfig, stage: Stage, opts: Prefligh
   }
 
   const redact = redactor(cfg, opts.env);
+  // 报错(返回值里的 error、日志里的 error)先去掉 V8 带出来的响应体片段,再抹 Key;回复预览不走这一步
+  const redactErr = (s: string): string => redact(dropBodySnippet(s));
   // 只换 max_tokens,其余参数(温度、extra、json、timeout_ms)和线上一致
   const probeCfg: ModelsConfig = { ...cfg, stages: { ...cfg.stages, [stage]: { ...sc, max_tokens: maxTokens } } };
   let log: LlmCallLog | undefined;
@@ -243,7 +290,7 @@ export async function probeStage(cfg: ModelsConfig, stage: Stage, opts: Prefligh
     // 预检要看第一次请求的真实结果:不重试,也免得裁判 120 秒的超时叠三遍
     retries: 0,
     onCall: (l) => {
-      log = l.error === undefined ? l : { ...l, error: redact(l.error) };
+      log = l.error === undefined ? l : { ...l, error: redactErr(l.error) };
     },
   });
   const done = (r: Partial<StageProbe>): StageProbe => ({ ...probe, ...r, ...(log && { log }) });
@@ -252,9 +299,9 @@ export async function probeStage(cfg: ModelsConfig, stage: Stage, opts: Prefligh
   try {
     ({ text } = await chat({ stage, messages: json ? PROBE_JSON : PROBE_TEXT, json, sessionId: "models-check" }));
   } catch (e) {
-    return done({ ok: false, error: redact(explain(e, sc, keyEnv, provider.base_url)) });
+    return done({ ok: false, error: explain(e, sc, keyEnv, provider.base_url, redactErr) });
   }
-  const reply = redact(preview(text));
+  const reply = preview(text, redact);
   if (!text.trim()) {
     const why = sc.extra?.enable_thinking === false ? "" : `;这个环节没关思考,思考过程可能把 max_tokens(${maxTokens})用完了`;
     return done({ ok: false, reply, error: `回复为空${why}` });
@@ -290,14 +337,15 @@ export async function runPreflight(cfg: ModelsConfig, opts: PreflightOptions): P
 
 // ---------- 结论与输出
 
-export function tallyPreflight(r: PreflightReport): { failures: number; warnings: number } {
+export function tallyPreflight(r: PreflightReport): { failures: number; warnings: number; notes: number } {
   return {
     failures: r.findings.filter((f) => f.level === "fail").length + r.probes.filter((p) => p.ok === false).length,
     warnings: r.findings.filter((f) => f.level === "warn").length,
+    notes: r.findings.filter((f) => f.level === "note").length,
   };
 }
 
-/** 0:都通过(可以有警告);1:有检查没过,或 strict 下有警告。参数和配置错误(退出码 2)由命令行自己处理。 */
+/** 0:都通过(可以有警告、提示);1:有检查没过,或 strict 下有警告(提示不算)。参数和配置错误(退出码 2)由命令行自己处理。 */
 export function preflightExitCode(r: PreflightReport, strict: boolean): 0 | 1 {
   const t = tallyPreflight(r);
   return t.failures > 0 || (strict && t.warnings > 0) ? 1 : 0;
@@ -317,7 +365,7 @@ export function renderPreflight(r: PreflightReport, opts: { strict?: boolean; ve
     const models = [...new Set(r.stages.map((s) => r.probes.find((p) => p.stage === s)?.model ?? s))];
     lines.push(`  ✓ 价格:${models.join("、")} 都在 prices 里`);
   }
-  for (const f of r.findings) lines.push(`  ${f.level === "fail" ? "✗" : "!"} ${f.message}`);
+  for (const f of r.findings) lines.push(`  ${f.level === "fail" ? "✗" : f.level === "warn" ? "!" : "i"} ${f.message}`);
 
   lines.push("");
   lines.push(
@@ -344,12 +392,12 @@ export function renderPreflight(r: PreflightReport, opts: { strict?: boolean; ve
     lines.push(`本次预检发了 ${logs.length} 次请求,约 ¥${cost.toFixed(6)}${unpriced ? `(另有 ${unpriced} 次的模型没登记价格,没算进去)` : ""}`);
   }
 
-  const { failures, warnings } = tallyPreflight(r);
+  const { failures, warnings, notes } = tallyPreflight(r);
   const scope = r.network ? "" : "(只做了静态检查)";
   lines.push("");
   if (failures) lines.push(`结论:${failures} 项没过${warnings ? `、${warnings} 条警告` : ""} → 不通过`);
   else if (warnings && opts.strict) lines.push(`结论${scope}:检查都过了,但有 ${warnings} 条警告;--strict 下警告也算失败 → 不通过`);
   else if (warnings) lines.push(`结论${scope}:检查都过了,有 ${warnings} 条警告 → 通过(--strict 下不通过)`);
-  else lines.push(`结论${scope}:全部通过`);
+  else lines.push(`结论${scope}:全部通过${notes ? `(另有 ${notes} 条提示,不算警告,--strict 下也通过)` : ""}`);
   return lines;
 }
