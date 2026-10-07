@@ -1,6 +1,7 @@
 // pnpm playtest 的启动前检查:缺 Key、没有管理员、FDE_ENGINE_MODE=offline、有 DATABASE_URL、验证码登录不了时不启动;
 // 验证码回显、存储位置、apps/web 下的 .env* 只提醒。
-// 命令行只跑 --help、参数错误和 --dry-run,不会真的起网页。
+// 命令行只跑 --help、参数错误和 --dry-run,不会真的起网页。子进程不继承 process.env、用 --dotenv 避开仓库根目录的 .env,
+// 本机的 .env、apps/web/.env*、shell 里的变量都不影响结果(最后一个用例拿一份"毒" .env 验证)。
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadModelsConfig } from "@fde/llm";
 import { missingModelKeys, parseAdminEmails, parseDailyLimit, preflight } from "../src/playtest/preflight.ts";
 import { webEnvFiles } from "../src/sessions/store.ts";
+import { cliEnv, emptyEnvFile } from "./helpers.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
 const cli = join(root, "tools/evals/src/playtest.ts");
@@ -26,6 +28,12 @@ afterEach(() => {
 });
 
 const check = (env: Record<string, string>, offline = false) => preflight({ env, repoRoot: root, offline });
+/**
+ * 断言"没有提醒"时用:repoRoot 换成空的临时目录(模型配置给绝对路径),本机 apps/web 下有 .env* 也不会多出一条提醒。
+ * check() 的 repoRoot 是真的仓库根目录,只用在不关心那条提醒的断言上。
+ */
+const checkIsolated = (env: Record<string, string>, offline = false) =>
+  preflight({ env: { FDE_MODELS_CONFIG: join(root, "config/models.yaml"), ...env }, repoRoot: tmp(), offline });
 const infoOf = (p: ReturnType<typeof preflight>, label: string) => p.info.find(([k]) => k === label)?.[1];
 
 describe("启动前检查", () => {
@@ -81,7 +89,7 @@ describe("启动前检查", () => {
   });
 
   it("配了发信就不回显验证码;自己设了 FDE_DEV_LOGIN_CODES=1 照样提醒", () => {
-    const smtp = check({ ...KEYS, ADMIN_EMAILS: "a@x.com", SMTP_URL: "smtps://u:p@smtp.example.com" });
+    const smtp = checkIsolated({ ...KEYS, ADMIN_EMAILS: "a@x.com", SMTP_URL: "smtps://u:p@smtp.example.com" });
     expect(smtp.env.FDE_DEV_LOGIN_CODES).toBeUndefined();
     expect(infoOf(smtp, "登录")).toContain("发邮件");
     expect(smtp.warnings).toEqual([]);
@@ -145,14 +153,15 @@ describe("启动前检查", () => {
   });
 
   it("apps/web 下有 .env*:next dev 也会读、检查却没看,提醒(只看文件在不在)", () => {
-    expect(check({ ...KEYS, ADMIN_EMAILS: "a@x.com" }).warnings.join("\n")).not.toContain("apps/web 下有");
     const fake = tmp();
     mkdirSync(join(fake, "apps/web"), { recursive: true });
     expect(webEnvFiles(fake)).toEqual([]);
+    const env = { ...KEYS, ADMIN_EMAILS: "a@x.com", FDE_MODELS_CONFIG: join(root, "config/models.yaml") };
+    expect(preflight({ env, repoRoot: fake, offline: false }).warnings.join("\n")).not.toContain("apps/web 下有");
     writeFileSync(join(fake, "apps/web/.env.local"), "");
     writeFileSync(join(fake, "apps/web/.env"), "");
     expect(webEnvFiles(fake)).toEqual(["apps/web/.env.local", "apps/web/.env"]);
-    const p = preflight({ env: { ...KEYS, ADMIN_EMAILS: "a@x.com", FDE_MODELS_CONFIG: join(root, "config/models.yaml") }, repoRoot: fake, offline: false });
+    const p = preflight({ env, repoRoot: fake, offline: false });
     expect(p.errors).toEqual([]);
     expect(p.warnings.join("\n")).toContain("apps/web 下有 apps/web/.env.local、apps/web/.env:next dev 也会读");
   });
@@ -168,30 +177,30 @@ describe("启动前检查", () => {
 });
 
 describe("命令行", () => {
-  // 用一份 Key 变量名独一无二的模型配置,并把相关变量都显式给出(.env 不会覆盖已经设了的变量),
-  // 本机 .env 里写了什么都不影响结果
-  const run = (args: string[], env: Record<string, string>) => {
+  // 用一份 Key 变量名独一无二的模型配置;preflight 读的变量都显式给出(没有的给空字符串,和没设一样),
+  // 文件里的值不会覆盖已经设了的变量(空字符串也算设了)。再用 --dotenv 指一个空文件,仓库根目录的 .env 根本不读
+  const SHIELD_KEYS = ["FDE_ENGINE_MODE", "DATABASE_URL", "FDE_PLAYTEST_TEST_BAILIAN_KEY", "FDE_PLAYTEST_TEST_DEEPSEEK_KEY", "ADMIN_EMAILS",
+    "FDE_ROOT", "SMTP_URL", "FDE_DEV_LOGIN_CODES", "FDE_DAILY_SESSION_LIMIT"] as const;
+  type RunOpts = { envFile?: string; shield?: boolean };
+  const run = (args: string[], env: Record<string, string>, { envFile, shield = true }: RunOpts = {}) => {
     const dir = tmp();
     const text = readFileSync(join(root, "config/models.yaml"), "utf8")
       .replace("api_key_env: DASHSCOPE_API_KEY", "api_key_env: FDE_PLAYTEST_TEST_BAILIAN_KEY")
       .replace("api_key_env: DEEPSEEK_API_KEY", "api_key_env: FDE_PLAYTEST_TEST_DEEPSEEK_KEY");
     writeFileSync(join(dir, "models.yaml"), text);
-    const r = spawnSync(tsx, [cli, ...args], {
+    const pinned: Record<string, string> = {
+      ...Object.fromEntries(SHIELD_KEYS.map((k) => [k, ""])),
+      FDE_MODELS_CONFIG: join(dir, "models.yaml"),
+      FDE_MEMORY_STORE_FILE: join(dir, "store.json"),
+    };
+    const r = spawnSync(tsx, [cli, ...args, "--dotenv", envFile ?? emptyEnvFile(dir)], {
       cwd: root,
       encoding: "utf8",
-      env: {
-        ...process.env,
-        FDE_MODELS_CONFIG: join(dir, "models.yaml"),
-        FDE_ENGINE_MODE: "",
-        DATABASE_URL: "",
-        FDE_MEMORY_STORE_FILE: join(dir, "store.json"),
-        FDE_PLAYTEST_TEST_BAILIAN_KEY: "",
-        FDE_PLAYTEST_TEST_DEEPSEEK_KEY: "",
-        ADMIN_EMAILS: "",
-        ...env,
-      },
+      env: cliEnv(shield ? { ...pinned, ...env } : env),
     });
-    return { code: r.status, out: `${r.stdout}${r.stderr}`, store: join(dir, "store.json") };
+    const out = `${r.stdout}${r.stderr}`;
+    // 每次一个新的临时目录;比较两次运行的输出时把它换掉
+    return { code: r.status, out, normalized: out.replaceAll(dir, "<tmp>"), store: join(dir, "store.json") };
   };
 
   it("--help、参数错误", () => {
@@ -199,6 +208,9 @@ describe("命令行", () => {
     const bad = run(["--port", "3001"], {});
     expect(bad.code).toBe(2);
     expect(bad.out).toContain("参数错误");
+    const noFile = run(["--dry-run"], {}, { envFile: join(tmp(), "nope.txt") });
+    expect(noFile.code).toBe(2);
+    expect(noFile.out).toContain("找不到 --dotenv 指定的文件");
   }, 60_000);
 
   it("--dry-run:检查没过退出码 2 且不启动;检查通过退出码 0,打印管理页地址和导出命令", () => {
@@ -215,6 +227,7 @@ describe("命令行", () => {
     expect(ok.out).toContain(`内存库 ${ok.store}`);
     expect(ok.out).toContain("--dry-run:检查通过,没有启动网页");
     expect(ok.out).toContain("备注写编号(P1–P5)");
+    expect(ok.out).toContain("试玩者在无痕窗口(或另一个浏览器用户)里打开 http://localhost:3000/login?invite=");
 
     const pg = run(["--dry-run"], {
       FDE_PLAYTEST_TEST_BAILIAN_KEY: "sk-a",
@@ -238,4 +251,45 @@ describe("命令行", () => {
     expect(dflt.out).toContain("--store-file");
     expect(dflt.out).toContain(".data/playtest-rehearsal.json(彩排的局不建标定用例)");
   }, 60_000);
+
+  it("本机的 .env 改不了结果:拿一份\"毒\" .env 经 --dotenv 读进来,输出和读空文件一模一样;去掉显式给的变量才会被它带偏", () => {
+    // 开发者 .env 里最可能有、又会改变结果的几样:Key、管理员、DATABASE_URL、FDE_ENGINE_MODE、FDE_ROOT、发信、验证码开关、局数
+    const poison = join(tmp(), "poison-env.txt");
+    const elsewhere = tmp();
+    writeFileSync(
+      poison,
+      [
+        "FDE_PLAYTEST_TEST_BAILIAN_KEY=sk-poison",
+        "FDE_PLAYTEST_TEST_DEEPSEEK_KEY=sk-poison",
+        "DASHSCOPE_API_KEY=sk-poison",
+        "DEEPSEEK_API_KEY=sk-poison",
+        "ADMIN_EMAILS=poison@example.com",
+        "DATABASE_URL=postgres://fde:poison@127.0.0.1:5432/fde",
+        "FDE_ENGINE_MODE=offline",
+        `FDE_ROOT=${elsewhere}`,
+        "SMTP_URL=smtps://poison:poison@smtp.example.com:465",
+        "FDE_DEV_LOGIN_CODES=0",
+        "FDE_DAILY_SESSION_LIMIT=99",
+        "",
+      ].join("\n"),
+    );
+    const cases: [string[], Record<string, string>][] = [
+      [["--dry-run"], {}],
+      [["--dry-run"], { FDE_PLAYTEST_TEST_BAILIAN_KEY: "sk-a", FDE_PLAYTEST_TEST_DEEPSEEK_KEY: "sk-b", ADMIN_EMAILS: "me@example.com" }],
+      [["--dry-run", "--offline"], { ADMIN_EMAILS: "me@example.com" }],
+    ];
+    for (const [args, env] of cases) {
+      const clean = run(args, env);
+      const poisoned = run(args, env, { envFile: poison });
+      expect(poisoned.code, args.join(" ")).toBe(clean.code);
+      expect(poisoned.normalized).toBe(clean.normalized);
+      expect(poisoned.out).not.toContain("poison");
+    }
+    // 对照:不显式给这些变量时,同一份文件确实会把结果带偏——上面的"一模一样"不是因为文件没被读
+    const unshielded = run(["--dry-run"], {}, { envFile: poison, shield: false });
+    expect(unshielded.code).toBe(2);
+    expect(unshielded.out).toContain("FDE_ENGINE_MODE=offline");
+    expect(unshielded.out).toContain("环境里有 DATABASE_URL");
+    expect(unshielded.out).toContain("poison@example.com");
+  }, 120_000);
 });
