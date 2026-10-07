@@ -121,10 +121,15 @@ export function truthIndex(scn: LoadedScenario): TruthIndex {
 const near = (a: number, b: number) => Math.abs(a - b) <= 0.005 * Math.max(Math.abs(b), 1);
 /** 整数约数(30、400、1500、50 万)对 ±10% 以内的值。 */
 const roundNear = (a: number, b: number) => isRound(a) && b >= 10 && Math.abs(a - b) <= 0.1 * b;
-const unitCompat = (a: string, b: string) => !a || !b || a === b;
+/** 同一类量词算一个:"几十号人"和"60 人"、"428 行"和"428 条"说的是同一种东西。 */
+const UNIT_CLASS: Record<string, string> = { 人: "个", 名: "个", 位: "个", 号: "个", 单: "票", 行: "条", 项: "条", 笔: "条", 块: "元" };
+const unitOf = (u: string) => UNIT_CLASS[u] ?? u;
+const unitCompat = (a: string, b: string) => !a || !b || unitOf(a) === unitOf(b);
 
-/** 已知量 k 能不能解释台词里的量 q。 */
-function explains(k: Quantity, q: Quantity): boolean {
+/**
+ * 已知量 k 能不能解释台词里的量 q。fromUser:k 出自用户自己的话(复述用户的说法时量词可以省)。
+ */
+function explains(k: Quantity, q: Quantity, fromUser = false): boolean {
   if (q.percent !== k.percent) return false; // "跟单 8"不能放行"8%"
   if (q.kind === "exact") {
     if (k.kind === "exact") return near(q.lo, k.lo) || roundNear(q.lo, k.lo);
@@ -132,9 +137,10 @@ function explains(k: Quantity, q: Quantity): boolean {
     return false; // 用户说"几十万",角色说"五十万":是把模糊的说具体了
   }
   // "几百""上千""几十"这种跨一个数量级的说法太宽,公共背景里随便一个数(日均约 300 票)都落在里面,
-  // 所以要求量词也对得上:"几百票"可以,"几百条""几百"不行。用户自己说的"几十万"被原样复述照样可以。
+  // 所以要求量词也对得上:"几百票"可以,"几百条""几百"不行。
+  // 复述用户自己的说法时放宽:用户问"几十万块有没有",角色反问"几十万?"也是复述。
   const wide = q.hi > 2 * Math.max(q.lo, 1);
-  const unitOk = !wide || (q.unit === k.unit && (q.unit !== "" || k.kind !== "exact"));
+  const unitOk = !wide || (fromUser ? unitCompat(q.unit, k.unit) : unitOf(q.unit) === unitOf(k.unit) && (q.unit !== "" || k.kind !== "exact"));
   if (k.kind === "exact") return k.lo >= q.lo && k.lo <= q.hi && unitOk; // "四百多"复述已知的 428
   return q.lo <= k.lo && k.hi <= q.hi && unitOk; // 和已知的一样模糊或更模糊
 }
@@ -208,7 +214,7 @@ export function auditText(scn: LoadedScenario, st: SessionState, text: string, c
     if (exempt(q, t)) continue;
     if (known.some((k) => explains(k, q))) continue;
     const truth = idx.truthOnly.filter((p) => approximates(q, p));
-    if (said.some((k) => explains(k, q))) {
+    if (said.some((k) => explains(k, q, true))) {
       // 用户自己说过的数照样可以说;恰好又是未解锁的真值时记一笔(可能是在确认用户的猜测)
       if (truth.length) echoes.push(`${q.raw}(${showQuantity(q)})`);
       continue;

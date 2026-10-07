@@ -101,6 +101,13 @@ describe("不误报", () => {
     const s0 = session([]);
     expect(audit(s0.st, "zhou", "一天几百票。").issues).toEqual([]);
     expect(audit(s0.st, "zhou", "记了几百条。").issues).toMatchObject([{ kind: "leak", raw: "几百" }]);
+    // 同一类量词算一个:公司约 60 人,"几十号人""几十个人"都是它
+    expect(audit(s0.st, "zhou", "我们公司几十号人。").issues).toEqual([]);
+    expect(audit(s0.st, "zhou", "几十个人吧。").issues).toEqual([]);
+    // 复述用户自己的说法可以省量词
+    const ctx = allowedContext(scn, s0.st, "liu");
+    ctx.userTexts.push("几十万块有没有?");
+    expect(auditText(scn, s0.st, "几十万?我可说不好。", ctx)).toEqual({ issues: [], echoes: ["几十万([200000, 990000])"] });
   });
 
   it("公共背景、钟点、序数、小数字", async () => {
