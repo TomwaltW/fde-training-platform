@@ -7,7 +7,8 @@
 - 引擎与算分(命令行可玩,回归评测可跑)、合成单据、裁判标定工具;
 - 网页:对局、复盘、我的对局、管理页;邀请码 + 邮箱验证码登录,手机号 + 短信验证码登录(配好短信才开放);
 - 内测与增长要用的:候补名单(W0「候补表单」、W5–W7「分批邀请」)、方案 6.3 继续/转向/放弃指标的看板(自建事件表)、预售页与兑换码核销(7.3「站内不收款」);
-- 部署与合规材料、CI。
+- 部署与合规材料、CI;
+- 接真模型之前能做的准备:在线质量门槛与对抗集(`pnpm evals --live` 没过门槛会判失败)、模型预检、本地用真引擎试玩并把对局导出成标定用例、第一关的内容与试玩草稿、场景事实核对备忘。
 
 上线前还需要人工完成的事见文末「上线前还要做的」。
 
@@ -41,13 +42,17 @@ CI(`.github/workflows/ci.yml`)在每个 PR 上跑三组:类型检查与单元测
 接真模型(需要百炼和 DeepSeek 的 API Key):
 
 ```bash
-cp .env.example .env   # 填 DASHSCOPE_API_KEY、DEEPSEEK_API_KEY
-pnpm play              # 闸门、演员、裁判、复盘都走 config/models.yaml
-pnpm evals --live      # 闸门和演员用真模型跑回归,报告闸门命中率和花费
-pnpm calibrate --live  # 裁判标定:稳定性(3 次极差 ≤ 6)与人工标注一致性(≥ 80%),见 docs/calibration.md
+cp .env.example .env            # 填 DASHSCOPE_API_KEY、DEEPSEEK_API_KEY
+pnpm models:check               # 第一个要跑的:每个环节的 Key、真请求、JSON 输出、价格登记、快照固定,见 docs/models.md
+pnpm play                       # 闸门、演员、裁判、复盘都走 config/models.yaml
+pnpm evals --live               # 闸门和演员用真模型跑回归,打印质量门槛表;没过门槛退出码为 1
+pnpm evals:adversarial --live   # 对抗集:泄露 60 轮、追问数字 61 轮,只看实际交付给用户的台词
+pnpm calibrate --live           # 裁判标定:稳定性(3 次极差 ≤ 6)与人工标注一致性(≥ 80%),见 docs/calibration.md
 ```
 
-不调模型时 `pnpm calibrate --mock` 回放仓库里的示例用例,用来检查工具本身。
+不调模型时 `pnpm calibrate --mock` 回放仓库里的示例用例,用来检查工具本身;`pnpm models:check --no-network` 只做静态检查。
+
+质量门槛(方案 4.3 与 W1 验收)写在 `config/quality-gates.yaml`:闸门触发器命中率、多命中率、每轮中位耗时 < 4 秒、兜底台词比例、交付台词里的泄露与白名单外数字、单局花费。泄露和编造由一个独立的交付台词审计判(认得「四百多」「六万八」「三成」这类说法),不信守卫的自查。三个没有方案出处的阈值标了【待验证】,第一次真跑之后按 [`docs/quality-gates.md`](./docs/quality-gates.md) 校准一次。
 
 部署(阿里云 ECS + Docker Compose + Caddy + PostgreSQL 16)见 [`docs/deploy.md`](./docs/deploy.md),上线前的合规清单(备案、算法与模型公示、AIGC 标识、个人信息保护)见 [`docs/compliance-checklist.md`](./docs/compliance-checklist.md)。所有环境变量列在 `.env.example`,`infra/test` 会检查代码里读到的每个变量都在里面。
 
@@ -73,6 +78,20 @@ tools/docgen/.venv/bin/python tools/docgen/check_docs.py    # 合成单据自检
 - **兑换码**:商品在 `config/products.yaml`(默认两个商品都没上架,价格待定)。线下成交或企业试点时给任意商品生成兑换码,对方在 `/redeem` 兑换;上架商品后预售页 `/presale` 才出现,站内只核销兑换码、不收款。
 - **手机号登录**:短信签名和模板审核通过后,按 [`docs/sms.md`](./docs/sms.md) 填四个 `ALIYUN_SMS_*`,登录页就会出现手机号入口。
 
+## 第一关:试玩与内容(备案下来之前)
+
+方案 6.1 的 L0/L1 和附录 E 第 3–7 天。引擎已经有了,L1 试玩直接用真引擎在本机跑,不再做单提示词版(没有 Key 时才退回单提示词):
+
+```bash
+pnpm playtest --dry-run    # 只做启动前检查:Key、管理员邮箱、库文件路径
+pnpm playtest              # 本机用真引擎起网页(只监听 127.0.0.1),试玩者当面或腾讯会议远程控制
+pnpm playtest --offline    # 不调模型,只彩排流程;对局存进另一个文件,不拿去标定
+pnpm session:export --list                              # 列出本地或线上库里的对局
+pnpm session:export --id <对局 id> --calibrate <caseId>  # 一局导出成标定用例(方案 3.4.4)
+```
+
+怎么组织一场试玩、每局后问哪三个问题、怎么让远程的人玩,见 [`docs/playtest.md`](./docs/playtest.md)。首条内容、备用角度、试玩招募话术、试玩记录表和第一关判定表的草稿在 [`docs/gate1/`](./docs/gate1/),要按你自己的经历改写后再发。
+
 ## 目录
 
 ```text
@@ -97,8 +116,9 @@ apps/web/             网页:Next.js 16(App Router)
   content/legal/      用户协议、隐私政策、AI 说明(草稿,须法务审阅)
   e2e/mock/           前端 e2e(拦截接口)
   e2e/real/           真后端 e2e(standalone 产物 + 离线引擎 + 内存库)
-apps/cli/             命令行:play(试玩)、validate(场景校验)
-tools/evals/          回归评测运行器;src/calibration/ 是裁判标定工具
+apps/cli/             命令行:play(试玩)、validate(场景校验)、models-check(模型预检)
+tools/evals/          回归评测运行器;src/calibration/ 是裁判标定工具,src/quality/ 是质量门槛与交付台词审计,
+                      src/adversarial/ 是对抗集运行器;session-export.ts、playtest.ts 是对局导出和本地试玩
 tools/docgen/         合成数据:先造账(真值表、异常表、费用表),再出 Excel 和单据图片、PDF
 scenarios/freight-docs/
   scenario.yaml       场景一:货代公司的「单据识别」
@@ -106,12 +126,15 @@ scenarios/freight-docs/
   artifacts/          资料文件(经鉴权接口下发,不打包进前端)
   narratives/         现场观察、参考路径、现实对照(预先写好,不由模型生成)
   evals/players/      10 个脚本化玩家
+  evals/adversarial/  对抗集:泄露(leak.yaml)与追问数字(numbers.yaml)
   evals/calibration/  标定用例(现有两个是示例,正式标定时删掉)
 config/models.yaml    线上模型配置
+config/quality-gates.yaml  方案 4.3 质量门槛与 W1 验收(在线回归和对抗集按它判过不过)
 config/gates.yaml     方案 6.3 的指标门槛
 config/products.yaml  商品、免费场景、预售开关
 infra/                Dockerfile、docker-compose、Caddyfile、备份脚本;db/ 是建表脚本
-docs/                 部署、合规清单、标定流程、短信、CI、各轮开发规格
+docs/                 部署、合规清单、标定流程、质量门槛、模型预检、试玩、短信、CI、各轮开发规格;
+                      gate1/ 是第一关内容草稿,author-review/ 是给作者的场景事实核对
 .github/workflows/    CI
 ```
 
@@ -130,7 +153,9 @@ docs/                 部署、合规清单、标定流程、短信、CI、各�
 `scenarios/freight-docs/evals/players/` 下每个文件是一个脚本化玩家,对应 `scenario.yaml` 里 `evals` 的一条。每一步说话都附带一份"标准答案"闸门标注:
 
 - **离线模式(默认)**:直接把标注喂给导演,演员用模板、裁判用玩家文件里的固定输出。完全确定,测的是导演、算分和场景设计。`EV_good` 按方案 3.5.3 的参考路径走,每个检查点的累计用时与方案一致(40 / 80 / 120 / 185 / 235 / 275 / 320 分钟)。
-- **在线模式(`--live`)**:闸门和演员用真模型,标注用来对照闸门命中率;泄露、编造、出戏、附和这几类断言只有在线模式才有意义。
+- **在线模式(`--live`)**:闸门和演员用真模型,标注用来对照闸门命中率;泄露、编造、出戏、附和这几类断言只有在线模式才有意义。跑完打印质量门槛表,任何一道门槛没过退出码为 1(离线时只在线才有意义的门槛显示「跳过」)。
+
+另有两套对抗集(`scenarios/freight-docs/evals/adversarial/`):注入、索要答案、跳出角色(60 轮),和向每个角色追问他不该知道的数字(61 轮)。离线跑是冒烟测试(在 `pnpm test` 里),在线跑(`pnpm evals:adversarial --live`)才判方案 4.3 的「泄露为 0」「编造为 0」。
 
 当前离线结果(总分):EV_good 98 · EV_boss_only 45(封顶前 48.2)· EV_leading 27 · EV_rude 20 · EV_numbers 17 · EV_offtopic 17 · EV_sycophancy 16 · EV_jailbreak 14 · EV_lazy 14 · EV_rush 4。
 
@@ -158,11 +183,12 @@ docs/                 部署、合规清单、标定流程、短信、CI、各�
 
 工程上能做的都做了,下面这些需要人来做:
 
-- **模型 Key 与标定**:填 `DASHSCOPE_API_KEY`、`DEEPSEEK_API_KEY`,跑 `pnpm evals --live` 看闸门命中率;按 [`docs/calibration.md`](./docs/calibration.md) 人工标注 20 份对话,跑 `pnpm calibrate --live` 过两道门槛。
+- **模型 Key 与标定**:填 `DASHSCOPE_API_KEY`、`DEEPSEEK_API_KEY`,先跑 `pnpm models:check`,再跑 `pnpm evals --live --runs 3` 和 `pnpm evals:adversarial --live` 过质量门槛(第一次真跑后校准三个【待验证】阈值);内测前把演员等百炼模型换成带日期的快照名(`pnpm models:check --strict` 会查),换完重跑回归。按 [`docs/calibration.md`](./docs/calibration.md) 人工标注 20 份对话(试玩和内测的对局用 `pnpm session:export` 导出),跑 `pnpm calibrate --live` 过两道门槛。
+- **第一关**:按 [`docs/gate1/`](./docs/gate1/) 改写并发首条内容,约 5 人试玩(见 [`docs/playtest.md`](./docs/playtest.md)),对照方案 6.3 第一关下结论。
 - **备案与公示**:ICP 备案号、公安备案号、模型公示文字(`SITE_ICP_NUMBER`、`SITE_PUBLIC_SECURITY_NUMBER`、`SITE_MODEL_DISCLOSURE`),逐项对照 [`docs/compliance-checklist.md`](./docs/compliance-checklist.md)。
 - **协议文本**:`apps/web/content/legal/` 下三份是草稿,不构成法律意见,须法务审阅后替换。
 - **发信**:配置 `SMTP_URL`、`MAIL_FROM`(阿里云邮件推送)。没配 SMTP 时线上发不出验证码,用户无法登录;不要用开发模式的验证码回显代替(生产环境默认也不会生效)。
 - **短信**:提交短信签名和模板;通过后按 `docs/sms.md` 开通手机号登录。开放前请法务看一下隐私政策里手机号那一行。
 - **商品与指标**:在 `config/products.yaml` 定价、写购买方式和真人复盘的预约方式,再把要卖的商品设成 `available: true`;按方案 6.3 的说明在 W0 末校准一次 `config/gates.yaml` 的门槛。
-- **场景内容**:`narratives/real_world.md` 仍是占位,需要作者按方案 4.2 的流程写;单据里的虚构公司名上线前再查一遍重名;LT2609-0446「电子配件」的 HS 编码按真实归类规则复核。
+- **场景内容**:`narratives/real_world.md` 仍是占位,需要作者按方案 4.2 的流程写;虚构名称查重、LT2609-0446「电子配件」的 HS 编码、方案 3.5.4 的损失量级已经做了一轮公开资料核对,结论和待你拍板的事项见 [`docs/author-review/2026-10-07-场景事实核对.md`](./docs/author-review/2026-10-07-场景事实核对.md)(企查查、天眼查、商标库在境外网络打不开,要在国内网络下补查)。
 - **变体 B、C**:引擎已按 `variant` 读取场景并支持 `overlay`,数据还没写。
