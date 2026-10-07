@@ -321,5 +321,13 @@ describe("命令行", () => {
     const again = run(["--id", ids.done, "--calibrate", "beta-01", "--store-file", file, "--dir", dir]);
     expect(again.code).toBe(2);
     expect(again.err).toContain("用例目录已存在");
+
+    // 用例目录写不进去(这里 --dir 是个普通文件):退出码 1,说的是建用例失败,不是读库失败
+    const notDir = join(tmp(), "not-a-dir");
+    writeFileSync(notDir, "");
+    const blocked = run(["--id", ids.done, "--calibrate", "beta-02", "--store-file", file, "--dir", notDir]);
+    expect(blocked.code).toBe(1);
+    expect(blocked.err).toContain("建用例失败");
+    expect(blocked.err).not.toContain("读库失败");
   }, 60_000);
 });

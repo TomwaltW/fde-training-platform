@@ -7,7 +7,10 @@
 //         --scenario scenarios/freight-docs、--dir <标定集目录>(后两个只和 --calibrate 一起用)
 // 库的选择和网页后端一样(见 sessions/store.ts):有 DATABASE_URL 读 PostgreSQL,否则读内存库落盘文件;只读,不改库。
 // 和 pnpm play、pnpm calibrate --live 一样先读仓库根目录的 .env(已经设了的环境变量不会被覆盖),pnpm playtest 也是这样启动网页的。
-// 退出码:0 成功;1 读库或写文件失败(连不上数据库、内存库文件坏了);2 参数或配置错误(找不到库文件、没有这局、用例 id 不对或已存在、场景读不进来)。
+// 直接用 pnpm dev:web 玩的对局例外:网页不读根目录的 .env、读 apps/web 下的 .env*,库的变量写在两边不一样时这里会找错库——
+// apps/web 下有 .env* 时打印提醒,对不上就用 --store-file。
+// 退出码:0 成功;1 读库、写文件或建用例失败(连不上数据库、内存库文件坏了、用例目录写不进去);
+// 2 参数或配置错误(找不到库文件、没有这局、用例 id 不对或已存在、场景读不进来)。
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -15,7 +18,15 @@ import { loadScenario, type LoadedScenario } from "@fde/engine";
 import { CASE_ID, initCase } from "./calibration/cases.ts";
 import { CalibrationInputError } from "./calibration/human.ts";
 import { exportDoc, exportWarnings, renderSessionRows, sessionRows } from "./sessions/export.ts";
-import { SourceConfigError, describeTarget, openSessionSource, webStoreTarget, type OpenedSource, type StoreTarget } from "./sessions/store.ts";
+import {
+  SourceConfigError,
+  describeTarget,
+  openSessionSource,
+  webEnvFiles,
+  webStoreTarget,
+  type OpenedSource,
+  type StoreTarget,
+} from "./sessions/store.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
 // pnpm 会把工作目录切到仓库根目录;用户在别处敲命令时,相对路径按他敲命令的目录解析
@@ -100,6 +111,13 @@ async function main(): Promise<number> {
     target = webStoreTarget(process.env, root);
   }
   console.error(`对局来源:${describeTarget(target)}`);
+  const webEnv = values["store-file"] ? [] : webEnvFiles(root);
+  if (webEnv.length) {
+    console.error(
+      `! apps/web 下有 ${webEnv.join("、")}:直接用 pnpm dev:web 玩时,网页读的是这些文件、不读仓库根目录的 .env(这里正相反)。` +
+        `DATABASE_URL、FDE_MEMORY_STORE_FILE、FDE_ROOT 写在那里时,上面的来源可能不是网页用的库,用 --store-file 指定文件。`,
+    );
+  }
 
   let opened: OpenedSource;
   try {
@@ -161,7 +179,17 @@ async function main(): Promise<number> {
     }
 
     if (caseId !== undefined) {
-      const r = initCase({ scn: scn!, calibrationDir, state: s.state, caseId });
+      let r: ReturnType<typeof initCase>;
+      try {
+        r = initCase({ scn: scn!, calibrationDir, state: s.state, caseId });
+      } catch (e) {
+        if (e instanceof CalibrationInputError) {
+          console.error(`输入有误:${e.message}`);
+          return 2;
+        }
+        console.error(`建用例失败:${(e as Error).message}`);
+        return 1;
+      }
       console.log(`已建标定用例 ${caseId}:`);
       for (const f of r.files) console.log(`  ${rel(f)}`);
       console.log(
@@ -172,10 +200,6 @@ async function main(): Promise<number> {
     }
     return 0;
   } catch (e) {
-    if (e instanceof CalibrationInputError) {
-      console.error(`输入有误:${e.message}`);
-      return 2;
-    }
     console.error(`读库失败:${(e as Error).message}`);
     return 1;
   } finally {

@@ -39,6 +39,17 @@ export function webFdeRoot(env: Env, repoRoot: string): string {
 /** 内存库的默认落盘位置(不看 FDE_MEMORY_STORE_FILE)。 */
 export const defaultStoreFile = (env: Env, repoRoot: string) => join(webFdeRoot(env, repoRoot), ".data/dev-store.json");
 
+/** next dev 在 apps/web 下会读的 .env 文件(优先级从高到低)。 */
+const WEB_ENV_FILES = [".env.development.local", ".env.local", ".env.development", ".env"];
+
+/**
+ * apps/web 下实际存在的 .env 文件(只看在不在,不读内容)。next dev 会读它们、不读仓库根目录的 .env;
+ * 这里的两个命令行只读根目录的 .env,有这些文件时两边看到的变量可能不一样,由调用方提醒。
+ */
+export function webEnvFiles(repoRoot: string): string[] {
+  return WEB_ENV_FILES.filter((f) => existsSync(join(webDir(repoRoot), f))).map((f) => `apps/web/${f}`);
+}
+
 /**
  * 网页后端会用哪个库。和网页的一处不同:FDE_MEMORY_STORE_FILE 是空字符串时网页会退回纯内存(什么都不落盘,
  * 也就没有东西可导出),这里按没设处理、去读默认文件;pnpm playtest 会把这种情况改掉并提醒。
@@ -80,7 +91,8 @@ export async function openSessionSource(t: StoreTarget, repoRoot: string): Promi
     if (!existsSync(t.file)) {
       throw new SourceConfigError(
         `找不到内存库文件 ${t.file}:还没在这里玩过,或者网页用的是别的 FDE_MEMORY_STORE_FILE / FDE_ROOT / DATABASE_URL` +
-          `(pnpm playtest 启动时会打印对局存在哪;也可以用 --store-file 直接指定文件)`,
+          `(pnpm playtest 启动时会打印对局存在哪;直接用 pnpm dev:web 时网页不读仓库根目录的 .env、读的是 apps/web 下的 .env*,` +
+          `这里正相反;对不上时用 --store-file 直接指定文件)`,
       );
     }
     const store = createMemoryStore({ file: t.file });

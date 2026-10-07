@@ -77,7 +77,9 @@ pnpm session:export --id <对局 id> --calibrate beta-01  # 直接建用例(和 
 pnpm session:export --id <对局 id> --out /tmp/beta-01.json   # 或者只导出 { state } 文件,再 --init
 ```
 
-有 `DATABASE_URL` 时它读 PostgreSQL(连接设成只读),在连得上数据库的机器上(一般是服务器上)可以代替上面的 `psql`。"模型调用"一列是"无"的是离线模式玩的,不要拿来标定。
+它和 `pnpm playtest` 一样只读仓库根目录的 `.env`,不读 `apps/web/.env*`;直接用 `pnpm dev:web` 玩、库的变量(`FDE_MEMORY_STORE_FILE`、`FDE_ROOT`、`DATABASE_URL`)写在 `apps/web` 下时,用 `--store-file <dev-store.json>` 指定文件。"模型调用"一列是"无"的是离线模式玩的,不要拿来标定。
+
+有 `DATABASE_URL` 时它读 PostgreSQL(连接设成只读),但要在装好依赖的仓库里跑,`DATABASE_URL` 也要指向这台机器连得上的地址。按 `docs/deploy.md` 部署的服务器上,postgres 不对外开放端口,宿主机的 `.env` 里没有 `DATABASE_URL`(compose 只在 app 容器里拼),镜像里也没有这个工具,所以线上的对局照旧用上面的 `psql`;经 SSH 隧道把容器里的库转到本机再用 `session:export` 读,没有实测【待确认】。
 
 **脚本化玩家 5 份**:
 

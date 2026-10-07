@@ -1,15 +1,17 @@
 // 本地试玩(方案 6.1 L1、附录 E 第 4–5 天):在本机用真引擎起网页,给试玩者玩。备案下来之前不能公开部署,见 docs/playtest.md。
 //   pnpm playtest              读仓库根目录的 .env → 启动前检查 → 起网页(live 模式,只监听本机)
 //   pnpm playtest --dry-run    只做检查、打印,不启动
-//   pnpm playtest --offline    不调模型,只彩排流程(登录、发邀请码、导出);这样的对局不算试玩、不拿去标定
+//   pnpm playtest --offline    不调模型,只彩排流程(登录、发邀请码、导出);这样的对局不算试玩、不拿去标定,
+//                              默认存进另一个文件 .data/playtest-rehearsal.json,不和试玩的对局混在一起
 // 只是 pnpm dev:web 外面的一层:补上根目录 .env(Next.js 只读 apps/web 下的 .env),把引擎写死成 live、
-// 缺 Key 或没有管理员时不启动,把内存库路径写成绝对路径(pnpm session:export 读的是同一个文件)。不加任何产品功能。
+// 缺 Key、没有管理员、环境里有 DATABASE_URL 时不启动,把内存库路径写成绝对路径(pnpm session:export 读的是同一个文件)。
+// 不加任何产品功能。
 // 和 pnpm dev:web 唯一的不同:只监听 127.0.0.1。没配发信时验证码显示在页面上,监听所有网卡的话,
 // 同一个 Wi-Fi 里的任何人都能用管理员邮箱登录;本机试玩和腾讯会议远程控制都只需要本机地址。
 // 退出码:0 正常结束(含 --dry-run);1 网页进程异常退出;2 参数错误或检查没过。
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { displayWidth } from "./calibration/report.ts";
 import { preflight } from "./playtest/preflight.ts";
@@ -57,16 +59,24 @@ async function main(): Promise<number> {
     return 2;
   }
 
+  // 彩排的库不是 session:export 默认读的那个,导出命令里带上 --store-file(在仓库根目录下敲;路径有空格时加引号)
+  let exportStep = "导出对局做标定:pnpm session:export --list,再 pnpm session:export --id <对局 id> --calibrate <用例 id>";
+  if (values.offline) {
+    const file = pf.env.FDE_MEMORY_STORE_FILE!;
+    const r = relative(root, file);
+    const shown = r.startsWith("..") || isAbsolute(r) ? file : r;
+    exportStep = `走一遍导出:pnpm session:export --list --store-file ${/\s/.test(shown) ? `"${shown}"` : shown}(彩排的局不建标定用例)`;
+  }
   console.log(
     [
       "",
       "启动后:",
       `  1. 打开 ${URL_BASE}/login,用管理员邮箱登录(管理员不需要邀请码)`,
-      `  2. 打开 ${URL_BASE}/admin,在「生成邀请码」里给每位试玩者生成一个,备注写是谁`,
+      `  2. 打开 ${URL_BASE}/admin,在「生成邀请码」里给每位试玩者生成一个,备注写编号(P1–P5),不写姓名`,
       `     试玩者打开 ${URL_BASE}/login?invite=<邀请码>,填自己的邮箱登录`,
       "  3. 每局收工后只问三个问题:哪里最像真的?哪里想放弃?完整版你愿意付多少钱?",
-      "  4. 导出对局做标定:pnpm session:export --list,再 pnpm session:export --id <对局 id> --calibrate <用例 id>",
-      "  每局的模型花费估算见 docs/playtest.md;实际花费看 /admin 或 session:export --list 的「模型调用」一列。Ctrl-C 结束。",
+      `  4. ${exportStep}`,
+      "  每局的模型花费估算见 docs/playtest.md;实际花费看 session:export --list 的「模型调用」一列。Ctrl-C 结束。",
     ].join("\n"),
   );
   if (values["dry-run"]) {
