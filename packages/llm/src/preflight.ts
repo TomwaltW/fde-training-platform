@@ -101,7 +101,7 @@ export function staticFindings(cfg: ModelsConfig, stages: readonly Stage[] = STA
         level: "warn",
         stages: ss,
         message:
-          `${who} 不是带日期的快照名(形如 ${model}-YYYY-MM-DD):这类名字会跟着上游升级,角色脾气可能悄悄变。` +
+          `${who} 不是带日期的快照名(形如 ${model}-YYYY-MM-DD):这类名字会跟着上游升级,模型行为可能悄悄变。` +
           `到百炼的模型列表里找它的快照版换上,补上同名价格,再跑 pnpm evals --live(见 docs/models.md)`,
       });
     }
@@ -179,8 +179,33 @@ function explain(e: unknown, sc: StageConfig, keyEnv: string, baseUrl: string): 
     return hint ? `${msg} —— ${hint}` : msg;
   }
   if (msg.endsWith("超时")) return `${msg}:${sc.timeout_ms ?? DEFAULT_TIMEOUT_MS} ms 内没有返回(预检不重试)`;
-  if (msg.includes("网络错误")) return `${msg} —— 连不上 ${baseUrl},检查网络和 base_url`;
+  if (msg.includes("网络错误")) {
+    // 网关把 fetch 和解析响应体时抛的所有异常都叫「网络错误」,这里按原始报错再分一次。
+    // 先认 JSON 解析错误:它的报错里带着响应体开头,里面写什么都有可能
+    if (/is not valid JSON|Unexpected end of JSON input|Unexpected token/.test(msg)) {
+      return `${msg} —— 连上了,但返回的不是 JSON:${baseUrl} 可能指向了网页、登录页或代理`;
+    }
+    if (/ByteString|invalid header value/i.test(msg)) return `${msg} —— Key 里有非法字符(检查 ${keyEnv} 是否混入全角字符、换行)`;
+    if (/fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EAI_AGAIN/.test(msg)) return `${msg} —— 连不上 ${baseUrl},检查网络和 base_url`;
+  }
   return msg;
+}
+
+/**
+ * 线上更宽松:引擎的 extractJson(packages/engine/src/prompts/gate.ts)先去掉 ```json 围栏,
+ * 再取第一个 { 到最后一个 } 之间解析。预检故意更严(要求整段回复就是 JSON),这里只用来把报错说清楚。
+ */
+function lenientObject(text: string): boolean {
+  const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  const start = t.indexOf("{");
+  const end = t.lastIndexOf("}");
+  if (start < 0 || end < start) return false;
+  try {
+    const v: unknown = JSON.parse(t.slice(start, end + 1));
+    return v !== null && typeof v === "object" && !Array.isArray(v);
+  } catch {
+    return false;
+  }
 }
 
 /** 查一个环节:Key 在不在;network 为 true 时再经网关发一次最小请求。 */
@@ -239,6 +264,13 @@ export async function probeStage(cfg: ModelsConfig, stage: Stage, opts: Prefligh
     try {
       v = JSON.parse(text);
     } catch {
+      if (lenientObject(text)) {
+        return done({
+          ok: false,
+          reply,
+          error: `回复不是纯 JSON(包了 \`\`\`json 围栏或夹了别的文字;线上的解析能容忍,但说明 json 模式没生效):${reply}`,
+        });
+      }
       return done({ ok: false, reply, error: `回复不是合法 JSON(json 模式可能没生效):${reply}` });
     }
     if (v === null || typeof v !== "object" || Array.isArray(v)) {

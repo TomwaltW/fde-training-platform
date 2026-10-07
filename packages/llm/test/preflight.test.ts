@@ -1,5 +1,6 @@
 // 模型预检(pnpm models:check):本地起一个 OpenAI 兼容的假服务(只绑 127.0.0.1,不出网),
-// 覆盖成功、JSON 环节回了非 JSON、401、超时、缺 Key、缺价格、快照没固定的警告和 --strict;
+// 覆盖成功、JSON 环节回了非 JSON(含 ```json 围栏)、401、超时、连不上 / 回网页 / Key 有非法字符、缺 Key、缺价格、
+// 快照没固定的警告和 --strict;
 // 退出码 0 / 1 / 2 用子进程跑命令行验证。
 // 测试配置里的 Key 变量名故意不用 DASHSCOPE_API_KEY / DEEPSEEK_API_KEY:作者机器上有真 .env 时也碰不到真 Key。
 import { spawn } from "node:child_process";
@@ -10,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { stringify } from "yaml";
+import type { z } from "zod";
 import {
   isSnapshotName,
   loadModelsConfig,
@@ -35,7 +37,7 @@ const keys = { [B_ENV]: B_KEY, [D_ENV]: D_KEY };
 
 // ---------- 假的 OpenAI 兼容服务:按请求体里的 model 决定怎么回
 
-type Behavior = { content: string; usage?: Record<string, number> } | { status: number; body: string } | "hang";
+type Behavior = { content: string; usage?: Record<string, number> } | { status: number; body: string; type?: string } | "hang";
 interface Seen {
   path: string;
   auth: string;
@@ -55,11 +57,13 @@ beforeAll(async () => {
       seen.push({ path: req.url ?? "", auth: req.headers.authorization ?? "", body });
       const b = behaviors.get(String(body.model)) ?? { content: body.response_format ? '{"ok": true}' : "收到" };
       if (b === "hang") return; // 不回,等客户端超时
+      // connection: close —— 每次请求用新连接、回完就关:测试进程里 fetch(undici)的连接池不留空闲连接,
+      // 下一个用例不会拿到一条已经被关掉的旧连接(那样第一个 POST 会 ECONNRESET,被网关报成「网络错误」)
       if ("status" in b) {
-        res.writeHead(b.status, { "content-type": "application/json" }).end(b.body);
+        res.writeHead(b.status, { "content-type": b.type ?? "application/json", connection: "close" }).end(b.body);
         return;
       }
-      res.writeHead(200, { "content-type": "application/json" }).end(
+      res.writeHead(200, { "content-type": "application/json", connection: "close" }).end(
         JSON.stringify({
           id: "chatcmpl-test",
           object: "chat.completion",
@@ -78,7 +82,8 @@ const tmps: string[] = [];
 afterEach(() => {
   seen.length = 0;
   behaviors.clear();
-  server.closeAllConnections();
+  // 不在这里 closeAllConnections:用例之间关连接正是并发跑时偶发 fetch failed 的来源。
+  // 超时用例里挂着的那条请求,客户端超时中止时就断开了;剩下的由 afterAll 收拾(和 apps/web/test 的假服务一样)
   for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 afterAll(async () => {
@@ -90,8 +95,12 @@ afterAll(async () => {
 
 const M = { gate: "qwen-t-flash-2000-01-01", actor: "qwen-t-plus-2000-01-01", judge: "ds-t-pro", debrief: "qwen-t-max-2000-01-01" };
 
-function cfgObj(edit: (c: any) => void = () => {}) {
-  const c = {
+/** 校验前的配置对象(和 config/models.yaml 读进来的形状一样),用例在它上面改 */
+type CfgIn = z.input<typeof ModelsConfigSchema>;
+type CfgEdit = (c: CfgIn) => void;
+
+function cfgObj(edit: CfgEdit = () => {}): CfgIn {
+  const c: CfgIn = {
     providers: {
       bailian: { base_url: `${base}/compatible-mode/v1`, api_key_env: B_ENV },
       deepseek: { base_url: base, api_key_env: D_ENV },
@@ -102,18 +111,18 @@ function cfgObj(edit: (c: any) => void = () => {}) {
       judge: { provider: "deepseek", model: M.judge, temperature: 0, max_tokens: 8000, json: true, timeout_ms: 120000 },
       debrief: { provider: "bailian", model: M.debrief, temperature: 0.5, max_tokens: 2000, extra: { enable_thinking: false } },
     },
-    prices: { [M.gate]: [0.2, 0.8], [M.actor]: [0.8, 2], [M.judge]: [9, 27], [M.debrief]: [2, 8] } as Record<string, [number, number]>,
+    prices: { [M.gate]: [0.2, 0.8], [M.actor]: [0.8, 2], [M.judge]: [9, 27], [M.debrief]: [2, 8] },
   };
   edit(c);
   return c;
 }
-const cfg = (edit?: (c: any) => void): ModelsConfig => ModelsConfigSchema.parse(cfgObj(edit));
+const cfg = (edit?: CfgEdit): ModelsConfig => ModelsConfigSchema.parse(cfgObj(edit));
 /** 没有任何警告的配置:裁判也换成钉了快照的百炼模型 */
-const cleanEdit = (c: any) => {
+const cleanEdit: CfgEdit = (c) => {
   c.stages.judge = { ...c.stages.judge, provider: "bailian", model: "qwen-t-judge-2000-01-01" };
   c.prices["qwen-t-judge-2000-01-01"] = [2.5, 10];
 };
-function cfgFile(edit?: (c: any) => void): string {
+function cfgFile(edit?: CfgEdit): string {
   const d = mkdtempSync(join(tmpdir(), "fde-preflight-"));
   tmps.push(d);
   const f = join(d, "models.yaml");
@@ -184,6 +193,16 @@ describe("在线检查(假服务)", () => {
     expect(text(renderPreflight(r))).toMatch(/结论:2 项没过、1 条警告 → 不通过/);
   });
 
+  it("JSON 包了 ```json 围栏:预检照样判失败(比线上的 extractJson 严),但点明线上能容忍、是 json 模式没生效", async () => {
+    behaviors.set(M.gate, { content: '```json\n{"ok": true}\n```' });
+    behaviors.set(M.judge, { content: '结果:{"ok": true}' });
+    const r = await runPreflight(cfg(), { env: keys, network: true, stages: ["gate", "judge"] });
+    for (const p of r.probes) {
+      expect(p.ok).toBe(false);
+      expect(p.error).toMatch(/^回复不是纯 JSON\(包了 ```json 围栏或夹了别的文字;线上的解析能容忍,但说明 json 模式没生效\):/);
+    }
+  });
+
   it("没关思考的环节回复为空:提示思考可能用完了 max_tokens", async () => {
     behaviors.set(M.judge, { content: "" });
     const r = await runPreflight(cfg(), { env: keys, network: true, stages: ["judge"] });
@@ -224,11 +243,34 @@ describe("在线检查(假服务)", () => {
     const dead = `http://127.0.0.1:${(probe.address() as AddressInfo).port}`;
     await new Promise<void>((r) => probe.close(() => r()));
     const r = await runPreflight(
-      cfg((c) => (c.providers.bailian.base_url = dead)),
+      cfg((c) => (c.providers.bailian!.base_url = dead)),
       { env: keys, network: true, stages: ["actor"] },
     );
     expect(r.probes[0]!.ok).toBe(false);
     expect(r.probes[0]!.error).toMatch(new RegExp(`^bailian 网络错误:.* —— 连不上 ${dead.replace(/\./g, "\\.")},检查网络和 base_url$`));
+  });
+
+  it("连上了但回的不是 JSON(网页、登录页、代理):说返回的不是 JSON,不说连不上", async () => {
+    behaviors.set(M.actor, { status: 200, type: "text/html", body: "<html>login</html>" });
+    const r = await runPreflight(cfg(), { env: keys, network: true, stages: ["actor"] });
+    expect(seen).toHaveLength(1);
+    const err = r.probes[0]!.error!;
+    expect(err).toMatch(/^bailian 网络错误:.*is not valid JSON —— 连上了,但返回的不是 JSON:http:\/\/127\.0\.0\.1:\d+\/compatible-mode\/v1 可能指向了网页、登录页或代理$/);
+    expect(err).not.toContain("连不上");
+  });
+
+  it("Key 里混了全角字符或换行:请求发不出去,提示检查哪个变量,Key 原文不出现", async () => {
+    for (const bad of ["sk-test-全角ｋｅｙ-0123456789", "sk-test-abc\ndef-0123456789"]) {
+      const r = await runPreflight(cfg(), { env: { [B_ENV]: bad }, network: true, stages: ["actor"] });
+      const p = r.probes[0]!;
+      expect(p.ok).toBe(false);
+      expect(p.error).toMatch(/ —— Key 里有非法字符\(检查 FDE_TEST_PREFLIGHT_BAILIAN_KEY 是否混入全角字符、换行\)$/);
+      expect(p.error).not.toContain("连不上");
+      // 换行那种,fetch 的报错会把整个请求头(含 Key)带出来:要被抹掉
+      expect(JSON.stringify(r)).not.toContain(JSON.stringify(bad).slice(1, -1));
+      expect(text(renderPreflight(r, { verbose: true }))).not.toContain(bad);
+    }
+    expect(seen).toHaveLength(0);
   });
 
   it("缺 Key(没有或只有空白):该环节失败并点名环境变量,不发请求", async () => {
@@ -377,7 +419,7 @@ describe("命令行 pnpm models:check(子进程)", () => {
     const missing = await runCli([], { FDE_MODELS_CONFIG: join(tmpdir(), "fde-preflight-no-such-file.yaml"), ...keys });
     expect(missing.code).toBe(2);
     expect(missing.out).toContain("找不到模型配置");
-    const bad = cfgFile((c) => delete c.stages.judge);
+    const bad = cfgFile((c) => delete (c.stages as Partial<CfgIn["stages"]>).judge);
     const invalid = await runCli([], { FDE_MODELS_CONFIG: bad, ...keys });
     expect(invalid.code).toBe(2);
     expect(invalid.out).toContain("模型配置有误");
@@ -390,7 +432,8 @@ describe("命令行 pnpm models:check(子进程)", () => {
     expect(a.code).toBe(0);
     expect(a.out).toContain("在线检查:跳过(--no-network)");
     expect(a.out).toContain("结论(只做了静态检查)");
-    // 跑测试的环境里设了真 Key 时,Key 的值也不能出现在输出里
+    // 跑测试的 shell 里 export 了真 Key 时,Key 的值也不能出现在输出里。只写在 .env 里的 Key 是子进程自己读的,
+    // 这里查不到(测试不读 .env);那种情况靠渲染只打印「已配置 / 缺失」来保证
     for (const v of [process.env.DASHSCOPE_API_KEY, process.env.DEEPSEEK_API_KEY]) if (v?.trim()) expect(a.out).not.toContain(v.trim());
   });
 });
