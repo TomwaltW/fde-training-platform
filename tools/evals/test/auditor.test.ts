@@ -271,6 +271,51 @@ describe("约数只能单向解释:说得比已知的更细就不放行", () => 
     expect(a.echoes).toHaveLength(1);
   });
 
+  // 有方向的约数说的是 X 的哪一边:比用户的"四百""五十万"多告诉了一半信息,不能当复述放过
+  it.each([
+    ["liu", "四百条有没有?", "超过四百条吧。", "P1"],
+    ["liu", "四百条有没有?", "至少四百条。", "P1"],
+    ["wang", "损失有没有五十万?", "不到五十万。", "C2"],
+    ["wang", "损失有没有五十万?", "将近五十万。", "C2"],
+    ["wang", "损失有没有五十万?", "快五十万了。", "C2"],
+    ["wang", "损失有没有五十万?", "小五十万吧。", "C2"],
+  ])("%s:用户猜「%s」,角色答「%s」:有方向的说法不算复述,对上未解锁的真值算泄露", async (role, guess, reply, source) => {
+    const a = (await afterGuess(guess, role))(reply);
+    const leak = a.issues.find((i) => i.kind === "leak");
+    expect(leak, JSON.stringify(a)).toBeDefined();
+    expect(leak!.sources!.some((x) => x.startsWith(source)), JSON.stringify(leak)).toBe(true);
+    expect(a.echoes).toEqual([]);
+  });
+
+  it.each([
+    ["liu", "超过四百条有没有?", "超过四百条吧。"],
+    ["liu", "四百多条有没有?", "超过四百条吧。"],
+    ["wang", "损失是不是不到五十万?", "不到五十万。"],
+    ["wang", "损失是不是将近五十万?", "不到五十万吧。"],
+  ])("%s:用户猜「%s」,角色答「%s」:用户自己说了同一边(或更细),是复述", async (role, guess, reply) => {
+    const a = (await afterGuess(guess, role))(reply);
+    expect(a.issues).toEqual([]);
+    expect(a.echoes).toHaveLength(1);
+  });
+
+  it("用户说「不到五十万」,角色答「将近五十万」:比用户说得细,算泄露", async () => {
+    const a = (await afterGuess("损失是不是不到五十万?", "wang"))("将近五十万。");
+    expect(a.issues).toMatchObject([{ kind: "leak", raw: "五十万", sources: expect.arrayContaining(["C2 498000"]) }]);
+  });
+
+  it("没人提过时「超过四百条」「不到五十万」照样对真值审;解锁之后不算问题", async () => {
+    const s0 = session([]);
+    expect(audit(s0.st, "liu", "超过四百条吧。").issues).toMatchObject([{ kind: "leak", raw: "四百", value: "[400, 500]" }]);
+    expect(audit(s0.st, "wang", "不到五十万。").issues).toMatchObject([{ kind: "leak", raw: "五十万", value: "[400000, 500000]" }]);
+    // 单边区间的另一头收住了:公共背景里没带量词的 22、14 解释不了"不到五十万"
+    expect(audit(s0.st, "zhou", "不到五十万。").issues).toHaveLength(1);
+    s0.st.facts.P1 = { level: "L3", turn: 1, source: "liu" };
+    s0.st.facts.C2 = { level: "L2", turn: 1, source: "wang" };
+    expect(audit(s0.st, "liu", "超过四百条吧。").issues).toEqual([]);
+    expect(audit(s0.st, "wang", "不到五十万。").issues).toEqual([]);
+    expect(audit(s0.st, "wang", "将近五十万。").issues).toEqual([]);
+  });
+
   it("公共背景里的整数约数不能洗白更细的数:「日均约 300 票」放行「三百票」「三百多票」,不放行「三百二十」", () => {
     const s0 = session([]);
     expect(audit(s0.st, "zhou", "一天三百票吧。").issues).toEqual([]);
@@ -334,6 +379,18 @@ describe("不是在说占比的「一半」「大半」不算数", () => {
     }
     expect(audit(s0.st, "chen", "一大半是客户资料对不上。").issues).toMatchObject([{ kind: "leak", raw: "一大半" }]);
     expect(audit(s0.st, "chen", "改单占了一半。").issues).toMatchObject([{ raw: "一半" }]);
+  });
+
+  it("「了一半」「到一半」只有干活的进度不算:超过了一半、错了一半照常审(T2 还没解锁)", () => {
+    const s0 = session([]);
+    expect(audit(s0.st, "chen", "超过了一半是改单和资料对不上。").issues).toMatchObject([
+      { kind: "leak", raw: "超过了一半", sources: expect.arrayContaining(["truth.diagnosis_items[1].statement 57%"]) },
+    ]);
+    expect(audit(s0.st, "chen", "错了一半是改单。").issues).toMatchObject([{ raw: "一半" }]);
+    expect(audit(s0.st, "chen", "单子改了一半。").issues).toMatchObject([{ raw: "一半" }]);
+    for (const text of ["录了一半就下班了。", "说到一半他就走了。", "路才走了一半。"]) {
+      expect(audit(s0.st, "chen", text).issues, text).toEqual([]);
+    }
   });
 });
 

@@ -16,7 +16,10 @@ export interface Quantity {
   kind: "exact" | "range" | "approx";
   /** 紧跟的量词或单位(没有则为空串;百分数为 %)。 */
   unit: string;
-  /** 带"大概""左右"之类放宽过的精确数:放宽前说出的那个数("差不多四百三"是 430)。审计比对已知值时用它,不用放宽后的区间。 */
+  /**
+   * 带"大概""左右"之类放宽过的精确数:放宽前说出的那个数("差不多四百三"是 430)。审计比对已知值时用它,不用放宽后的区间。
+   * 有方向的说法("超过四百""不到五十万""将近五十万")没有这个数:它们说的是 X 的哪一边,不是 X 本身。
+   */
   center?: number;
 }
 
@@ -28,8 +31,18 @@ export interface ExtractOptions {
 const CN_DIGIT: Record<string, number> = { 零: 0, 〇: 0, 一: 1, 二: 2, 两: 2, 俩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
 const BIG: Record<string, number> = { 百: 100, 千: 1000, 万: 10_000, 亿: 100_000_000 };
 
-/** 前置的约数词:"将近五十万""大概三百""小五十万""不到十万"。 */
-const APPROX_BEFORE = /(大约|大概|差不多|将近|接近|估计|也就|不到|不足|超过|至少|起码|约|近|快|小)\s*$/;
+/** 前置的对称约数词:"大概三百""差不多四百三""约 19800"。按 ±10% 放宽,记下说出的那个数。 */
+const APPROX_BEFORE = /(大约|大概|差不多|估计|也就|约)\s*$/;
+/**
+ * 前置的有方向的约数词,给单边区间(见 directional):不到 / 不足 X 在 X 下面;超过 / 至少 / 起码 X 在 X 上面;
+ * 将近 / 接近 / 近 / 快 / 小 X 是略低于 X("小五十万"是快到五十万)。"最近""很快""尽快"不是约数词。
+ */
+const BELOW_BEFORE = /(不到|不足)\s*$/;
+const ABOVE_BEFORE = /(超过|至少|起码)\s*$/;
+const NEAR_BEFORE = /(将近|接近|(?<![最附])近|(?<![很尽赶加])快|(?<!最)小)\s*$/;
+type Direction = "below" | "above" | "near";
+const directionOf = (before: string): Direction | undefined =>
+  BELOW_BEFORE.test(before) ? "below" : ABOVE_BEFORE.test(before) ? "above" : NEAR_BEFORE.test(before) ? "near" : undefined;
 /** 后置的约数词(中间可以隔一个量词:"三百条左右")。 */
 const APPROX_AFTER = /^(左右|上下)/;
 const ABOVE_AFTER = /^(出头|开外)/;
@@ -93,21 +106,29 @@ const HALF_FORMS: [RegExp, number, number][] = [
   [/^(将近|接近|不到|不足|小)一半/, 40, 50],
   [/^(差不多|大概|大约|约)一半/, 45, 55],
   [/^一小半/, 30, 50],
-  [/^(一多半|多一半|一大半|一半多|过半|超过一半)/, 50, 70],
+  [/^(一多半|多一半|一大半|一半多|过半|超过了?一半|至少一半|起码一半)/, 50, 70],
   [/^大半(?![天年夜辈个月生日])/, 50, 70],
   [/^(一半|半数)/, 45, 55],
 ];
-/** "一半"的习惯说法,不是占比:"一半一半"(五五开、马马虎虎)、"说一半留一半"、"一半儿"、"一半天"。 */
-const HALF_IDIOM = /^(一半一半|说一半留一半|一半儿|一半天)/;
+/** "一半"的习惯说法,不是占比:"一半一半"(五五开、马马虎虎)、"说一半留一半"、"说对了一半"(只对了一部分)、"一半儿"、"一半天"。 */
+const HALF_IDIOM = /^(一半一半|说一半留一半|说对了?一半|一半儿|一半天)/;
+/**
+ * "V到一半""V了一半"里说干活进度的动词:干到一半、录到一半、话说了一半、路走了一半、表填了一半。
+ * 只认这张白名单,别的"了一半""到一半"照常算占比:错了一半、少了一半、多了一半、超过了一半、降到一半、减到一半、占了一半。
+ * "改""对"只跟"到":改到一半、对到一半是进度,"单子改了一半""答对了一半"是占比(说对了一半见 HALF_IDIOM)。
+ * "转走了一半""拉走了一半"是货量的占比,不是"走了一半"。
+ */
+const PROGRESS_VERB = "干做录说写走听看读讲弄填打查核吃开聊谈忙跑输敲翻算数理搞办";
+const PROGRESS_BEFORE = new RegExp(`(?:[${PROGRESS_VERB}改对]到|(?<![转拉搬抢撤调运])[${PROGRESS_VERB}]了)$`);
 /**
  * 一半字族不是在说占比的用法:
- *   - 前面是"到""了"——干到一半、录到一半(进度),说对了一半、做了一半;但"占到一半""达到一半""占了一半"是占比;
+ *   - 前面是说干活进度的"V到 / V了"(见 PROGRESS_BEFORE);
  *   - 后面是"(的)时间 / 时候 / 工夫"——"一大半时间都在核对""到一半的时候",说的是时间怎么花,不是哪个数的比例。
  * 只管一半字族;"三分之一的时间"这种分数照常审(docs/quality-gates.md「已知的局限」)。
  */
 function notShare(text: string, i: number, len: number): boolean {
-  const before = text.slice(Math.max(0, i - 2), i);
-  if (/[到了]$/.test(before) && !/^[占达].$/.test(before)) return true;
+  // 多取一个字给"转走了"这类的排除用
+  if (PROGRESS_BEFORE.test(text.slice(Math.max(0, i - 3), i))) return true;
   return /^的?(时间|时候|工夫|功夫)/.test(text.slice(i + len));
 }
 /** "三分之一""四分之一""千分之三":按百分数算,本身就是约数,按 ±10% 放宽(三分之一 = [30%, 36.7%])。 */
@@ -174,15 +195,30 @@ const make = (raw: string, index: number, lo: number, hi: number, percent: boole
 const widen = (q: Quantity): Quantity => (q.kind === "exact" ? { ...q, lo: round(q.lo * 0.9), hi: round(q.hi * 1.1), kind: "approx", center: q.lo } : q);
 
 /**
+ * 有方向的约数,给 X 一边的区间,不记"放宽前的数"(审计不能把它当成复述 X):
+ *   - 不到 / 不足 X = [X − 末位位值, X]:不到五十万 = [40 万, 50 万],不到四百三 = [420, 430];
+ *   - 超过 / 至少 / 起码 X = [X, X + 末位位值],和"X多"一样:超过四百 = [400, 500];
+ *   - 将近 / 接近 / 近 / 快 / 小 X = [0.9X, X],和"近千"一样:将近五十万 = [45 万, 50 万]。
+ * 另一头不放到无穷:万、千不算量词,无穷的区间会被公共背景里随便一个没带量词的数(操作部 22)解释掉,
+ * 也会把每个比 X 大(小)的真值都算成"对上了"。
+ */
+function directional(q: Quantity, base: number, dir: Direction): Quantity {
+  const pv = placeValue(base);
+  const [lo, hi] = dir === "below" ? [base - pv, base] : dir === "above" ? [base, base + pv] : [base * 0.9, base];
+  return { ...q, lo: round(lo), hi: round(hi), kind: "approx" };
+}
+
+/**
  * 抽出一句话里的全部"量"。规则(docs/quality-gates.md 有完整的表):
  *   - 精确数:428、四百二十八、6.8万、六万八、十四万八千五、18%、百分之十八、一千五
  *   - X多 / X来 / X余 / X几:[X, X + 末位位值](四百多 = [400, 500];五十多万 = [50 万, 60 万];二十几 = [20, 30])
  *   - 几十、几百、上千、十几、十多、大几十……:数量级区间(几十万 = [20 万, 99 万]);近千 = [900, 1000];千把 = [1000, 1999]
  *   - 百分数也一样:百分之十几 = 十几个点 = [11%, 19%];百分之三十多 = 30多% = 三十多个点 = [30%, 40%]
  *   - N成:百分数 [10N − 5, 10N + 5](三成 = 25%–35%);N成多 = [10N, 10N + 10];一成八 = 18%;七八成 = [70, 80]
- *   - 一半 = [45%, 55%];将近一半 = [40%, 50%];一多半 = [50%, 70%];三分之一 = [30%, 36.7%](分数按 ±10%)
- *     不是占比的不算:干到一半、说对了一半、一半一半、一大半时间(见 notShare)
- *   - 约 / 大概 / 差不多 / 将近 / 左右 / 上下:±10%;出头 / 开外:[X, X + 末位位值]
+ *   - 一半 = [45%, 55%];将近一半 = [40%, 50%];一多半 = 超过了一半 = [50%, 70%];三分之一 = [30%, 36.7%](分数按 ±10%)
+ *     不是占比的不算:干到一半、录了一半、说对了一半、一半一半、一大半时间(见 notShare);错了一半、少了一半照算
+ *   - 约 / 大概 / 差不多 / 左右 / 上下:±10%;出头 / 开外:[X, X + 末位位值]
+ *   - 不到 / 超过 / 至少 / 将近 / 快 / 小……:X 一边的区间(见 directional),N成也一样(不到三成 = [20%, 30%])
  *   - 五六十、两三天、四五百(后面没跟量词也算):[50, 60]、[2, 3]、[400, 500]
  */
 export function extractQuantities(input: string, opts: ExtractOptions = {}): Quantity[] {
@@ -254,6 +290,8 @@ export function extractQuantities(input: string, opts: ExtractOptions = {}): Qua
     if (overlaps(m.index, m.end)) continue;
     let end = m.end;
     let q: Quantity;
+    /** 前面有"不到""超过""将近"时围着哪个数取单边区间:精确数是它自己,"三成"是 30%;其他约数(四百多、两三百)不再改。 */
+    let base: number | undefined;
     const lead = leadingRange(text, m);
     if (m.unit === "成") {
       // "一成不变";"九成九是看错了"是"十有八九"一类的口头禅,不是 99%
@@ -274,6 +312,7 @@ export function extractQuantities(input: string, opts: ExtractOptions = {}): Qua
         end = after + 1;
       } else {
         q = opts.literal ? make(text.slice(m.index, after), m.index, lo, lo, true, "%") : make(text.slice(m.index, after), m.index, lo - 5, lo + 5, true, "%");
+        base = lo;
         end = after;
       }
     } else if (m.unit === "个" && /^个(百分)?点/.test(text.slice(end))) {
@@ -309,15 +348,23 @@ export function extractQuantities(input: string, opts: ExtractOptions = {}): Qua
       }
     }
     if (!opts.literal) {
-      // 后置:左右、上下、出头、开外
+      if (q.kind === "exact") base = q.lo;
+      // 后置:左右、上下、出头、开外(处理过的不再按前置词改)
       const rest = text.slice(end);
       const restAfterUnit = rest.slice(measureAt(text, end).length);
-      if (APPROX_AFTER.test(rest) || APPROX_AFTER.test(restAfterUnit)) q = widen(q);
-      else if ((ABOVE_AFTER.test(rest) || ABOVE_AFTER.test(restAfterUnit)) && q.kind === "exact") {
+      if (APPROX_AFTER.test(rest) || APPROX_AFTER.test(restAfterUnit)) {
+        q = widen(q);
+        base = undefined;
+      } else if ((ABOVE_AFTER.test(rest) || ABOVE_AFTER.test(restAfterUnit)) && q.kind === "exact") {
         q = { ...q, hi: round(q.lo + placeValue(q.lo)), kind: "approx" };
+        base = undefined;
       }
-      // 前置:将近、大概、小……
-      if (APPROX_BEFORE.test(text.slice(Math.max(0, m.index - 3), m.index))) q = widen(q);
+      // 前置:有方向的(不到、超过、将近……)给单边区间;对称的(大概、差不多……)±10%
+      const before = text.slice(Math.max(0, m.index - 3), m.index);
+      const dir = directionOf(before);
+      if (dir) {
+        if (base !== undefined) q = directional(q, base, dir);
+      } else if (APPROX_BEFORE.test(before)) q = widen(q);
     }
     out.push(q);
   }
