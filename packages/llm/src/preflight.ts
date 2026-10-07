@@ -152,8 +152,10 @@ export const KEY_FRAGMENT_MIN = 8;
 /**
  * 把配置里各供应商 Key 的原文从要打印的文字里抹掉(供应商的 401 报错有时会回显 Key)。
  * 先抹完整的 Key,再抹截断处残留的片段:结尾是某个 Key 的前缀、开头是某个 Key 的后缀(至少 KEY_FRAGMENT_MIN 个字符)。
- * 截断处有三种:回复预览截到 80 字(preview)、网关把报错正文截到 300 字(在报错末尾)、模型回复被 max_tokens 截断。
+ * 结尾、开头的截断处有三种:回复预览截到 80 字(preview)、网关把报错正文截到 300 字(在报错末尾)、模型回复被 max_tokens 截断。
  * 要截断的文字得先整段抹、截完再抹一次:先截后抹的话,跨在截断处的 Key 只剩前半截,整段匹配认不出来。
+ * 还有一处截断不在两头,片段匹配管不到:响应体不是 JSON 时,V8 的解析报错里带着响应体的一小段(见 dropBodySnippet),
+ * 那一段在抹 Key 之前就整段去掉(probeStage 里的 redactErr)。
  */
 function redactor(cfg: ModelsConfig, env: Record<string, string | undefined>): (s: string) => string {
   const secrets = [
@@ -191,6 +193,15 @@ function redactor(cfg: ModelsConfig, env: Record<string, string | undefined>): (
 function preview(s: string, redact: (s: string) => string): string {
   const one = redact(redact(s).replace(/\s+/g, " ").trim());
   return one.length > 80 ? `${redact(one.slice(0, 80))}…` : one;
+}
+
+/**
+ * 响应体不是 JSON 时,V8 的报错形如 Unexpected token 'X', "Xsk-abcdef"... is not valid JSON:引号里是响应体的一小段
+ * (约 10~20 个字符,可能从中间开窗,前面带 ...),两头都可能切在 Key 中间,残片后面还跟着 "...,结尾、开头的片段匹配认不出来。
+ * 这一段对排查没多大用(说明里已经讲了返回的不是 JSON),整段去掉;其余报错原样返回。
+ */
+function dropBodySnippet(msg: string): string {
+  return msg.replace(/(Unexpected token '.+?'), (?:\.\.\.)?".*"(?:\.\.\.)? (is not valid JSON)/su, "$1, (响应体片段已略去) $2");
 }
 
 /** 返回的文字已脱敏:报错原文(网关截到 300 字的报错正文在它末尾)先抹 Key,再接说明 —— 接上说明之后,截断处就不在结尾了。 */
@@ -268,6 +279,8 @@ export async function probeStage(cfg: ModelsConfig, stage: Stage, opts: Prefligh
   }
 
   const redact = redactor(cfg, opts.env);
+  // 报错(返回值里的 error、日志里的 error)先去掉 V8 带出来的响应体片段,再抹 Key;回复预览不走这一步
+  const redactErr = (s: string): string => redact(dropBodySnippet(s));
   // 只换 max_tokens,其余参数(温度、extra、json、timeout_ms)和线上一致
   const probeCfg: ModelsConfig = { ...cfg, stages: { ...cfg.stages, [stage]: { ...sc, max_tokens: maxTokens } } };
   let log: LlmCallLog | undefined;
@@ -277,7 +290,7 @@ export async function probeStage(cfg: ModelsConfig, stage: Stage, opts: Prefligh
     // 预检要看第一次请求的真实结果:不重试,也免得裁判 120 秒的超时叠三遍
     retries: 0,
     onCall: (l) => {
-      log = l.error === undefined ? l : { ...l, error: redact(l.error) };
+      log = l.error === undefined ? l : { ...l, error: redactErr(l.error) };
     },
   });
   const done = (r: Partial<StageProbe>): StageProbe => ({ ...probe, ...r, ...(log && { log }) });
@@ -286,7 +299,7 @@ export async function probeStage(cfg: ModelsConfig, stage: Stage, opts: Prefligh
   try {
     ({ text } = await chat({ stage, messages: json ? PROBE_JSON : PROBE_TEXT, json, sessionId: "models-check" }));
   } catch (e) {
-    return done({ ok: false, error: explain(e, sc, keyEnv, provider.base_url, redact) });
+    return done({ ok: false, error: explain(e, sc, keyEnv, provider.base_url, redactErr) });
   }
   const reply = preview(text, redact);
   if (!text.trim()) {

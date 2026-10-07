@@ -1,6 +1,6 @@
 // 模型预检(pnpm models:check):本地起一个 OpenAI 兼容的假服务(只绑 127.0.0.1,不出网),
 // 覆盖成功、JSON 环节回了非 JSON(含 ```json 围栏)、401、超时、连不上 / 回网页 / Key 有非法字符、缺 Key、缺价格、
-// 回显的 Key 跨在截断处(回复预览 80 字、网关报错正文 300 字)也抹干净、百炼快照没固定的警告和 --strict、
+// 回显的 Key 跨在截断处(回复预览 80 字、网关报错正文 300 字、回网页时 V8 解析报错带出的响应体片段)也抹干净、百炼快照没固定的警告和 --strict、
 // DeepSeek 那条只是提示(--strict 也不算);
 // 退出码 0 / 1 / 2 用子进程跑命令行验证。
 // 测试配置里的 Key 变量名故意不用 DASHSCOPE_API_KEY / DEEPSEEK_API_KEY:作者机器上有真 .env 时也碰不到真 Key。
@@ -315,6 +315,33 @@ describe("在线检查(假服务)", () => {
     const err = r.probes[0]!.error!;
     expect(err).toMatch(/^bailian 网络错误:.*is not valid JSON —— 连上了,但返回的不是 JSON:http:\/\/127\.0\.0\.1:\d+\/compatible-mode\/v1 可能指向了网页、登录页或代理$/);
     expect(err).not.toContain("连不上");
+  });
+
+  it("回的不是 JSON、V8 的解析报错里带出的响应体片段切在 Key 中间(片段后面跟着 \"...,可能从中间开窗):整段片段去掉,报错和日志里都不留 Key 的前缀", async () => {
+    const frag = B_KEY.slice(0, KEY_FRAGMENT_MIN);
+    // 片段在开头;片段从响应体中间开窗(前面带 ...)
+    for (const body of [`X${B_KEY}${"z".repeat(400)}`, `{"a":"d","key": ${B_KEY}}`]) {
+      // 前提:V8 的原始报错里真带着 Key 的前缀(不在结尾也不在开头,片段匹配认不出);V8 换了格式这里会先失败
+      let raw = "";
+      try {
+        JSON.parse(body);
+      } catch (e) {
+        raw = (e as Error).message;
+      }
+      expect(raw).toMatch(/is not valid JSON$/);
+      expect(raw).toContain(frag);
+
+      behaviors.set(M.actor, { status: 200, type: "text/html", body });
+      const r = await runPreflight(cfg(), { env: keys, network: true, stages: ["actor"] });
+      const p = r.probes[0]!;
+      expect(p.ok).toBe(false);
+      expect(p.error).toMatch(
+        /^bailian 网络错误:Unexpected token '.', \(响应体片段已略去\) is not valid JSON —— 连上了,但返回的不是 JSON:http:\/\/127\.0\.0\.1:\d+\/compatible-mode\/v1 可能指向了网页、登录页或代理$/,
+      );
+      expect(p.log!.error).toMatch(/^bailian 网络错误:Unexpected token '.', \(响应体片段已略去\) is not valid JSON$/);
+      expect(JSON.stringify(r)).not.toContain(frag);
+      expect(text(renderPreflight(r, { verbose: true }))).not.toContain(frag);
+    }
   });
 
   it("Key 里混了全角字符或换行:请求发不出去,提示检查哪个变量,Key 原文不出现", async () => {
