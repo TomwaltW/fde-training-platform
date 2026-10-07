@@ -1,7 +1,8 @@
 // pnpm session:export:按网页后端的约定找到库、只读打开、列出对局(账号脱敏)、导出 { state }、建标定用例。
-// 不需要 PostgreSQL:内存库用临时文件;只读连接用 PGlite(WASM 版 PostgreSQL)验证。
+// 不需要 PostgreSQL:内存库用临时文件;只读连接用 PGlite(WASM 版 PostgreSQL)验证;连不上库用本机一个没人监听的端口。
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
@@ -15,12 +16,15 @@ import { initCase, loadSessionFile, parseSession } from "../src/calibration/case
 import { exportDoc, exportWarnings, formatTime, maskEmail, maskPhone, maskUser, renderSessionRows, sessionRows } from "../src/sessions/export.ts";
 import {
   SourceConfigError,
+  checkPgUrl,
   describeTarget,
+  errorText,
   makeReadOnly,
   openSessionSource,
   webStoreTarget,
   type SessionSource,
 } from "../src/sessions/store.ts";
+import { cliEnv, emptyEnvFile } from "./helpers.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
 const scn = loadScenario(join(root, "scenarios/freight-docs"));
@@ -115,6 +119,38 @@ describe("选库:和网页后端一样", () => {
     expect(describeTarget({ kind: "pg", url: "postgres://fde:secret@db:5432/fde" })).toBe("PostgreSQL db:5432/fde");
     expect(describeTarget({ kind: "pg", url: "not a url" })).toBe("PostgreSQL(DATABASE_URL)");
     expect(describeTarget({ kind: "memory", file: "/x/dev-store.json" })).toBe("内存库 /x/dev-store.json");
+  });
+
+  it("DATABASE_URL 写错了是配置错误;驱动认的 socket 写法、主机留空的写法照样放行", async () => {
+    for (const ok of [
+      "postgres://fde:secret@db:5432/fde",
+      "postgresql://fde@[::1]/fde",
+      "postgres://fde@/fde?host=/var/run/postgresql",
+      "/var/run/postgresql fde",
+      "socket:/var/run/postgresql?db=fde",
+    ]) {
+      expect(() => checkPgUrl(ok), ok).not.toThrow();
+    }
+    // 端口不是数字(驱动会抛 Invalid URL);不是绝对地址的串(驱动会去连一台叫 base 的主机);libpq 的 key=value 写法
+    for (const bad of ["postgres://fde:secret@db:notaport/fde", "not a url", "host=localhost dbname=fde"]) {
+      expect(() => checkPgUrl(bad), bad).toThrow(SourceConfigError);
+    }
+    const open = openSessionSource({ kind: "pg", url: "postgres://fde:secret@db:notaport/fde" }, root);
+    await expect(open).rejects.toBeInstanceOf(SourceConfigError);
+    await expect(open).rejects.toThrow(/^DATABASE_URL 不是合法的连接串/);
+    await expect(open).rejects.not.toThrow(/secret/);
+  });
+
+  it("读库失败的原因:localhost 连不上时 Node 抛的 AggregateError 没有 message,逐条列出里面的错误", () => {
+    const refused = (addr: string) => Object.assign(new Error(`connect ECONNREFUSED ${addr}`), { code: "ECONNREFUSED" });
+    const agg = Object.assign(new AggregateError([refused("::1:5432"), refused("127.0.0.1:5432")]), { code: "ECONNREFUSED" });
+    expect(agg.message).toBe("");
+    expect(errorText(agg)).toBe("connect ECONNREFUSED ::1:5432;connect ECONNREFUSED 127.0.0.1:5432(数据库没启动,或者 DATABASE_URL 的主机、端口不对)");
+    expect(errorText(refused("127.0.0.1:5432"))).toBe("connect ECONNREFUSED 127.0.0.1:5432(数据库没启动,或者 DATABASE_URL 的主机、端口不对)");
+    expect(errorText(new Error("无法解析 x.json"))).toBe("无法解析 x.json");
+    expect(errorText(Object.assign(new Error(""), { code: "ETIMEDOUT" }))).toBe("ETIMEDOUT");
+    expect(errorText(new TypeError(""))).toBe("TypeError");
+    expect(errorText("boom")).toBe("boom");
   });
 
   it("和网页的 getStore() 写的是同一个文件:FDE_ROOT 默认位置、FDE_MEMORY_STORE_FILE 绝对路径", async () => {
@@ -241,11 +277,22 @@ runExportSuite("memory (file)", async () => createMemoryStore({ file: join(tmp()
 // ---------------------------------------------------------------- 命令行
 
 describe("命令行", () => {
-  // 一律用 --store-file 指定库:本机 .env 里就算有 DATABASE_URL 也不会去连
-  const run = (args: string[]) => {
-    const r = spawnSync(tsx, [cli, ...args], { cwd: root, encoding: "utf8", env: { ...process.env, INIT_CWD: root } });
+  // 子进程不继承 process.env(shell 里的 DATABASE_URL、PGHOST 之类漏不进来);要读库的用 --store-file,不读 .env;
+  // 要走 DATABASE_URL 的用 --dotenv 指一个空文件,仓库根目录的 .env 也不读
+  const run = (args: string[], env: Record<string, string> = {}) => {
+    const r = spawnSync(tsx, [cli, ...args], { cwd: root, encoding: "utf8", env: cliEnv({ INIT_CWD: root, ...env }) });
     return { code: r.status, out: r.stdout, err: r.stderr };
   };
+  /** 本机一个刚刚还空着、现在没人监听的端口。 */
+  const closedPort = () =>
+    new Promise<number>((done, fail) => {
+      const srv = createServer();
+      srv.once("error", fail);
+      srv.listen(0, "127.0.0.1", () => {
+        const { port } = srv.address() as { port: number };
+        srv.close(() => done(port));
+      });
+    });
   const fixture = async () => {
     const file = join(tmp(), "dev-store.json");
     const ids = await seed(createMemoryStore({ file }));
@@ -263,6 +310,30 @@ describe("命令行", () => {
     expect(run(["--id", "x", "--calibrate", "../evil"]).err).toContain("用例 id「../evil」不合法");
     expect(run(["--id", "x", "--calibrate", "ok", "--scenario", "scenarios/nope"])).toMatchObject({ code: 2 });
     expect(run(["--bogus"]).err).toContain("参数错误");
+    expect(run(["--list", "--store-file", "x.json", "--dotenv", "y.txt"]).err).toContain("--dotenv 不和 --store-file 一起用");
+    const noFile = run(["--list", "--dotenv", join(tmp(), "nope.txt")]);
+    expect(noFile.code).toBe(2);
+    expect(noFile.err).toContain("找不到 --dotenv 指定的文件");
+  }, 60_000);
+
+  it("DATABASE_URL 写错了:退出码 2,不打印连接串;连不上库:退出码 1,说清楚连的哪里、被拒了", async () => {
+    const dotenv = emptyEnvFile(tmp());
+    for (const url of ["postgres://fde:secret@db:notaport/fde", "not a url"]) {
+      const bad = run(["--list", "--dotenv", dotenv], { DATABASE_URL: url });
+      expect(bad.code, url).toBe(2);
+      expect(bad.err).toContain("DATABASE_URL 不是合法的连接串");
+      expect(bad.err).not.toContain("secret");
+      expect(bad.err).not.toContain("读库失败");
+    }
+
+    // localhost 会先后试 ::1 和 127.0.0.1,两个都被拒时是 message 为空的 AggregateError;只有一个地址的机器上是普通 Error。两种都要有原因
+    const port = await closedPort();
+    const refused = run(["--list", "--dotenv", dotenv], { DATABASE_URL: `postgres://fde:secret@localhost:${port}/fde` });
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain(`对局来源:PostgreSQL localhost:${port}/fde`);
+    expect(refused.err).toMatch(new RegExp(`读库失败:connect ECONNREFUSED \\S+:${port}`));
+    expect(refused.err).toContain("数据库没启动,或者 DATABASE_URL 的主机、端口不对");
+    expect(refused.err).not.toContain("secret");
   }, 60_000);
 
   it("--list:打印来源和表格,账号脱敏;库文件不存在退出码 2,文件坏了退出码 1", async () => {

@@ -73,6 +73,37 @@ export function describeTarget(t: StoreTarget): string {
   }
 }
 
+/**
+ * 读库失败时给人看的原因。连 localhost 被拒时 Node 先后试 ::1 和 127.0.0.1,抛的是 message 为空的 AggregateError,
+ * 原因在 errors 里:逐条列出(connect ECONNREFUSED ::1:5432;connect ECONNREFUSED 127.0.0.1:5432),都没有就退到 code。
+ */
+export function errorText(e: unknown): string {
+  const text = rawErrorText(e);
+  const code = (e as { code?: unknown } | null)?.code;
+  return code === "ECONNREFUSED" || text.includes("ECONNREFUSED") ? `${text}(数据库没启动,或者 DATABASE_URL 的主机、端口不对)` : text;
+}
+
+function rawErrorText(e: unknown): string {
+  const err = (e ?? {}) as { message?: unknown; code?: unknown; errors?: unknown };
+  const nested = Array.isArray(err.errors) ? err.errors.map(rawErrorText).filter(Boolean) : [];
+  if (nested.length) return [...new Set(nested)].join(";");
+  if (typeof err.message === "string" && err.message) return err.message;
+  if (typeof err.code === "string" && err.code) return err.code;
+  return e instanceof Error ? e.name : String(e);
+}
+
+/**
+ * DATABASE_URL 写错了是配置错误(退出码 2),不是连不上库。驱动(pg-connection-string)按 new URL(串, "postgres://base") 解析:
+ * 解析不了时 new pg.Client() 直接抛 "Invalid URL";"not a url"、libpq 的 "host=… dbname=…" 这种不是绝对地址的串还会被当成相对路径、
+ * 去连一台叫 base 的主机。所以这里要求是绝对 URL,驱动认的另外两种写法照样放行:"/" 开头的 Unix socket 路径,
+ * 和主机留空的 postgres://用户@/库名(驱动先补一个占位主机再解析)。报错不带连接串本身(里面有密码)。
+ */
+export function checkPgUrl(url: string): void {
+  if (!url.startsWith("/") && !URL.canParse(url) && !URL.canParse(url.replace("@/", "@___DUMMY___/"))) {
+    throw new SourceConfigError("DATABASE_URL 不是合法的连接串,应该形如 postgres://用户:密码@主机:5432/库名(密码里的 @ : / # 等字符要写成 %40 这样的转义)");
+  }
+}
+
 /** 把这个连接设成只读:之后的事务一律只读,误调写方法时数据库直接拒绝。 */
 export async function makeReadOnly(sql: SqlClient): Promise<SqlClient> {
   await sql.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY");
@@ -84,7 +115,7 @@ export interface OpenedSource {
   close(): Promise<void>;
 }
 
-/** 只读打开。内存库文件不存在抛 SourceConfigError;文件坏了、连不上数据库抛普通 Error。 */
+/** 只读打开。内存库文件不存在、DATABASE_URL 写错了抛 SourceConfigError;文件坏了、连不上数据库抛普通 Error。 */
 export async function openSessionSource(t: StoreTarget, repoRoot: string): Promise<OpenedSource> {
   if (t.kind === "memory") {
     if (!isAbsolute(t.file)) throw new SourceConfigError(`内存库路径必须是绝对路径:${t.file}`);
@@ -99,8 +130,15 @@ export async function openSessionSource(t: StoreTarget, repoRoot: string): Promi
     return { source: store, close: () => store.close() };
   }
   // 命令行只需要一条连接;连上之后先设只读,再交给 PgStore。和网页一样,用到 PostgreSQL 时才加载驱动
+  checkPgUrl(t.url);
   const { default: pg } = await import("pg");
-  const client = new pg.Client({ connectionString: t.url });
+  let client: InstanceType<typeof pg.Client>;
+  try {
+    // 连接串在构造时解析,这里还没碰网络:抛出来的都是连接串本身的问题(比如端口不是数字)
+    client = new pg.Client({ connectionString: t.url });
+  } catch (e) {
+    throw new SourceConfigError(`DATABASE_URL 解析不了:${errorText(e)}`);
+  }
   await client.connect();
   try {
     const sql = await makeReadOnly({
