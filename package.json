@@ -20,6 +20,8 @@
     "test:e2e:real": "pnpm --filter @fde/web test:e2e:real",
     "calibrate": "tsx tools/evals/src/calibrate.ts",
     "models:check": "tsx apps/cli/src/models-check.ts",
+    "session:export": "tsx tools/evals/src/session-export.ts",
+    "playtest": "tsx tools/evals/src/playtest.ts",
     "fixtures": "tsx packages/contracts/scripts/gen-fixtures.ts",
     "ci:fixtures": "pnpm fixtures && git diff --exit-code packages/contracts/fixtures && ! git status --porcelain packages/contracts/fixtures | grep .",
     "ci:local": "pnpm typecheck && pnpm test && pnpm validate && pnpm evals && pnpm calibrate --mock && pnpm ci:fixtures"

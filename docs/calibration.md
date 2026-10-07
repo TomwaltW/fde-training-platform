@@ -69,6 +69,18 @@ pnpm calibrate --init /tmp/beta-01.json --id beta-01
 
 挑的时候覆盖不同的分数段和不同的玩法(只和老板聊的、资料看得多的、早早报价的……),不要只挑完整玩完的。
 
+**本地网页上玩的对局**(备案之前的 L1 试玩,`pnpm playtest` 或 `pnpm dev:web`,见 [`docs/playtest.md`](./playtest.md)):没有数据库,对局在内存库的落盘文件里(默认 `.data/dev-store.json`)。用 `pnpm session:export` 导出,它按网页后端的同一套约定找库、只读打开:
+
+```bash
+pnpm session:export --list                              # 对局 id、轮数、总分、模型调用与花费、脱敏账号
+pnpm session:export --id <对局 id> --calibrate beta-01  # 直接建用例(和 --init 是同一段代码)
+pnpm session:export --id <对局 id> --out /tmp/beta-01.json   # 或者只导出 { state } 文件,再 --init
+```
+
+它和 `pnpm playtest` 一样只读仓库根目录的 `.env`,不读 `apps/web/.env*`;直接用 `pnpm dev:web` 玩、库的变量(`FDE_MEMORY_STORE_FILE`、`FDE_ROOT`、`DATABASE_URL`)写在 `apps/web` 下时,用 `--store-file <dev-store.json>` 指定文件。"模型调用"一列是"无"的是离线模式玩的,不要拿来标定。
+
+有 `DATABASE_URL` 时它读 PostgreSQL(连接设成只读),但要在装好依赖的仓库里跑,`DATABASE_URL` 也要指向这台机器连得上的地址。按 `docs/deploy.md` 部署的服务器上,postgres 不对外开放端口,宿主机的 `.env` 里没有 `DATABASE_URL`(compose 只在 app 容器里拼),镜像里也没有这个工具,所以线上的对局照旧用上面的 `psql`;经 SSH 隧道把容器里的库转到本机再用 `session:export` 读,没有实测【待确认】。
+
 **脚本化玩家 5 份**:
 
 ```bash
