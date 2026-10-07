@@ -1,7 +1,7 @@
 // 第一关发布前自查脚本(docs/gate1/01-首条内容.md 第 7 节)的回归测试。
 // 脚本从文档里现取(文档就是脚本的唯一来源),用 python3 跑没装 PyYAML 时的正则路径:
 // - canaries 写成块状列表、列表中间夹着空行或注释行时,也要把金丝雀词读全(以前读到一半就停,还照常退出 0);
-// - 千分位只认半角逗号:全角逗号(62，100)是两个数,不能先被 NFKC 变成半角再合并成 62100。
+// - 千分位只认半角逗号:全角逗号(79，100)是两个数,不能先被 NFKC 变成半角再合并成 79100。
 // 测试里不抄任何金丝雀词和隐藏数字,要用的都从 scenario.yaml 现取。
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -77,7 +77,7 @@ describe.skipIf(!hasPython)("第一关自查脚本(正则路径,没装 PyYAML)",
     });
     const lines = r.stdout.split("\n");
     const line = (n: string) => lines.find((l) => l.startsWith(`${n} `)) ?? "";
-    /** 第 1–3 行冒号后面列表里的各项('62' 之类)。 */
+    /** 第 1–3 行冒号后面列表里的各项('79' 之类)。 */
     const items = (n: string) => [...line(n).slice(line(n).indexOf("):") + 2).matchAll(/'([^']*)'/g)].map((m) => m[1]!);
     return { status: r.status, stderr: r.stderr, head: lines[0] ?? "", items, line };
   }
@@ -97,11 +97,11 @@ describe.skipIf(!hasPython)("第一关自查脚本(正则路径,没装 PyYAML)",
   });
 
   it("全角逗号隔开的两个数不当千分位合并", () => {
-    const r = run("我这局拿了 62，100 分满分\n");
+    const r = run("我这局拿了 79，100 分满分\n");
     expect(r.status).toBe(0);
     expect(r.head).toContain("正则");
     const nums = [...r.items("2"), ...r.items("3")].sort();
-    expect(nums).toEqual(["100", "62"]);
+    expect(nums).toEqual(["100", "79"]);
   });
 
   it("半角千分位逗号照样合并(全角数字也一样),18000 按公开数字放行", () => {

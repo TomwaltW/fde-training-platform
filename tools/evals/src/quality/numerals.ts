@@ -34,12 +34,12 @@ const BIG: Record<string, number> = { 百: 100, 千: 1000, 万: 10_000, 亿: 100
 /** 前置的对称约数词:"大概三百""差不多四百三""约 19800"。按 ±10% 放宽,记下说出的那个数。 */
 const APPROX_BEFORE = /(大约|大概|差不多|估计|也就|约)\s*$/;
 /**
- * 前置的有方向的约数词,给单边区间(见 directional):不到 / 不足 / 少于 X 在 X 下面;超过(了) / 至少(有) / 起码(有) / 不止 X 在 X 上面;
+ * 前置的有方向的约数词,给单边区间(见 directional):不到 / 不足 / 少于 / 不超过 X 在 X 下面;超过(了) / 至少(有) / 起码(有) / 不止 X 在 X 上面;
  * 将近(有) / 接近 / 近 / 快(到) / 小 X 是略低于 X("小五十万"是快到五十万)。"最近""很快""尽快"不是约数词;
  * "不少于"是"至少",不是"少于"(不认,按精确数读)。只看数前面 3 个字,还认哪些、哪些照旧按精确数读见 docs/quality-gates.md「已知的局限」。
  */
-const BELOW_BEFORE = /(不到|不足|(?<!不)少于)\s*$/;
-const ABOVE_BEFORE = /(超过了?|至少有?|起码有?|不止)\s*$/;
+const BELOW_BEFORE = /(不到|不足|(?<!不)少于|不超过了?)\s*$/;
+const ABOVE_BEFORE = /((?<!不)超过了?|至少有?|起码有?|不止)\s*$/;
 const NEAR_BEFORE = /(将近有?|接近|(?<![最附])近|(?<![很尽赶加])快到?|(?<!最)小)\s*$/;
 type Direction = "below" | "above" | "near";
 const directionOf = (before: string): Direction | undefined =>
