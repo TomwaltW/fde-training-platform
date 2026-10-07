@@ -56,6 +56,9 @@ export class LlmError extends Error {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** 环节没配 timeout_ms 时的单次请求超时。 */
+export const DEFAULT_TIMEOUT_MS = 30_000;
+
 export function createGateway(cfg: ModelsConfig, opts: GatewayOptions = {}) {
   const env = opts.env ?? process.env;
   const doFetch = opts.fetch ?? fetch;
@@ -84,7 +87,7 @@ export function createGateway(cfg: ModelsConfig, opts: GatewayOptions = {}) {
     while (attempts <= retries) {
       attempts++;
       const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), sc.timeout_ms ?? 30_000);
+      const timer = setTimeout(() => ac.abort(), sc.timeout_ms ?? DEFAULT_TIMEOUT_MS);
       try {
         const res = await doFetch(`${provider.base_url.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
