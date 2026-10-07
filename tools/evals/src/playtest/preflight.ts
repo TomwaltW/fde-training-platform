@@ -115,7 +115,7 @@ export function preflight({ env, repoRoot, offline }: PreflightInput): Preflight
   if (devCodes) {
     info.push(["登录", "验证码直接显示在登录页上(FDE_DEV_LOGIN_CODES=1)"]);
     warnings.push(
-      "验证码显示在页面上:谁能打开这个网址,谁就能用任何邮箱登录,包括 ADMIN_EMAILS 里的管理员邮箱。" +
+      "验证码显示在页面上:谁能打开这个网址,谁就能登录任何已注册的账号,包括 ADMIN_EMAILS 里的管理员邮箱(管理员不需要邀请码)。" +
         "只在本机、当面或腾讯会议远程控制时用;不要用隧道、端口转发把它暴露出去(远程试玩的几种做法见 docs/playtest.md)。",
     );
   } else {

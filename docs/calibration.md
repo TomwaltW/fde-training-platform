@@ -77,7 +77,7 @@ pnpm session:export --id <对局 id> --calibrate beta-01  # 直接建用例(和 
 pnpm session:export --id <对局 id> --out /tmp/beta-01.json   # 或者只导出 { state } 文件,再 --init
 ```
 
-有 `DATABASE_URL` 时它读 PostgreSQL(连接设成只读),可以代替上面的 `psql`。"模型调用"一列是"无"的是离线模式玩的,不要拿来标定。
+有 `DATABASE_URL` 时它读 PostgreSQL(连接设成只读),在连得上数据库的机器上(一般是服务器上)可以代替上面的 `psql`。"模型调用"一列是"无"的是离线模式玩的,不要拿来标定。
 
 **脚本化玩家 5 份**:
 
