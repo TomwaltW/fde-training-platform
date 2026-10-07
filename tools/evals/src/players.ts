@@ -34,7 +34,7 @@ const Check = z.strictObject({
 });
 export type Check = z.infer<typeof Check>;
 
-const Step = z.union([
+export const Step = z.union([
   z.strictObject({ say: z.string(), gate: GateShort.optional(), check: Check.optional() }),
   z.strictObject({ switch: z.string(), check: Check.optional() }),
   z.strictObject({ open: z.string(), check: Check.optional() }),

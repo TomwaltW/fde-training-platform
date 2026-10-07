@@ -1,6 +1,8 @@
-// 回归评测:pnpm evals [--live] [--player EV_good] [--runs 3] [--scenario scenarios/freight-docs]
+// 回归评测:pnpm evals [--live] [--player EV_good] [--runs 3] [--scenario scenarios/freight-docs] [--gates config/quality-gates.yaml]
 //   离线(默认):闸门用脚本里的标准标注,演员用模板,裁判用脚本里的固定输出。完全确定,测导演和算分。
 //   在线(--live):闸门、演员用真模型(config/models.yaml),裁判仍用固定输出;额外报告闸门命中率和花费。
+// 跑完打印质量门槛表(config/quality-gates.yaml,说明见 docs/quality-gates.md)。
+// 退出码:0 玩家断言和要判的门槛全部通过;1 有没过的;2 配置错误(门槛配置写错、--live 缺 Key)。
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -8,6 +10,10 @@ import { LlmActor, LlmGate, loadScenario } from "@fde/engine";
 import { createGateway, loadModelsConfig, type LlmCallLog } from "@fde/llm";
 import { loadPlayers } from "./players.ts";
 import { checkExpectations, runPlayer, type Mode, type PlayerRun } from "./runner.ts";
+import { describeIssue } from "./quality/auditor.ts";
+import { barsFailed, evalBars, evalRunInput, renderBars, type EvalRunInput } from "./quality/bars.ts";
+import { loadQualityGates, type QualityGates } from "./quality/config.ts";
+import { liveEnvProblem } from "./quality/live-env.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
 const { values } = parseArgs({
@@ -16,6 +22,7 @@ const { values } = parseArgs({
     player: { type: "string", multiple: true },
     runs: { type: "string", default: "1" },
     scenario: { type: "string", default: "scenarios/freight-docs" },
+    gates: { type: "string", default: "config/quality-gates.yaml" },
     verbose: { type: "boolean", short: "v", default: false },
   },
 });
@@ -25,21 +32,36 @@ const scn = loadScenario(scnDir);
 const players = loadPlayers(join(scnDir, "evals/players")).filter((p) => !values.player?.length || values.player.includes(p.id));
 const specs = new Map((scn.data.evals ?? []).map((e) => [e.id, e]));
 
+let gates: QualityGates;
+try {
+  gates = loadQualityGates(resolve(root, values.gates!));
+} catch (e) {
+  console.error((e as Error).message);
+  process.exit(2);
+}
+
 const calls: LlmCallLog[] = [];
 let mode: Mode = { kind: "offline" };
 if (values.live) {
   if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
   const cfg = loadModelsConfig(process.env.FDE_MODELS_CONFIG ?? join(root, "config/models.yaml"));
+  const problem = liveEnvProblem(cfg, process.env, ["gate", "actor"]);
+  if (problem) {
+    console.error(`无法用 --live:${problem}。在仓库根目录的 .env 里配置后重试;没有 Key 时不加 --live。`);
+    process.exit(2);
+  }
   const chat = createGateway(cfg, { onCall: (l) => calls.push(l) });
   mode = { kind: "live", deps: { gate: new LlmGate(chat), actor: new LlmActor(chat) } };
 }
 
 const runs = Math.max(1, Number(values.runs));
 const results: (PlayerRun & { expectChecks: ReturnType<typeof checkExpectations> })[] = [];
+const barInputs: EvalRunInput[] = [];
 let failed = 0;
 
 for (const p of players) {
   for (let r = 0; r < runs; r++) {
+    const callsBefore = calls.length;
     const run = await runPlayer(scn, p, mode);
     const specExpect = specs.get(p.id)?.expect ?? {};
     const expect = { ...(p.expect ?? {}), ...specExpect };
@@ -52,6 +74,8 @@ for (const p of players) {
     const bad = all.filter((c) => !c.ok);
     if (bad.length || run.crashed) failed++;
     results.push({ ...run, expectChecks });
+    // 花费按调用顺序切:玩家是一个接一个跑的,不靠 sessionId(同一毫秒开的两局会重名)
+    barInputs.push(evalRunInput(run, Boolean(bad.length || run.crashed), calls.slice(callsBefore)));
 
     const dims = run.dims ? Object.entries(run.dims).map(([k, v]) => `${k}=${v}`).join(" ") : "";
     console.log(
@@ -62,6 +86,10 @@ for (const p of players) {
     if (run.gateAgreement) {
       const g = run.gateAgreement;
       console.log(`    闸门命中 ${g.matched}/${g.expected},多命中 ${g.extra}`);
+    }
+    for (const a of run.delivered) {
+      for (const i of a.issues) console.log(`    ✗ 交付台词 ${a.ref}(${a.roleId}):${describeIssue(i)}  「${a.text}」`);
+      if (values.verbose) for (const e of a.echoes) console.log(`    · 复述了用户说过的数 ${e}(${a.ref}「${a.text}」)`);
     }
     if (!specs.has(p.id)) console.log(`    ! scenario.yaml 的 evals 里没有 ${p.id}`);
   }
@@ -78,6 +106,10 @@ if (calls.length) {
   }
 }
 
+const bars = evalBars(barInputs, gates, mode.kind);
+console.log("");
+for (const l of renderBars(bars, `质量门槛(${values.gates},${mode.kind === "live" ? "在线" : "离线"})`)) console.log(l);
+
 const outDir = join(root, "tools/evals/out");
 mkdirSync(outDir, { recursive: true });
 const file = join(outDir, `${values.live ? "live" : "offline"}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
@@ -87,6 +119,7 @@ writeFileSync(
     {
       scenario: scn.data.meta.id,
       mode: mode.kind,
+      bars,
       results: results.map(({ state, report, ...r }) => ({ ...r, ledger: state?.ledger, debrief: report?.markdown })),
       calls,
     },
@@ -95,4 +128,4 @@ writeFileSync(
   ),
 );
 console.log(`\n${results.length - failed}/${results.length} 通过 · 明细:${file.replace(`${root}/`, "")}`);
-process.exit(failed ? 1 : 0);
+process.exit(failed || barsFailed(bars) ? 1 : 0);
