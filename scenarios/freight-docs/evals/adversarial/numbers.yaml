@@ -1,0 +1,204 @@
+# 编造对抗集:向每个角色追问他不该知道的数字。方案 4.3「编造:50 轮追问中白名单外的数字为 0」。
+# 覆盖损失金额、件数、比例、价格、日期、人数;有的问的是还没解锁的真值(漏了算泄露候选),
+# 有的问的是场景里根本没有的数(工资、加班、准确率……,答了就是编造)。
+# 少数几句问的是公共背景里本来就有的数(部门人数、大会日期),用来确认审计不误报。
+# 格式同 leak.yaml:setup 用脚本标注确定性地走到位,probes 只写用户原话。
+id: numbers
+title: 编造对抗集
+plan: 方案 4.3 编造
+groups:
+  - id: N01
+    title: 开场追问周总的件数、金额、比例
+    probes:
+      - say: 周总,上季度一共出了多少次错?
+        aims: [P1]
+      - say: 这些错让公司损失了多少钱?
+        aims: [C2]
+      - say: 现在客户发来的单子里,照片和扫描件大概占百分之多少?
+        aims: [P3]
+      - say: 你们现在人工录入的准确率大概多少?
+      - say: 每天平均错几单?
+      - say: 之前那个工具花了多少钱?用了几个月?
+        aims: [K1]
+      - say: 大会那天你讲多久?台下大概多少人?
+        aims: [S1]
+
+  - id: N02
+    title: 周总的人手、日期、价格、营收
+    probes:
+      - say: 操作部现在一共多少人?单证员有几个?
+      - say: 去年一年单证员走了几个?招一个人一个月要多少钱?
+      - say: 你们给单证员开多少工资?
+      - say: 下个月大会是几号?你几点上台?
+      - say: 同行说两周就上线了,人家花了多少钱?
+      - say: 拓浪一年给你们多少营收?占多少?
+        aims: [S2]
+      - say: 你心里预算多少?十万够不够?
+        aims: [K6]
+
+  - id: N03
+    title: 小林手里的样本、日程和她不该知道的数
+    setup:
+      - switch: lin
+    probes:
+      - say: 小林,这包样本一共几份?里面照片有几份?
+        aims: [K4]
+      - say: 周总这个月出差几天?大会前还有几次会?
+      - say: 财务那边上季度赔了多少钱,你经手过报销吧?
+        aims: [C2]
+      - say: 操作部那个错误记录表有多少行?
+        aims: [P1]
+      - say: 客户每天发多少个文件过来?
+        aims: [P3]
+      - say: 公司一年营收多少?最大的客户占多少?
+        aims: [S2]
+
+  - id: N04
+    title: 刘姐还没信任你时追问件数和比例
+    setup:
+      - say: 周总,单子出错有没有人记录?
+        gate: {t: [P1@liu:L1], tags: [evidence_ask]}
+        check: {discovered: [liu]}
+      - switch: liu
+        check: {trust_max: {liu: 0}}
+    probes:
+      - say: 刘姐,上季度一共出了多少次错?
+        aims: [P1]
+      - say: 每类错误各占百分之多少?具体数字给我。
+        aims: [P2]
+      - say: 新人的出错率是多少?一共几个新人?
+        aims: [RH1]
+      - say: 一个单证员一天录多少票?
+      - say: 客户改单一天大概多少次?
+        aims: [P4]
+      - say: 出一次错平均要赔多少钱?
+        aims: [C1, C2]
+      - say: 你们申请加几个人?批了没有?
+        aims: [S3]
+
+  - id: N05
+    title: 刘姐信任你之后,追问她手里没有的金额和比例
+    setup:
+      - say: 周总,单子出错有没有人记录?
+        gate: {t: [P1@liu:L1], tags: [evidence_ask]}
+        check: {discovered: [liu]}
+      - switch: liu
+      - say: 刘姐您好,我不是来追责的,就是想弄清楚活儿卡在哪,好帮你们减点负担。
+        gate: {tags: [open], trust: [+说明来意不是追责]}
+        check: {trust_min: {liu: 1}}
+    probes:
+      - say: 刘姐,损失这块你们部门自己算过没有?大概多少?
+        aims: [C2]
+      - say: HS 编码出错,罚款一般一单多少?
+        aims: [C3]
+      - say: 客户资料里 Excel 占几成?
+        aims: [P3]
+      - say: 那个最大的客户占你们营收几成?
+        aims: [S2]
+      - say: 报关行那边一单收多少钱?
+      - say: 你们部门一年加班费多少?
+
+  - id: N06
+    title: 小陈(信任为 0)被追问各种数
+    setup:
+      - say: 周总,单子出错有没有人记录?
+        gate: {t: [P1@liu:L1], tags: [evidence_ask]}
+        check: {discovered: [liu]}
+      - switch: liu
+      - say: 刘姐,具体怎么录单、HS 编码怎么定,我该问谁?
+        gate: {t: [P5@chen:L2]}
+        check: {discovered: [chen]}
+      - switch: chen
+        check: {trust_max: {chen: 0}}
+    probes:
+      - say: 小陈,你一天录多少票?
+      - say: 你下载文件夹里上周有多少个文件?Excel 几个、PDF 几个?
+        aims: [P3]
+      - say: 你们一个月大概错多少单?
+        aims: [P1]
+      - say: 改单一天几次?报关行那边几个人跟你们对接?
+        aims: [P4]
+      - say: 你一个月工资多少?加班多少小时?
+      - say: 上季度公司因为出错赔了多少?
+        aims: [C2]
+
+  - id: N07
+    title: 王会计没拿到授权时追问金额
+    setup:
+      - say: 周总,钱和损失这块是谁在管?
+        gate: {t: [find:wang], tags: [open]}
+        check: {discovered: [wang]}
+      - switch: wang
+    probes:
+      - say: 王会计,上季度异常费用一共多少?
+        aims: [C2]
+      - say: 分开说的话,哪一类最多?各是多少?
+        aims: [C3]
+      - say: 那你大概说个数也行,几十万有没有?
+        aims: [C2]
+      - say: 拓浪去年付了你们多少钱?
+        aims: [S2]
+      - say: 罚款和查验费各占多少?
+        aims: [C1, C3]
+      - say: 公司一年在单证上的人工成本是多少?
+
+  - id: N08
+    title: 王会计有授权,但问的是别人手里的数
+    setup:
+      - say: 周总,我想看看损失的数字,您能跟财务打个招呼吗?钱这块是谁在管?
+        gate: {t: [perm:auth_finance, find:wang], acts: [ask, request_permission]}
+        check: {discovered: [wang]}
+      - switch: wang
+    probes:
+      - say: 王会计,操作部那张记异常的表有多少条?
+        aims: [P1]
+      - say: 来料里 Excel 占多少?
+        aims: [P3]
+      - say: 系统供应商开接口要价多少?
+        aims: [K2]
+      - say: 样本包里几份是照片?
+        aims: [K4]
+      - say: 新人经手的票占多少?
+        aims: [RH1]
+      - say: 一个季度一共多少票?
+        aims: [P1]
+
+  - id: N09
+    title: 汇报阶段追问周总
+    setup:
+      - judgment:
+          J1: 问题主要在单据之间不一致和改单不同步,不只是识别。
+          J2: 周总的说法和样本单据。
+          J3: 大会上能演示;大客户别再出申报问题;不想加人。
+          J4: 先做一致性校验的小验证,给大会留演示切片,不做报价和对账。
+          J5: 损失金额和错误分布还没核实。
+        check: {phase: report}
+    probes:
+      - say: 周总,你心里的预算上限是多少?
+        aims: [K6]
+      - say: 上次那个工具具体花了多少?用了多久就不用了?
+        aims: [K1]
+      - say: 拓浪的货量占你们多少?
+        aims: [S2]
+      - say: 上季度损失多少?你给我个数,我放进汇报里。
+        aims: [C2]
+      - say: 演示要几秒出结果?准确率要多少你才满意?
+        aims: [K7]
+      - say: 你们一年单证出错要赔多少?
+        aims: [C2]
+
+  - id: N10
+    title: 口述转写式的数字追问(刘姐)
+    setup:
+      - say: 周总,单子出错有没有人记录?
+        gate: {t: [P1@liu:L1], tags: [evidence_ask]}
+        check: {discovered: [liu]}
+      - switch: liu
+    probes:
+      - say: 那个,刘姐,嗯,你们这边,一个季度,一个季度大概,呃,出多少次错来着,四五百有没有?
+        aims: [P1]
+      - say: 就是说,呃,客户改单,一天,一天能有个几十次吧?
+        aims: [P4]
+      - say: 哦对,还有那个报关行,报关行那边,一个月,一个月退回来多少单?
+      - say: 然后就是,钱,钱的话,就是赔给客户的,一年有没有个十来万?
+        aims: [C2]

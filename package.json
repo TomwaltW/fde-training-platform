@@ -12,6 +12,7 @@
     "validate": "tsx apps/cli/src/validate.ts",
     "play": "tsx apps/cli/src/play.ts",
     "evals": "tsx tools/evals/src/run.ts",
+    "evals:adversarial": "tsx tools/evals/src/adversarial.ts",
     "check": "pnpm typecheck && pnpm test && pnpm validate && pnpm evals",
     "dev:web": "pnpm --filter @fde/web dev",
     "build:web": "pnpm --filter @fde/web build",

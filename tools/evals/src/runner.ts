@@ -14,6 +14,7 @@ import {
 } from "@fde/engine";
 import { triggers } from "@fde/engine";
 import { expandGate, lintPlayer, type Check, type Player } from "./players.ts";
+import { auditDelivered, type LineAudit } from "./quality/auditor.ts";
 
 export interface CheckResult {
   name: string;
@@ -31,6 +32,10 @@ export interface PlayerRun {
   minutesUsed: number;
   turns: number;
   gateAgreement?: { expected: number; matched: number; extra: number };
+  /** 每句话(进了闸门的)从发出到拿到回复的毫秒数,含闸门、演员和守卫重试(质量门槛:单轮中位耗时)。 */
+  turnMs: number[];
+  /** 每条实际出给用户的角色台词的审计结果(quality/auditor.ts,独立于守卫)。 */
+  delivered: LineAudit[];
   state?: SessionState;
   report?: SessionReport;
 }
@@ -39,7 +44,7 @@ export type Mode =
   | { kind: "offline"; /** 测试用:替换离线的某个端口(比如包一层记录提示词的演员) */ overrides?: Partial<EngineDeps> }
   | { kind: "live"; deps: Omit<EngineDeps, "judge" | "debrief"> & Partial<EngineDeps> };
 
-function stepCheck(name: string, c: Check, res: TurnResult, st: SessionState, before: { traps: number }): CheckResult[] {
+export function stepCheck(name: string, c: Check, res: TurnResult, st: SessionState, before: { traps: number }): CheckResult[] {
   const out: CheckResult[] = [];
   const add = (label: string, ok: boolean, detail: string) => out.push({ name: `${name} ${label}`, ok, detail });
   if (c.directive) add("directive", res.directive?.stance === c.directive, `期望 ${c.directive},实际 ${res.directive?.stance ?? "无"}`);
@@ -60,6 +65,8 @@ function stepCheck(name: string, c: Check, res: TurnResult, st: SessionState, be
   if (c.phase) add("phase", st.phase === c.phase, `实际 ${st.phase}`);
   if (c.system_includes) add("system", res.system.some((s) => s.includes(c.system_includes!)), res.system.join(" | ") || "无");
   if (c.minutes_used !== undefined) add("minutes", st.minutesUsed === c.minutes_used, `实际 ${st.minutesUsed}`);
+  for (const [r, v] of Object.entries(c.trust_min ?? {})) add(`trust_min ${r}`, (st.trust[r] ?? 0) >= v, `${r} 信任 ${st.trust[r] ?? 0}`);
+  for (const [r, v] of Object.entries(c.trust_max ?? {})) add(`trust_max ${r}`, (st.trust[r] ?? 0) <= v, `${r} 信任 ${st.trust[r] ?? 0}`);
   return out;
 }
 
@@ -74,6 +81,8 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
   const st = engine.start(`eval-${player.id}-${Date.now()}`);
   const checks: CheckResult[] = [];
   const agree = { expected: 0, matched: 0, extra: 0 };
+  const turnMs: number[] = [];
+  const delivered: LineAudit[] = [];
   const live = mode.kind === "live";
 
   // 脚本写错了直接算失败
@@ -95,15 +104,21 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
       let res: TurnResult | undefined;
       if ("say" in step) {
         if (!live) queue.push(expandGate(step.gate));
+        const t0 = performance.now();
+        const turnBefore = st.turn;
         res = await engine.userTurn(st, step.say);
+        if (st.turn > turnBefore) turnMs.push(Math.round(performance.now() - t0));
         queue.clear();
-        if (live && step.gate?.t) {
+        // 闸门对照:每句进了闸门的话都比(没进闸门的,比如被内容审核挡下,st.turns 里没有这一轮,不能拿上一轮的结果来比)。
+        // 没写 t 的步骤,标准答案就是"什么触发器都不命中"(离线喂给导演的也是空的),真闸门命中的全算多命中。
+        if (live && st.turn > turnBefore) {
           const got = new Set(st.turns.at(-1)?.gate?.matched_triggers.filter((m) => m.confidence >= 0.6).map((m) => m.id));
-          for (const id of step.gate.t) {
+          const want = step.gate?.t ?? [];
+          for (const id of want) {
             agree.expected++;
             if (got.has(id)) agree.matched++;
           }
-          agree.extra += [...got].filter((id) => !step.gate!.t!.includes(id)).length;
+          agree.extra += [...got].filter((id) => !want.includes(id)).length;
         }
       } else if ("switch" in step) res = await engine.act(st, { type: "switch_role", role: step.switch });
       else if ("open" in step) res = await engine.act(st, { type: "open_artifact", artifact: step.open });
@@ -114,6 +129,8 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
         if (st.phase !== "debrief") res = await engine.act(st, { type: "end" });
         break;
       }
+      const audit = res && auditDelivered(scn, st, res);
+      if (audit) delivered.push(audit);
       // 按钮动作被拒绝(前提不满足、阶段不对)说明脚本和引擎对不上,不能悄悄跳过
       if (res && res.ok === false && !("say" in step)) {
         checks.push({ name: `${label} 动作`, ok: false, detail: `被拒绝:${res.system.join(" | ")}` });
@@ -148,11 +165,13 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
       minutesUsed: st.minutesUsed,
       turns: st.turn,
       ...(live && { gateAgreement: agree }),
+      turnMs,
+      delivered,
       state: st,
       report,
     };
   } catch (e) {
-    return { player: player.id, ok: false, crashed: (e as Error).stack ?? String(e), checks, minutesUsed: st.minutesUsed, turns: st.turn, state: st };
+    return { player: player.id, ok: false, crashed: (e as Error).stack ?? String(e), checks, minutesUsed: st.minutesUsed, turns: st.turn, turnMs, delivered, state: st };
   }
 }
 
