@@ -117,6 +117,24 @@ describe("不是数的不抽", () => {
     expect(extractQuantities(s).filter((q) => q.lo >= 10 || q.percent)).toEqual([]);
   });
 
+  it.each([
+    "活干到一半,客户又改单了",
+    "录到一半发现箱数对不上",
+    "你这话只说对了一半",
+    "一半一半吧",
+    "说一半留一半",
+    "我一大半时间都在核对",
+    "大半时间在核对",
+    "一半的时间在追客户",
+    "到一半的时候停了",
+  ])("不是在说占比的一半:%s", (s) => {
+    expect(extractQuantities(s)).toEqual([]);
+  });
+
+  it.each(["改单占了一半", "改单占到一半", "错误率达到一半", "有一半是改单"])("说的是占比的一半照常认:%s", (s) => {
+    expect(one(s)).toMatchObject({ lo: 45, hi: 55, percent: true, raw: "一半" });
+  });
+
   it("钟点保留单位「点」,序数保留前面的「第」由审计去豁免", () => {
     expect(one("下午三点半")).toMatchObject({ lo: 3, unit: "点" });
     // "十一二点":十一点到十二点,两段都是钟点

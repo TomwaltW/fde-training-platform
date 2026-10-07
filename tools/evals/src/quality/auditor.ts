@@ -100,7 +100,9 @@ export function truthIndex(scn: LoadedScenario): TruthIndex {
     ...b.rules_shown,
     ...d.roles.map((r) => `${r.name},${r.title}`),
   ].map(foldWidth);
-  const pub = new Set(publicTexts.flatMap((t) => points(t, "public")).map((p) => p.v));
+  // 按"值 + 是不是百分数"去重:公共背景里的"单证 14"(人数)盖不住 P2 的"录入手误 14%"
+  const key = (p: TruthPoint) => `${p.v}|${p.percent}`;
+  const pub = new Set(publicTexts.flatMap((t) => points(t, "public")).map(key));
 
   const all: TruthPoint[] = [];
   walkTruth(d.truth, "truth", all);
@@ -116,7 +118,7 @@ export function truthIndex(scn: LoadedScenario): TruthIndex {
   for (const x of d.experiments) all.push(...points(x.result, x.id));
   for (const a of d.artifacts) all.push(...points(a.title, a.id));
 
-  const idx: TruthIndex = { publicTexts, truthOnly: all.filter((p) => !pub.has(p.v)), canaries };
+  const idx: TruthIndex = { publicTexts, truthOnly: all.filter((p) => !pub.has(key(p))), canaries };
   cache.set(scn, idx);
   return idx;
 }
@@ -156,16 +158,35 @@ function impliedRange(v: number): [number, number] {
 }
 
 /**
+ * 复述用户说的精确数 u:原样说出来,或者往粗里取整——角色的数末位位值比 u 的大、正好是 u 在那一位上的取整,
+ * 并且差不到 0.5%(用户"四百二十八" → "四百三")。比用户的数多出有效数字的一律不算:
+ * 用户"五十万" → "四十九万八"、"四百三十" → "四百二十八"、"十四万八" → "十四万八千五"都是把猜测说准了;
+ * 位值一样的也不算(用户"四百二十八" → "四百二十七"是在纠正用户);
+ * 不是取整的也不算(用户"四千二百八十四" → "四千二百九十"差不到 0.5%,但不是 4284 的取整,是在纠正)。
+ */
+function echoesUser(said: number, u: number): boolean {
+  if (said === u) return true;
+  const pv = placeValue(said);
+  return pv > placeValue(u) && near(said, u) && Math.round(u / pv) * pv === said;
+}
+
+/**
  * 已知量 k 能不能解释台词里的量 q。fromUser:k 出自用户自己的话。
  * 复述用户的说法时量词可以省,但不能借复述把用户的猜测说得更准:
- *   用户"四百条有没有" → 角色"四百条?"是复述;"四百三十条""差不多四百三""四百多"都比用户说得细,不是复述。
+ *   用户"四百条有没有" → 角色"四百条?"是复述;"四百三十条""差不多四百三""四百多"都比用户说得细,不是复述;
+ *   用户"五十万有没有" → 角色"四十九万八"也不是(精确数只认原样复述和往粗里取整,见 echoesUser)。
  */
 function explains(k: Quantity, q: Quantity, fromUser = false): boolean {
   if (q.percent !== k.percent) return false; // "跟单 8"不能放行"8%"
   // 精确数,和带"大概""左右"的精确数:按说出的那个数比,不按放宽后的区间("差不多四百三"是 430,不是 [387, 473])
   const said = q.kind === "exact" ? q.lo : q.center;
   if (said !== undefined) {
-    if (k.kind === "exact") return near(said, k.lo) || (!fromUser && roundsTo(said, k.lo) && unitCompat(q.unit, k.unit));
+    if (fromUser) {
+      if (k.kind === "exact") return echoesUser(said, k.lo);
+      if (k.kind === "range") return echoesUser(said, k.lo) || echoesUser(said, k.hi);
+      return false;
+    }
+    if (k.kind === "exact") return near(said, k.lo) || (roundsTo(said, k.lo) && unitCompat(q.unit, k.unit));
     if (k.kind === "range") return near(said, k.lo) || near(said, k.hi);
     return false; // 用户说"几十万",角色说"五十万":是把模糊的说具体了
   }

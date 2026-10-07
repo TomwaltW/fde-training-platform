@@ -2,7 +2,7 @@
 // 门槛没过 → 退出码 1;全部通过 → 0;配置错误(缺 Key、门槛配置写错、对抗集名字写错)→ 2。
 // 临时模型配置里 base_url 指向假服务、Key 变量名独一无二,所以本机以后有了 .env 也不会把真 Key 发出去。
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -113,6 +113,22 @@ describe("pnpm evals --live", () => {
     const badGates = await run(evalsCli, ["--player", "EV_rush", "--gates", bad], {});
     expect(badGates.code).toBe(2);
     expect(badGates.out).toContain("0.85 而不是 85");
+  }, 60_000);
+});
+
+describe("pnpm evals(离线)", () => {
+  it("玩家断言没过:最后一行只报玩家,不把「脚本化玩家断言」再当一项门槛报一次;退出码 1", async () => {
+    // 场景目录拷到临时目录,给 EV_rush 第 2 步加一条走不到的断言(那时还没到汇报阶段)
+    const scn = join(tmp(), "freight-docs");
+    cpSync(join(root, "scenarios/freight-docs"), scn, { recursive: true });
+    const file = join(scn, "evals/players/EV_rush.yaml");
+    const src = readFileSync(file, "utf8");
+    expect(src).toContain("    check: {trap: TR1, beat: true}\n");
+    writeFileSync(file, src.replace("    check: {trap: TR1, beat: true}\n", "    check: {trap: TR1, beat: true, phase: report}\n"));
+    const r = await run(evalsCli, ["--player", "EV_rush", "--scenario", scn], {});
+    expect(row(r.out, "脚本化玩家断言")).toContain("未过");
+    expect(r.out.trimEnd().split("\n").at(-1)).toMatch(/^0\/1 通过 · 明细:/);
+    expect(r.code).toBe(1);
   }, 60_000);
 });
 

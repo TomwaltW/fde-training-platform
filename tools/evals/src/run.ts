@@ -134,7 +134,8 @@ writeFileSync(
     2,
   ),
 );
-// 玩家全过、门槛没过时也要在最后一行说清楚,不能只看到"N/N 通过"却拿到退出码 1
-const barFails = bars.filter((b) => b.status === "fail").length;
+// 玩家全过、门槛没过时也要在最后一行说清楚,不能只看到"N/N 通过"却拿到退出码 1。
+// "脚本化玩家断言"这一项就是前面的"N/N 通过",不再算一次:玩家没过、门槛都过时,最后一行和以前一字不差
+const barFails = bars.filter((b) => b.status === "fail" && b.id !== "players").length;
 console.log(`\n${results.length - failed}/${results.length} 通过${barFails ? `;门槛 ${barFails} 项未过` : ""} · 明细:${file.replace(`${root}/`, "")}`);
 process.exit(failed || barFails ? 1 : 0);

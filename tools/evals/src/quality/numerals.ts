@@ -87,7 +87,7 @@ const percentAfter = (text: string, i: number) => text.slice(i).match(/^(个百�
 
 /**
  * "一半"字族和分数,都是百分数的约数。"差不多一半"要整体先认,免得从"多一半"那里认起。
- * "大半天""大半年"说的是时间,"多半"是"多半是看错了"(大概),都不算。
+ * "大半天""大半年"说的是时间,"多半"是"多半是看错了"(大概),都不算;不是在说占比的用法见 HALF_IDIOM、notShare。
  */
 const HALF_FORMS: [RegExp, number, number][] = [
   [/^(将近|接近|不到|不足|小)一半/, 40, 50],
@@ -97,7 +97,19 @@ const HALF_FORMS: [RegExp, number, number][] = [
   [/^大半(?![天年夜辈个月生日])/, 50, 70],
   [/^(一半|半数)/, 45, 55],
 ];
-const NOT_HALF = /^(一半天|一半儿)/;
+/** "一半"的习惯说法,不是占比:"一半一半"(五五开、马马虎虎)、"说一半留一半"、"一半儿"、"一半天"。 */
+const HALF_IDIOM = /^(一半一半|说一半留一半|一半儿|一半天)/;
+/**
+ * 一半字族不是在说占比的用法:
+ *   - 前面是"到""了"——干到一半、录到一半(进度),说对了一半、做了一半;但"占到一半""达到一半""占了一半"是占比;
+ *   - 后面是"(的)时间 / 时候 / 工夫"——"一大半时间都在核对""到一半的时候",说的是时间怎么花,不是哪个数的比例。
+ * 只管一半字族;"三分之一的时间"这种分数照常审(docs/quality-gates.md「已知的局限」)。
+ */
+function notShare(text: string, i: number, len: number): boolean {
+  const before = text.slice(Math.max(0, i - 2), i);
+  if (/[到了]$/.test(before) && !/^[占达].$/.test(before)) return true;
+  return /^的?(时间|时候|工夫|功夫)/.test(text.slice(i + len));
+}
 /** "三分之一""四分之一""千分之三":按百分数算,本身就是约数,按 ±10% 放宽(三分之一 = [30%, 36.7%])。 */
 const FRACTION = /^([一二两三四五六七八九十]{1,3}|\d{1,3}|千)分之([一二两三四五六七八九十]{1,3}|\d{1,3})/;
 
@@ -169,6 +181,7 @@ const widen = (q: Quantity): Quantity => (q.kind === "exact" ? { ...q, lo: round
  *   - 百分数也一样:百分之十几 = 十几个点 = [11%, 19%];百分之三十多 = 30多% = 三十多个点 = [30%, 40%]
  *   - N成:百分数 [10N − 5, 10N + 5](三成 = 25%–35%);N成多 = [10N, 10N + 10];一成八 = 18%;七八成 = [70, 80]
  *   - 一半 = [45%, 55%];将近一半 = [40%, 50%];一多半 = [50%, 70%];三分之一 = [30%, 36.7%](分数按 ±10%)
+ *     不是占比的不算:干到一半、说对了一半、一半一半、一大半时间(见 notShare)
  *   - 约 / 大概 / 差不多 / 将近 / 左右 / 上下:±10%;出头 / 开外:[X, X + 末位位值]
  *   - 五六十、两三天、四五百(后面没跟量词也算):[50, 60]、[2, 3]、[400, 500]
  */
@@ -198,13 +211,21 @@ export function extractQuantities(input: string, opts: ExtractOptions = {}): Qua
         continue;
       }
     }
-    if (!NOT_HALF.test(rest)) {
-      const half = HALF_FORMS.find(([re]) => re.test(rest));
-      if (half) {
-        const len = rest.match(half[0])![0].length;
-        i = take(make(text.slice(i, i + len), i, half[1], half[2], true, "%", "approx"), i + len);
-        continue;
-      }
+    // 不是占比的"一半":整段占住、不出量,免得引擎再从里面抠出"一"来
+    const idiom = rest.match(HALF_IDIOM)?.[0];
+    if (idiom) {
+      taken.push([i, i + idiom.length]);
+      i += idiom.length - 1;
+      continue;
+    }
+    const half = HALF_FORMS.find(([re]) => re.test(rest));
+    if (half) {
+      const len = rest.match(half[0])![0].length;
+      if (notShare(text, i, len)) {
+        taken.push([i, i + len]);
+        i += len - 1;
+      } else i = take(make(text.slice(i, i + len), i, half[1], half[2], true, "%", "approx"), i + len);
+      continue;
     }
     if (NOT_JI.test(rest)) continue;
     const hit = JI_FORMS.find(([re]) => re.test(rest));

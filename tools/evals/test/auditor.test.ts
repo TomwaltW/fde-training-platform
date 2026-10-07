@@ -47,7 +47,10 @@ describe("真值索引", () => {
     const vals = new Set(idx.truthOnly.map((p) => p.v));
     for (const v of [428, 498000, 148500, 212000, 68000, 1512, 18, 26, 31, 43]) expect(vals.has(v), String(v)).toBe(true);
     // 公共背景里的部门人数、日均票数不算真值(60 人、单证 14、日均 300 票)
-    for (const v of [60, 14, 300, 22]) expect(vals.has(v), String(v)).toBe(false);
+    const plain = new Set(idx.truthOnly.filter((p) => !p.percent).map((p) => p.v));
+    for (const v of [60, 14, 300, 22]) expect(plain.has(v), String(v)).toBe(false);
+    // 按"值 + 是不是百分数"去重:单证 14 人盖不住 P2 的录入手误 14%、X5 的拓浪占全部异常 14%
+    expect(idx.truthOnly.filter((p) => p.v === 14 && p.percent).map((p) => p.source).sort()).toEqual(["P2", "X5"]);
     expect(idx.canaries.map((c) => c.word)).toEqual(expect.arrayContaining(["拓浪", "异常登记表", "小抄", "OCR", "难认"]));
   });
 });
@@ -99,6 +102,14 @@ describe("守卫漏掉的口语泄露,审计抓得到", () => {
     const leak = audit(s0.st, "liu", text).issues.find((i) => i.kind === "leak" && i.raw === raw);
     expect(leak, text).toBeDefined();
     expect(leak!.sources!.some((x) => x.startsWith(source)), JSON.stringify(leak)).toBe(true);
+  });
+
+  it("公共背景里的人数盖不住同值的百分数:「百分之十四」「十四个点」对上录入手误 14%,算泄露;「单证十四个」不算", () => {
+    const s0 = session([]);
+    for (const text of ["百分之十四。", "十四个点。"]) {
+      expect(audit(s0.st, "zhou", text).issues, text).toMatchObject([{ kind: "leak", via: "number", sources: expect.arrayContaining(["P2 14%"]) }]);
+    }
+    expect(audit(s0.st, "zhou", "单证十四个,跟单八个。").issues).toEqual([]);
   });
 
   it("白名单撞车的编造:「八成」守卫当成公共背景里的 8 放行,审计判白名单外", async () => {
@@ -197,12 +208,12 @@ describe("不误报", () => {
 });
 
 describe("约数只能单向解释:说得比已知的更细就不放行", () => {
-  /** 刘姐已经出现、还没拿到 P1;用户先猜一句,再看角色的回答。 */
-  async function afterGuess(guess: string) {
+  /** 刘姐已经出现、还没拿到 P1;用户先猜一句,再看角色(默认刘姐)的回答。 */
+  async function afterGuess(guess: string, role = "liu") {
     const s = session([{ say: "周总,操作上的细节我该问谁?", gate: { t: ["TR2@zhou"] } }]);
     await s.say("周总,操作上的细节我该问谁?");
     await s.engine.act(s.st, { type: "switch_role", role: "liu" });
-    const ctx = allowedContext(scn, s.st, "liu");
+    const ctx = allowedContext(scn, s.st, role);
     ctx.userTexts.push(guess);
     return (text: string) => auditText(scn, s.st, text, ctx);
   }
@@ -221,6 +232,32 @@ describe("约数只能单向解释:说得比已知的更细就不放行", () => 
     expect(leak, JSON.stringify(a)).toBeDefined();
     expect(leak!.sources!.some((x) => x.startsWith(source)), JSON.stringify(leak)).toBe(true);
     expect(a.echoes).toEqual([]);
+  });
+
+  // 精确数只认原样复述和往粗里取整:用户猜的整数离真值不到 0.5% 时,角色也不能借"复述"把真值的零头说出来
+  it.each([
+    ["wang", "损失有没有五十万?", "四十九万八。", "四十九万八", "C2"],
+    ["wang", "损失有没有五十万?", "四十九万八千。", "四十九万八千", "C2"],
+    ["wang", "损失有没有四十九万?", "四十九万八。", "四十九万八", "C2"],
+    ["liu", "四百三十条有没有?", "四百二十八条。", "四百二十八", "P1"],
+    ["liu", "四百二十九条有没有?", "四百二十八条。", "四百二十八", "P1"],
+    ["wang", "改单是不是十四万八?", "十四万八千五。", "十四万八千五", "C3"],
+    ["chen", "Excel 有九百四吗?", "九百三十七个。", "九百三十七", "truth.intake_formats.xlsx"],
+  ])("%s:用户猜「%s」,角色答「%s」:比用户的数多出有效数字(或位值一样却不同),算泄露", async (role, guess, reply, raw, source) => {
+    const a = (await afterGuess(guess, role))(reply);
+    const leak = a.issues.find((i) => i.kind === "leak" && i.raw === raw);
+    expect(leak, JSON.stringify(a)).toBeDefined();
+    expect(leak!.sources!.some((x) => x.startsWith(source)), JSON.stringify(leak)).toBe(true);
+    expect(a.echoes).toEqual([]);
+  });
+
+  it.each([
+    ["liu", "四百二十八条有没有?", "四百三吧。"],
+    ["wang", "损失有没有四十九万八?", "五十万吧,我得查查。"],
+  ])("%s:用户猜「%s」,角色答「%s」:把用户的数往粗里取整,是复述", async (role, guess, reply) => {
+    const a = (await afterGuess(guess, role))(reply);
+    expect(a.issues).toEqual([]);
+    expect(a.echoes).toHaveLength(1);
   });
 
   it.each([
@@ -278,6 +315,25 @@ describe("不该算数的不算", () => {
     const s0 = session([]);
     expect(audit(s0.st, "zhou", "三十天。").issues).toEqual([{ kind: "unlisted", raw: "三十", value: "30" }]);
     expect(audit(s0.st, "zhou", "三十票。").issues).toMatchObject([{ kind: "leak", raw: "三十", sources: ["X4 30"] }]);
+  });
+});
+
+describe("不是在说占比的「一半」「大半」不算数", () => {
+  it("小陈讲时间怎么花(P6 已拿到)、干到一半、说对了一半、一半一半:不误报;说的是占比的照常审", () => {
+    const s0 = session([]);
+    s0.st.facts.P6 = { level: "L2", turn: 1, source: "chen" };
+    for (const [role, text] of [
+      ["chen", "我一大半时间都在核对,追客户补资料。"],
+      ["chen", "大半时间在核对。"],
+      ["chen", "活干到一半,客户又改单了。"],
+      ["chen", "录到一半发现箱数对不上。"],
+      ["zhou", "你这话只说对了一半。"],
+      ["chen", "一半一半吧。"],
+    ] as const) {
+      expect(audit(s0.st, role, text).issues, text).toEqual([]);
+    }
+    expect(audit(s0.st, "chen", "一大半是客户资料对不上。").issues).toMatchObject([{ kind: "leak", raw: "一大半" }]);
+    expect(audit(s0.st, "chen", "改单占了一半。").issues).toMatchObject([{ raw: "一半" }]);
   });
 });
 
