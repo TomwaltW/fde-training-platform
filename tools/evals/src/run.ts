@@ -11,7 +11,7 @@ import { createGateway, loadModelsConfig, type LlmCallLog } from "@fde/llm";
 import { loadPlayers } from "./players.ts";
 import { checkExpectations, runPlayer, type Mode, type PlayerRun } from "./runner.ts";
 import { describeIssue } from "./quality/auditor.ts";
-import { barsFailed, evalBars, evalRunInput, renderBars, type EvalRunInput } from "./quality/bars.ts";
+import { evalBars, evalRunInput, renderBars, type EvalRunInput } from "./quality/bars.ts";
 import { loadQualityGates, type QualityGates } from "./quality/config.ts";
 import { liveEnvProblem } from "./quality/live-env.ts";
 
@@ -43,8 +43,15 @@ try {
 const calls: LlmCallLog[] = [];
 let mode: Mode = { kind: "offline" };
 if (values.live) {
-  if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
-  const cfg = loadModelsConfig(process.env.FDE_MODELS_CONFIG ?? join(root, "config/models.yaml"));
+  // 模型配置读不了、写错了,和缺 Key 一样是配置错误(退出码 2),不能当成评测失败
+  let cfg: ReturnType<typeof loadModelsConfig>;
+  try {
+    if (existsSync(join(root, ".env"))) process.loadEnvFile(join(root, ".env"));
+    cfg = loadModelsConfig(process.env.FDE_MODELS_CONFIG ?? join(root, "config/models.yaml"));
+  } catch (e) {
+    console.error(`无法用 --live:${(e as Error).message}`);
+    process.exit(2);
+  }
   const problem = liveEnvProblem(cfg, process.env, ["gate", "actor"]);
   if (problem) {
     console.error(`无法用 --live:${problem}。在仓库根目录的 .env 里配置后重试;没有 Key 时不加 --live。`);
@@ -127,5 +134,7 @@ writeFileSync(
     2,
   ),
 );
-console.log(`\n${results.length - failed}/${results.length} 通过 · 明细:${file.replace(`${root}/`, "")}`);
-process.exit(failed || barsFailed(bars) ? 1 : 0);
+// 玩家全过、门槛没过时也要在最后一行说清楚,不能只看到"N/N 通过"却拿到退出码 1
+const barFails = bars.filter((b) => b.status === "fail").length;
+console.log(`\n${results.length - failed}/${results.length} 通过${barFails ? `;门槛 ${barFails} 项未过` : ""} · 明细:${file.replace(`${root}/`, "")}`);
+process.exit(failed || barFails ? 1 : 0);

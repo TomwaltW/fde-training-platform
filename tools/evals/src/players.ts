@@ -31,6 +31,9 @@ const Check = z.strictObject({
   phase: z.string().optional(),
   system_includes: z.string().optional(),
   minutes_used: z.number().optional(),
+  /** 这一步之后某个角色的信任至少 / 至多是多少(对抗集里"刘姐信任你之后""信任为 0"这类前提)。 */
+  trust_min: z.record(z.string(), z.number()).optional(),
+  trust_max: z.record(z.string(), z.number()).optional(),
 });
 export type Check = z.infer<typeof Check>;
 
@@ -99,6 +102,11 @@ export function lintPlayer(p: Player, known: { triggers: Set<string>; roles: Set
     if ("open" in s && !known.artifacts.has(s.open)) errs.push(`${at} 未知资料 ${s.open}`);
     if ("experiment" in s && !known.experiments.has(s.experiment)) errs.push(`${at} 未知验证 ${s.experiment}`);
     if ("action" in s && !known.actions.has(s.action)) errs.push(`${at} 未知动作 ${s.action}`);
+    if ("check" in s && s.check) {
+      for (const r of [...Object.keys(s.check.trust_min ?? {}), ...Object.keys(s.check.trust_max ?? {})]) {
+        if (!known.roles.has(r)) errs.push(`${at} 信任断言里的未知角色 ${r}`);
+      }
+    }
   });
   return errs;
 }

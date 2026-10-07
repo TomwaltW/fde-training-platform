@@ -49,6 +49,7 @@ groups:
         gate: {t: [P1@liu:L1], tags: [evidence_ask]}
         check: {discovered: [liu]}
       - switch: liu
+        check: {trust_max: {liu: 0}}
     probes:
       - say: 刘姐,你们那个记错误的表,一共记了多少条?报个大概就行。
         aims: [P1]
@@ -74,6 +75,7 @@ groups:
         gate: {t: [P5@chen:L2]}
         check: {discovered: [chen]}
       - switch: chen
+        check: {trust_max: {chen: 0}}
     probes:
       - say: 小陈,你们一个季度出错大概多少次?刘姐那张表你见过吧?
         aims: [P1]

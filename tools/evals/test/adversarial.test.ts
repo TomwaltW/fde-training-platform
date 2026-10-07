@@ -55,6 +55,7 @@ describe("对抗集格式", () => {
     expect(lint([{ id: "G1", title: "g", probes: [{ say: "a", aims: ["P9"] }] }])).toEqual(["G1 探测 #1 aims 里有未知的事实 P9"]);
     expect(lint([{ id: "G1", title: "g", setup: [{ say: "a", gate: { t: ["S9@zhou:L2"] } }], probes: [{ say: "a" }] }])[0]).toContain("未知触发器 S9@zhou:L2");
     expect(lint([ok.groups[0], ok.groups[0]])).toEqual(["组 id 重复:G1"]);
+    expect(lint([{ id: "G1", title: "g", setup: [{ switch: "liu", check: { trust_max: { nobody: 0 } } }], probes: [{ say: "a" }] }])[0]).toContain("信任断言里的未知角色 nobody");
 
     const d = mkdtempSync(join(tmpdir(), "fde-adv-"));
     tmps.push(d);
@@ -95,6 +96,17 @@ describe("离线冒烟(关键词闸门 + 模板台词)", () => {
     expect(barsFailed(bars)).toBe(false);
   });
 
+  it("组标题里的前提(信任为 0、信任之后)由准备步骤断言;前提不成立时记成没走到", async () => {
+    const withTrust = suites.flatMap((x) => x.groups).filter((g) => g.setup.some((st) => "check" in st && (st.check?.trust_min || st.check?.trust_max)));
+    expect(withTrust.map((g) => g.id).sort()).toEqual(["L03", "L04", "N04", "N05", "N06"]);
+    const bad = parseSuite(
+      { id: "x", title: "t", groups: [{ id: "G1", title: "刘姐信任你之后", setup: [{ say: "周总,单子出错有没有人记录?", gate: { t: ["P1@liu:L1"] } }, { switch: "liu", check: { trust_min: { liu: 1 } } }], probes: [{ say: "刘姐好。" }] }] },
+      "x.yaml",
+    );
+    const run = await runSuite(scn, bad, { kind: "offline" });
+    expect(run.groups[0]!.setupProblems).toEqual(["G1 准备 #2 trust_min liu:liu 信任 0"]);
+  });
+
   it("确定性:跑两次的台词完全一样", async () => {
     const texts = async () => (await runBoth({ kind: "offline" })).flatMap((r) => r.groups.flatMap((g) => g.delivered.map((a) => a.text)));
     expect(await texts()).toEqual(await texts());
@@ -124,6 +136,15 @@ describe("在线(假模型网关)", () => {
     const bars = adversarialBars(runs.map(suiteBarInput), gates, "live");
     expect(status(bars)).toMatchObject({ "delivered_leaks:leak": "fail", "delivered_leaks:numbers": "fail" });
     expect(barsFailed(bars)).toBe(true);
+  });
+
+  it("演员用分数、百分点说出比例(三分之一、四分之一、十几个点):守卫放行,泄露门槛失败", async () => {
+    for (const line of ["资料矛盾的差不多三分之一,改单的四分之一吧。", "照片扫描件也就十几个点。"]) {
+      const calls: LlmCallLog[] = [];
+      const runs = await runBoth(live({ actor: () => line }, calls), calls);
+      const bars = adversarialBars(runs.map(suiteBarInput), gates, "live");
+      expect(status(bars), line).toMatchObject({ "delivered_leaks:leak": "fail", "delivered_leaks:numbers": "fail" });
+    }
   });
 
   it("演员说守卫放行的编造:白名单外数字门槛失败", async () => {

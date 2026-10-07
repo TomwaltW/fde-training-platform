@@ -70,6 +70,37 @@ describe("守卫漏掉的口语泄露,审计抓得到", () => {
     expect(leak!.sources!.some((x) => x.startsWith(source))).toBe(true);
   });
 
+  it.each([
+    ["图片也就十几个点。", "十几个点", "P3"],
+    ["资料矛盾差不多三分之一。", "三分之一", "P2"],
+    ["改单的有四分之一吧。", "四分之一", "P2"],
+    ["上周近千个Excel。", "近千", "truth.intake_formats.xlsx"],
+  ])("百分数、分数、近千这类说法守卫放行,审计算泄露:%s", async (reply, raw, source) => {
+    const s = session([{ say: "周总,最近出错的情况怎么样?", reply }]);
+    const { res, audit: a } = await s.say("周总,最近出错的情况怎么样?");
+    expect(res.guardFlags).toEqual([]);
+    expect(res.reply?.text).toBe(reply);
+    const leak = a.issues.find((i) => i.kind === "leak" && i.raw === raw);
+    expect(leak, JSON.stringify(a.issues)).toBeDefined();
+    expect(leak!.sources!.some((x) => x.startsWith(source)), JSON.stringify(leak)).toBe(true);
+  });
+
+  it.each([
+    ["HS 申报占百分之十几。", "百分之十几", "P3"],
+    ["四十几个点是申报的。", "四十几个点", "C3"],
+    ["二十多个点。", "二十多个点", "P2"],
+    ["百分之二十几。", "百分之二十几", "P2"],
+    ["百分之五十几是对不上。", "百分之五十几", "truth.diagnosis_items[1]"],
+    ["30多%是改单。", "30多%", "S2"],
+    ["将近一半是申报的。", "将近一半", "C3"],
+    ["一半多都是单据对不上。", "一半多", "truth.diagnosis_items[1]"],
+  ])("百分数的口语约数不丢百分号:%s", (text, raw, source) => {
+    const s0 = session([]);
+    const leak = audit(s0.st, "liu", text).issues.find((i) => i.kind === "leak" && i.raw === raw);
+    expect(leak, text).toBeDefined();
+    expect(leak!.sources!.some((x) => x.startsWith(source)), JSON.stringify(leak)).toBe(true);
+  });
+
   it("白名单撞车的编造:「八成」守卫当成公共背景里的 8 放行,审计判白名单外", async () => {
     const s = session([{ say: "周总,错误主要是哪类?", reply: "八成是录入看错的。" }]);
     const { res, audit: a } = await s.say("周总,错误主要是哪类?");
@@ -162,6 +193,91 @@ describe("不误报", () => {
     const r2 = await s.engine.userTurn(s.st, "周总,我的建议是先做两周小验证。");
     expect(r2.directive?.trapId).toBe("TR6");
     expect(auditText(scn, s.st, "上次那个才六万八,你凭什么要这么多?", allowedContext(scn, s.st, "zhou", r2.directive)).issues).toEqual([]);
+  });
+});
+
+describe("约数只能单向解释:说得比已知的更细就不放行", () => {
+  /** 刘姐已经出现、还没拿到 P1;用户先猜一句,再看角色的回答。 */
+  async function afterGuess(guess: string) {
+    const s = session([{ say: "周总,操作上的细节我该问谁?", gate: { t: ["TR2@zhou"] } }]);
+    await s.say("周总,操作上的细节我该问谁?");
+    await s.engine.act(s.st, { type: "switch_role", role: "liu" });
+    const ctx = allowedContext(scn, s.st, "liu");
+    ctx.userTexts.push(guess);
+    return (text: string) => auditText(scn, s.st, text, ctx);
+  }
+
+  it.each([
+    ["四百条有没有?你点个头就行。", "四百三十条。", "四百三十", "P1"],
+    ["四百条有没有?", "差不多四百三。", "四百三", "P1"],
+    ["四百条有没有?", "四百多条吧。", "四百多", "P1"],
+    ["四百条有没有?", "四百出头。", "四百", "P1"],
+    ["二十万有没有?", "二十一万。", "二十一万", "C3"],
+    ["一百二十条有没有?", "对,一百三。", "一百三", "X2"],
+    ["四五百有没有?", "四百三吧。", "四百三", "P1"],
+  ])("用户猜「%s」,角色答「%s」:比用户说得细,算泄露", async (guess, reply, raw, source) => {
+    const a = (await afterGuess(guess))(reply);
+    const leak = a.issues.find((i) => i.kind === "leak" && i.raw.startsWith(raw));
+    expect(leak, JSON.stringify(a)).toBeDefined();
+    expect(leak!.sources!.some((x) => x.startsWith(source)), JSON.stringify(leak)).toBe(true);
+    expect(a.echoes).toEqual([]);
+  });
+
+  it.each([
+    ["四百条有没有?", "四百条?这个我可说不好。"],
+    ["四百条有没有?", "几百条吧,我没数过。"],
+    ["四百条有没有?", "大概四百吧,我也说不准。"],
+    ["四五百有没有?", "四百多吧。"],
+  ])("用户猜「%s」,角色答「%s」:不比用户说得细,是复述", async (guess, reply) => {
+    const a = (await afterGuess(guess))(reply);
+    expect(a.issues).toEqual([]);
+    expect(a.echoes).toHaveLength(1);
+  });
+
+  it("公共背景里的整数约数不能洗白更细的数:「日均约 300 票」放行「三百票」「三百多票」,不放行「三百二十」", () => {
+    const s0 = session([]);
+    expect(audit(s0.st, "zhou", "一天三百票吧。").issues).toEqual([]);
+    expect(audit(s0.st, "zhou", "一天三百多票。").issues).toEqual([]);
+    expect(audit(s0.st, "zhou", "一天三百个单子。").issues).toEqual([]);
+    expect(audit(s0.st, "lin", "三百二十个 PDF 文件。").issues).toMatchObject([{ kind: "leak", raw: "三百二十", sources: ["truth.intake_formats.pdf 318"] }]);
+    expect(audit(s0.st, "liu", "三百二十票。").issues).toMatchObject([{ kind: "leak", raw: "三百二十" }]);
+  });
+
+  it("约数和已知值比时量词要兼容:「三四百票」是日均票数,「三四百条」不是", () => {
+    const s0 = session([]);
+    expect(audit(s0.st, "zhou", "三四百票吧。").issues).toEqual([]);
+    expect(audit(s0.st, "zhou", "三四百条吧。").issues).toMatchObject([{ kind: "leak", raw: "三四百" }]);
+  });
+
+  it("已知值的取整照样放行:拿到 P1 之后「四百」「四百三」都行;已知 14 人不放行「十」", async () => {
+    const s = session([
+      { say: "周总,操作上的细节我该问谁?", gate: { t: ["TR2@zhou"] } },
+      { say: "刘姐,出错的记录能导一份给我看吗?", gate: { t: ["P1@liu:L3"], acts: ["ask", "request_artifact"] } },
+    ]);
+    await s.say("周总,操作上的细节我该问谁?");
+    await s.engine.act(s.st, { type: "switch_role", role: "liu" });
+    await s.say("刘姐,出错的记录能导一份给我看吗?");
+    expect(audit(s.st, "liu", "四百条上下吧。").issues).toEqual([]);
+    expect(audit(s.st, "liu", "四百三十条。").issues).toEqual([]);
+    expect(audit(s.st, "liu", "单证就十个人。").issues).toMatchObject([{ kind: "unlisted", raw: "十" }]);
+  });
+});
+
+describe("不该算数的不算", () => {
+  it("年份、钟点范围、口头禅「九成九」", () => {
+    const s0 = session([]);
+    expect(audit(s0.st, "zhou", "今年是2026年,下个月就开大会。").issues).toEqual([]);
+    expect(audit(s0.st, "chen", "夜里十一二点还在改单。").issues).toEqual([]);
+    expect(audit(s0.st, "zhou", "九成九是看错了。").issues).toEqual([]);
+    // 统计口径不是真值
+    const vals = new Set(truthIndex(scn).truthOnly.map((p) => p.v));
+    expect(vals.has(19800) || vals.has(2026)).toBe(false);
+  });
+
+  it("带量词的数不和量词对不上的真值比:「三十天」是编造,「三十票」才对得上验证 X4 的 30 票", () => {
+    const s0 = session([]);
+    expect(audit(s0.st, "zhou", "三十天。").issues).toEqual([{ kind: "unlisted", raw: "三十", value: "30" }]);
+    expect(audit(s0.st, "zhou", "三十票。").issues).toMatchObject([{ kind: "leak", raw: "三十", sources: ["X4 30"] }]);
   });
 });
 

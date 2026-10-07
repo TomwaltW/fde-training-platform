@@ -83,6 +83,8 @@ describe("pnpm evals --live", () => {
       expect(row(r.out, "脚本化玩家断言")).toContain("通过");
       expect(row(r.out, "交付台词泄露候选")).toContain("未过");
       expect(r.out).toMatch(/✗ 交付台词 N\d+\S+泄露候选「两成多」/);
+      // 最后一行:玩家全过,但门槛没过,要写出来
+      expect(r.out.trimEnd().split("\n").at(-1)).toMatch(/^1\/1 通过;门槛 1 项未过 · 明细:/);
       expect(r.code).toBe(1);
     });
   }, 60_000);
@@ -97,10 +99,14 @@ describe("pnpm evals --live", () => {
     });
   }, 60_000);
 
-  it("缺 Key、门槛配置写错:退出码 2,说清楚原因", async () => {
+  it("缺 Key、模型配置读不了、门槛配置写错:退出码 2,说清楚原因", async () => {
     const noKey = await run(evalsCli, ["--live", "--player", "EV_rush"], { FDE_MODELS_CONFIG: modelsConfig("http://127.0.0.1:9/v1", "FDE_EVALS_TEST_NO_SUCH_KEY") });
     expect(noKey.code).toBe(2);
     expect(noKey.out).toContain("缺少环境变量 FDE_EVALS_TEST_NO_SUCH_KEY");
+
+    const noModels = await run(evalsCli, ["--live", "--player", "EV_rush"], { FDE_MODELS_CONFIG: join(tmp(), "no-such-models.yaml") });
+    expect(noModels.code).toBe(2);
+    expect(noModels.out).toContain("无法用 --live:找不到模型配置");
 
     const bad = join(tmp(), "gates.yaml");
     writeFileSync(bad, readFileSync(join(root, "config/quality-gates.yaml"), "utf8").replace("gate_recall_min: 0.85", "gate_recall_min: 85"));

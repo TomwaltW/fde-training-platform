@@ -175,12 +175,22 @@ export function evalBars(runs: EvalRunInput[], cfg: QualityGates, mode: RunMode)
       value: `${pct(agree.extra, agree.expected)}(${agree.extra}/${agree.expected})`,
       threshold: tbd(cfg, "gate_extra_max", `≤ ${asPct(g.gate_extra_max)}`),
       status: extra <= g.gate_extra_max ? "pass" : "fail",
-      source: "标注之外多命中的 / 应命中的标注",
+      source: "标注之外多命中的(没写 t 的步骤上命中的全算)/ 应命中的标注",
     });
   } else {
+    // 只跑了没有标注的玩家(比如 --player EV_rush):命中率没法算;但真闸门命中了任何触发器都是多命中,照样判
     bars.push(
       { id: "gate_recall", name: "闸门命中率", value: "-", threshold: tbd(cfg, "gate_recall_min", `≥ ${asPct(g.gate_recall_min)}`), status: "skip", source: "这次跑的玩家脚本里没有触发器标注" },
-      { id: "gate_extra", name: "闸门多命中率", value: "-", threshold: tbd(cfg, "gate_extra_max", `≤ ${asPct(g.gate_extra_max)}`), status: "skip", source: "同上" },
+      agree.extra
+        ? {
+            id: "gate_extra",
+            name: "闸门多命中率",
+            value: `${agree.extra} 个(没有应命中的标注)`,
+            threshold: tbd(cfg, "gate_extra_max", `≤ ${asPct(g.gate_extra_max)}`),
+            status: "fail",
+            source: "这次跑的玩家脚本里没有触发器标注,真闸门却命中了",
+          }
+        : { id: "gate_extra", name: "闸门多命中率", value: "-", threshold: tbd(cfg, "gate_extra_max", `≤ ${asPct(g.gate_extra_max)}`), status: "skip", source: "同上" },
     );
   }
 

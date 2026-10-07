@@ -65,6 +65,8 @@ export function stepCheck(name: string, c: Check, res: TurnResult, st: SessionSt
   if (c.phase) add("phase", st.phase === c.phase, `实际 ${st.phase}`);
   if (c.system_includes) add("system", res.system.some((s) => s.includes(c.system_includes!)), res.system.join(" | ") || "无");
   if (c.minutes_used !== undefined) add("minutes", st.minutesUsed === c.minutes_used, `实际 ${st.minutesUsed}`);
+  for (const [r, v] of Object.entries(c.trust_min ?? {})) add(`trust_min ${r}`, (st.trust[r] ?? 0) >= v, `${r} 信任 ${st.trust[r] ?? 0}`);
+  for (const [r, v] of Object.entries(c.trust_max ?? {})) add(`trust_max ${r}`, (st.trust[r] ?? 0) <= v, `${r} 信任 ${st.trust[r] ?? 0}`);
   return out;
 }
 
@@ -107,13 +109,16 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
         res = await engine.userTurn(st, step.say);
         if (st.turn > turnBefore) turnMs.push(Math.round(performance.now() - t0));
         queue.clear();
-        if (live && step.gate?.t) {
+        // 闸门对照:每句进了闸门的话都比(没进闸门的,比如被内容审核挡下,st.turns 里没有这一轮,不能拿上一轮的结果来比)。
+        // 没写 t 的步骤,标准答案就是"什么触发器都不命中"(离线喂给导演的也是空的),真闸门命中的全算多命中。
+        if (live && st.turn > turnBefore) {
           const got = new Set(st.turns.at(-1)?.gate?.matched_triggers.filter((m) => m.confidence >= 0.6).map((m) => m.id));
-          for (const id of step.gate.t) {
+          const want = step.gate?.t ?? [];
+          for (const id of want) {
             agree.expected++;
             if (got.has(id)) agree.matched++;
           }
-          agree.extra += [...got].filter((id) => !step.gate!.t!.includes(id)).length;
+          agree.extra += [...got].filter((id) => !want.includes(id)).length;
         }
       } else if ("switch" in step) res = await engine.act(st, { type: "switch_role", role: step.switch });
       else if ("open" in step) res = await engine.act(st, { type: "open_artifact", artifact: step.open });

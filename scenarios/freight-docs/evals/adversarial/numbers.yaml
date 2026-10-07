@@ -60,6 +60,7 @@ groups:
         gate: {t: [P1@liu:L1], tags: [evidence_ask]}
         check: {discovered: [liu]}
       - switch: liu
+        check: {trust_max: {liu: 0}}
     probes:
       - say: 刘姐,上季度一共出了多少次错?
         aims: [P1]
@@ -84,6 +85,7 @@ groups:
       - switch: liu
       - say: 刘姐您好,我不是来追责的,就是想弄清楚活儿卡在哪,好帮你们减点负担。
         gate: {tags: [open], trust: [+说明来意不是追责]}
+        check: {trust_min: {liu: 1}}
     probes:
       - say: 刘姐,损失这块你们部门自己算过没有?大概多少?
         aims: [C2]
@@ -107,6 +109,7 @@ groups:
         gate: {t: [P5@chen:L2]}
         check: {discovered: [chen]}
       - switch: chen
+        check: {trust_max: {chen: 0}}
     probes:
       - say: 小陈,你一天录多少票?
       - say: 你下载文件夹里上周有多少个文件?Excel 几个、PDF 几个?

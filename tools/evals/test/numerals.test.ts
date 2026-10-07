@@ -58,6 +58,46 @@ describe("口语约数", () => {
     expect(one(s).kind).toBe("approx");
   });
 
+  it.each([
+    ["百分之十几", "[11%, 19%]"],
+    ["十几个点", "[11%, 19%]"],
+    ["十几个百分点", "[11%, 19%]"],
+    ["四十几个点", "[40%, 50%]"],
+    ["二十多个点", "[20%, 30%]"],
+    ["百分之二十几", "[20%, 30%]"],
+    ["百分之三十多", "[30%, 40%]"],
+    ["30多%", "[30%, 40%]"],
+    ["三十多%", "[30%, 40%]"],
+    ["三分之一", "[30%, 36.667%]"],
+    ["四分之一", "[22.5%, 27.5%]"],
+    ["一半", "[45%, 55%]"],
+    ["差不多一半", "[45%, 55%]"],
+    ["将近一半", "[40%, 50%]"],
+    ["一多半", "[50%, 70%]"],
+    ["一半多", "[50%, 70%]"],
+    ["大半是改单", "[50%, 70%]"],
+  ])("百分数的口语约数 %s → %s", (s, want) => {
+    expect(shown(s)).toBe(want);
+    expect(one(s)).toMatchObject({ percent: true, kind: "approx", unit: "%" });
+  });
+
+  it.each([
+    ["近千个", "[900, 1000]"],
+    ["千把块", "[1000, 1999]"],
+    ["百把人", "[100, 199]"],
+    ["近千万", "[9000000, 10000000]"],
+  ])("数量级约数 %s → %s", (s, want) => {
+    expect(shown(s)).toBe(want);
+    expect(one(s).percent).toBe(false);
+  });
+
+  it("放宽过的精确数记下放宽前的数;四五百没跟量词也是两端", () => {
+    expect(one("差不多四百三")).toMatchObject({ lo: 387, hi: 473, kind: "approx", center: 430 });
+    expect(one("四百多").center).toBeUndefined();
+    expect(one("四五百有没有")).toMatchObject({ lo: 400, hi: 500, kind: "range", raw: "四五百" });
+    expect(one("两三百吧")).toMatchObject({ lo: 200, hi: 300, kind: "range" });
+  });
+
   it("两端都说出来的约数是 range", () => {
     expect(one("五六十个人")).toMatchObject({ lo: 50, hi: 60, kind: "range", unit: "个" });
     expect(one("四五百条")).toMatchObject({ lo: 400, hi: 500, kind: "range" });
@@ -73,12 +113,14 @@ describe("口语约数", () => {
 });
 
 describe("不是数的不抽", () => {
-  it.each(["几乎没有", "一成不变", "Q3 一共", "运单 LT2609-0387", "三天两头来改单", "他来了就走"])("%s", (s) => {
+  it.each(["几乎没有", "一成不变", "Q3 一共", "运单 LT2609-0387", "三天两头来改单", "他来了就走", "九成九是看错了", "多半是看错了", "忙了大半天", "最近千万别改单", "十分重要"])("%s", (s) => {
     expect(extractQuantities(s).filter((q) => q.lo >= 10 || q.percent)).toEqual([]);
   });
 
   it("钟点保留单位「点」,序数保留前面的「第」由审计去豁免", () => {
     expect(one("下午三点半")).toMatchObject({ lo: 3, unit: "点" });
+    // "十一二点":十一点到十二点,两段都是钟点
+    expect(extractQuantities("夜里十一二点还在改").map((q) => q.unit)).toEqual(["点", "点"]);
     expect(one("第三轮")).toMatchObject({ lo: 3, index: 1 });
   });
 });

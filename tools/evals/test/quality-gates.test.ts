@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LlmActor, LlmGate, loadScenario } from "@fde/engine";
 import type { LlmCallLog } from "@fde/llm";
-import { loadPlayers, type Player } from "../src/players.ts";
+import { expandGate, loadPlayers, type Player } from "../src/players.ts";
 import { barsFailed, evalBars, evalRunInput, percentile, renderBars, type Bar } from "../src/quality/bars.ts";
 import { loadQualityGates, parseQualityGates, QualityGatesError, type QualityGates } from "../src/quality/config.ts";
 import { checkExpectations, runPlayer } from "../src/runner.ts";
@@ -92,10 +92,21 @@ describe("离线:结果不变,只在线有意义的门槛跳过", () => {
     expect(status(bars)).toMatchObject({ players: "pass", reachability: "skip", discrimination: "skip" });
   });
 
-  it("可达性、区分度只会在玩家断言已经失败时失败(scenario.yaml 已要求 EV_good ≥ 80、EV_rush ≤ 45)", () => {
+  it("区分度不会让玩家断言全过的离线跑多出一个失败:scenario.yaml 的 total_min / total_max 卡死了最小差值", () => {
+    // 两条断言都过时,差值至少是 EV_good 的 total_min − EV_rush 的 total_max
+    const goodMin = Number(specs.get("EV_good")!.total_min);
+    const rushMax = Number(specs.get("EV_rush")!.total_max);
+    expect(goodMin - rushMax).toBeGreaterThanOrEqual(gates.evals.discrimination.min_gap);
+    expect(goodMin).toBeGreaterThanOrEqual(gates.evals.reachability.total_min);
     const mk = (player: string, total: number, failed: boolean) => ({ player, total, failed, turnMs: [], delivered: [], costYuan: 0, liveInconsistent: 0 });
-    const bars = evalBars([mk("EV_good", 70, true), mk("EV_rush", 45, false)], gates, "offline");
-    expect(status(bars)).toMatchObject({ players: "fail", reachability: "fail", discrimination: "fail" });
+    // 断言刚好压线通过:可达性、区分度也通过
+    expect(status(evalBars([mk("EV_good", goodMin, false), mk("EV_rush", rushMax, false)], gates, "offline"))).toMatchObject({
+      players: "pass", reachability: "pass", discrimination: "pass",
+    });
+    // EV_good 的断言没过时,可达性、区分度跟着失败
+    expect(status(evalBars([mk("EV_good", 70, true), mk("EV_rush", rushMax, false)], gates, "offline"))).toMatchObject({
+      players: "fail", reachability: "fail", discrimination: "fail",
+    });
   });
 });
 
@@ -136,10 +147,31 @@ describe("在线:假模型网关", () => {
 
   it("演员慢:单轮中位耗时超过门槛就失败(门槛调到 10 ms 测)", async () => {
     const strict: QualityGates = { ...gates, evals: { ...gates.evals, turn_latency_p50_max_ms: 10 } };
-    const inputs = await runAll([player("EV_rush")], { fake: { delayMs: { actor: 15 } } });
+    const inputs = await runAll([player("EV_rush")], { fake: { delayMs: { actor: 20 } } });
+    // 定时器可能比 performance.now() 早 1 ms 左右触发,留出余量
     expect(Math.min(...inputs[0]!.turnMs)).toBeGreaterThanOrEqual(15);
     expect(status(evalBars(inputs, strict, "live")).turn_latency).toBe("fail");
     expect(status(evalBars(inputs, gates, "live")).turn_latency).toBe("pass");
+  });
+
+  it("闸门在没写 t 的步骤上多命中(EV_rush 的每句都多中 S2、K1):多命中率门槛失败", async () => {
+    const ps = two();
+    const labels = labelsFrom(ps.flatMap((p) => p.steps));
+    const rushSays = new Set(player("EV_rush").steps.flatMap((s) => ("say" in s ? [s.say] : [])));
+    const gate = (said: string) => {
+      const l = labels.get(said) ?? expandGate(undefined);
+      const extra = rushSays.has(said) ? [{ id: "S2@zhou:L2", confidence: 0.9 }, { id: "K1@zhou:L1", confidence: 0.9 }] : [];
+      return { ...l, matched_triggers: [...l.matched_triggers, ...extra] };
+    };
+    const inputs = await runAll(ps, { fake: { gate } });
+    const rush = inputs.find((r) => r.player === "EV_rush")!;
+    // EV_rush 的步骤都没写 t:应命中 0,多命中 = 句数 × 2
+    expect(rush.gateAgreement).toEqual({ expected: 0, matched: 0, extra: rushSays.size * 2 });
+    expect(inputs.find((r) => r.player === "EV_good")!.gateAgreement!.extra).toBe(0);
+    const bars = evalBars(inputs, gates, "live");
+    expect(status(bars)).toMatchObject({ gate_recall: "pass", gate_extra: "fail" });
+    // 只跑 EV_rush:没有应命中的标注,命中率跳过,多命中照样判失败
+    expect(status(evalBars([rush], gates, "live"))).toMatchObject({ gate_recall: "skip", gate_extra: "fail" });
   });
 
   it("闸门什么都不命中:命中率门槛失败", async () => {
