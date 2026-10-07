@@ -1,6 +1,7 @@
 // 模型预检(pnpm models:check):本地起一个 OpenAI 兼容的假服务(只绑 127.0.0.1,不出网),
 // 覆盖成功、JSON 环节回了非 JSON(含 ```json 围栏)、401、超时、连不上 / 回网页 / Key 有非法字符、缺 Key、缺价格、
-// 快照没固定的警告和 --strict;
+// 回显的 Key 跨在截断处(回复预览 80 字、网关报错正文 300 字)也抹干净、百炼快照没固定的警告和 --strict、
+// DeepSeek 那条只是提示(--strict 也不算);
 // 退出码 0 / 1 / 2 用子进程跑命令行验证。
 // 测试配置里的 Key 变量名故意不用 DASHSCOPE_API_KEY / DEEPSEEK_API_KEY:作者机器上有真 .env 时也碰不到真 Key。
 import { spawn } from "node:child_process";
@@ -14,6 +15,7 @@ import { stringify } from "yaml";
 import type { z } from "zod";
 import {
   isSnapshotName,
+  KEY_FRAGMENT_MIN,
   loadModelsConfig,
   ModelsConfigSchema,
   preflightExitCode,
@@ -117,7 +119,7 @@ function cfgObj(edit: CfgEdit = () => {}): CfgIn {
   return c;
 }
 const cfg = (edit?: CfgEdit): ModelsConfig => ModelsConfigSchema.parse(cfgObj(edit));
-/** 没有任何警告的配置:裁判也换成钉了快照的百炼模型 */
+/** 没有任何警告、提示的配置:裁判也换成钉了快照的百炼模型 */
 const cleanEdit: CfgEdit = (c) => {
   c.stages.judge = { ...c.stages.judge, provider: "bailian", model: "qwen-t-judge-2000-01-01" };
   c.prices["qwen-t-judge-2000-01-01"] = [2.5, 10];
@@ -163,17 +165,19 @@ describe("在线检查(假服务)", () => {
     expect(g).toMatchObject({ stage: "gate", model: M.gate, tokensIn: 40, tokensOut: 5, attempts: 1, ok: true, sessionId: "models-check" });
     expect(g.costYuan).toBeCloseTo((40 * 0.2 + 5 * 0.8) / 1e6);
 
-    // 只有 DeepSeek 那条警告:不加 --strict 通过,加了不通过
-    expect(r.findings.map((f) => [f.level, f.stages])).toEqual([["warn", ["judge"]]]);
+    // 只有 DeepSeek 那条提示:不算警告,加不加 --strict 都通过(没有快照可钉,对策只有上游一变就重跑回归)
+    expect(r.findings.map((f) => [f.level, f.stages])).toEqual([["note", ["judge"]]]);
     expect(r.findings[0]!.message).toMatch(/DeepSeek 没有带日期的快照.*pnpm evals --live 和 pnpm calibrate --live/);
     expect(preflightExitCode(r, false)).toBe(0);
-    expect(preflightExitCode(r, true)).toBe(1);
+    expect(preflightExitCode(r, true)).toBe(0);
 
     const out = text(renderPreflight(r));
     expect(out).toMatch(/✓ gate\s+bailian\/qwen-t-flash-2000-01-01\s+FDE_TEST_PREFLIGHT_BAILIAN_KEY 已配置\s+JSON 对象回复 ✓/);
     expect(out).toMatch(/耗时 \d+ ms · 输入 40 \/ 输出 5 \/ 缓存 0 token · ¥0\.000012 · 尝试 1 次/);
     expect(out).toContain("本次预检发了 4 次请求");
-    expect(out).toContain("→ 通过(--strict 下不通过)");
+    expect(out).toMatch(/\n {2}i judge 用的 deepseek\/ds-t-pro:DeepSeek 没有带日期的快照/);
+    expect(out).toContain("结论:全部通过(另有 1 条提示,不算警告,--strict 下也通过)");
+    expect(text(renderPreflight(r, { strict: true }))).toContain("结论:全部通过(另有 1 条提示");
     expect(out).not.toContain(B_KEY);
     expect(out).not.toContain(D_KEY);
   });
@@ -190,7 +194,7 @@ describe("在线检查(假服务)", () => {
     expect(judge!.error).toMatch(/回复是 JSON,但不是对象/);
     expect(actor!.ok).toBe(true);
     expect(preflightExitCode(r, false)).toBe(1);
-    expect(text(renderPreflight(r))).toMatch(/结论:2 项没过、1 条警告 → 不通过/);
+    expect(text(renderPreflight(r))).toMatch(/结论:2 项没过 → 不通过/);
   });
 
   it("JSON 包了 ```json 围栏:预检照样判失败(比线上的 extractJson 严),但点明线上能容忍、是 json 模式没生效", async () => {
@@ -221,6 +225,60 @@ describe("在线检查(假服务)", () => {
     expect(out).toContain("失败,不计费");
     expect(out).not.toContain(B_KEY);
     expect(JSON.stringify(r)).not.toContain(B_KEY);
+  });
+
+  it("回复里回显的 Key 跨在预览的 80 字截断处:先整段抹再截,截断处不留 Key 的前半截", async () => {
+    const content = `${"甲".repeat(70)}${B_KEY}${"乙".repeat(30)}`;
+    // 前提:先截后抹的话,80 字的截断正好切在 Key 中间
+    expect(content.indexOf(B_KEY)).toBeLessThan(80);
+    expect(content.indexOf(B_KEY) + B_KEY.length).toBeGreaterThan(80);
+    behaviors.set(M.actor, { content });
+    const r = await runPreflight(cfg(), { env: keys, network: true, stages: ["actor"] });
+    const p = r.probes[0]!;
+    expect(p.ok).toBe(true);
+    expect(p.reply).toBe(`${"甲".repeat(70)}***${"乙".repeat(7)}…`);
+    const frag = B_KEY.slice(0, KEY_FRAGMENT_MIN);
+    expect(JSON.stringify(r)).not.toContain(frag);
+    const out = text(renderPreflight(r, { verbose: true }));
+    expect(out).toContain(`回复:${p.reply}`);
+    expect(out).not.toContain(frag);
+  });
+
+  it("截断处残留的 Key 片段(≥ 8 个字符)也抹:半截 Key 跨在预览截断处、回复被 max_tokens 截在 Key 中间、开头是 Key 的后半截", async () => {
+    const half = B_KEY.slice(0, 20);
+    // 回复里只有半截 Key,整段匹配认不出;预览截到 80 字后剩 10 个字符的前缀
+    behaviors.set(M.actor, { content: `${"甲".repeat(70)}${half} 后面还有字` });
+    // 回复本身就停在 Key 中间(max_tokens 用完),后面跟着换行
+    behaviors.set(M.debrief, { content: `Key 是 ${half}\n` });
+    const r = await runPreflight(cfg(), { env: keys, network: true, stages: ["actor", "debrief"] });
+    expect(r.probes.map((p) => p.reply)).toEqual([`${"甲".repeat(70)}***…`, "Key 是 ***"]);
+    expect(JSON.stringify(r)).not.toContain(B_KEY.slice(0, KEY_FRAGMENT_MIN));
+
+    behaviors.set(M.actor, { content: `${B_KEY.slice(-12)} 是后半截` });
+    const tail = await runPreflight(cfg(), { env: keys, network: true, stages: ["actor"] });
+    expect(tail.probes[0]!.reply).toBe("*** 是后半截");
+
+    // 不到 8 个字符的不抹(拼不回 Key,也免得误伤普通文字)
+    behaviors.set(M.actor, { content: `前缀是 ${B_KEY.slice(0, KEY_FRAGMENT_MIN - 1)}` });
+    const short = await runPreflight(cfg(), { env: keys, network: true, stages: ["actor"] });
+    expect(short.probes[0]!.reply).toBe(`前缀是 ${B_KEY.slice(0, KEY_FRAGMENT_MIN - 1)}`);
+  });
+
+  it("401 的报错正文被网关截到 300 字、回显的 Key 跨在截断处:报错原文先抹再接说明,日志里也不留残片", async () => {
+    const head = '{"error":{"message":"Incorrect API key provided: ';
+    const body = `${head}${"x".repeat(290 - head.length)}${B_KEY}"}}`;
+    // 前提:网关的 slice(0, 300)(packages/llm/src/gateway.ts)正好切在 Key 中间
+    expect(body.indexOf(B_KEY)).toBe(290);
+    expect(body.indexOf(B_KEY) + B_KEY.length).toBeGreaterThan(300);
+    behaviors.set(M.actor, { status: 401, body });
+    const r = await runPreflight(cfg(), { env: keys, network: true, stages: ["actor"] });
+    const p = r.probes[0]!;
+    expect(p.ok).toBe(false);
+    expect(p.error).toMatch(/^bailian 401: .*x\*\*\* —— Key 无效、过期,或没有这个模型的权限\(检查 FDE_TEST_PREFLIGHT_BAILIAN_KEY\)$/);
+    expect(p.log!.error).toMatch(/x\*\*\*$/);
+    const frag = B_KEY.slice(0, KEY_FRAGMENT_MIN);
+    expect(JSON.stringify(r)).not.toContain(frag);
+    expect(text(renderPreflight(r, { verbose: true }))).not.toContain(frag);
   });
 
   it("超时:按环节的 timeout_ms 判失败,不重试", async () => {
@@ -397,6 +455,22 @@ describe("命令行 pnpm models:check(子进程)", () => {
     expect(a.code).toBe(0);
     expect(seen.map((s) => s.body.model)).toEqual(["qwen-t-plus"]);
     const s = await runCli(["--stage", "actor", "--strict"], { FDE_MODELS_CONFIG: f, ...keys });
+    expect(s.code).toBe(1);
+  });
+
+  it("裁判在 DeepSeek 上:那条只是提示,--strict 也是 0;同时有百炼快照没固定时,--strict 只按警告算、照样 1", async () => {
+    const a = await runCli(["--strict"], { FDE_MODELS_CONFIG: cfgFile(), ...keys });
+    expect(a.out).toMatch(/ {2}i judge 用的 deepseek\/ds-t-pro:DeepSeek 没有带日期的快照/);
+    expect(a.out).toContain("结论:全部通过(另有 1 条提示,不算警告,--strict 下也通过)");
+    expect(a.code).toBe(0);
+    expect(seen).toHaveLength(4);
+
+    const f = cfgFile((c) => {
+      c.stages.actor.model = "qwen-t-plus";
+      c.prices["qwen-t-plus"] = [0.8, 2];
+    });
+    const s = await runCli(["--stage", "actor", "--stage", "judge", "--strict"], { FDE_MODELS_CONFIG: f, ...keys });
+    expect(s.out).toContain("检查都过了,但有 1 条警告;--strict 下警告也算失败 → 不通过");
     expect(s.code).toBe(1);
   });
 

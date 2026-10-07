@@ -1,9 +1,9 @@
 // 模型预检:pnpm models:check [--stage gate|actor|judge|debrief]… [--strict] [--no-network] [-v]
 //   Key 填进 .env 之后第一个要跑的命令。读仓库根目录的 .env(有的话)和 config/models.yaml(或 FDE_MODELS_CONFIG)。
-//   静态检查:每个模型都登记了价格;百炼模型固定到带日期的快照名;DeepSeek 提醒上游一变就重跑回归。
+//   静态检查:每个模型都登记了价格;百炼模型固定到带日期的快照名(没固定是警告);DeepSeek 提示上游一变就重跑回归(只是提示)。
 //   在线检查:每个环节经网关发一次最小请求(参数和线上一致,只压小 max_tokens),报告 Key 有没有、耗时、token 和花费。
 //   --no-network 只做静态检查,Key 只列出有没有,不计入结论。说明见 docs/models.md。
-// 退出码:0 都通过(可以有警告);1 有检查没过,或 --strict 下有警告;2 参数或配置错误(配置读不进来、未知环节)。
+// 退出码:0 都通过(可以有警告、提示);1 有检查没过,或 --strict 下有警告(提示不算);2 参数或配置错误(配置读不进来、未知环节)。
 import { existsSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -18,7 +18,7 @@ const rel = (p: string) => {
 const USAGE = `用法:
   pnpm models:check [--stage <环节>]… [--strict] [--no-network] [-v]
   --stage        只查这个环节(可重复):${STAGES.join(" / ")};不给就全查
-  --strict       有警告(快照没固定、DeepSeek 别名)也算不通过
+  --strict       有警告(百炼模型没固定快照)也算不通过;DeepSeek 没有快照可钉,那条只是提示,不影响结论
   --no-network   不发请求,只做静态检查(价格、快照)
   -v             打出每次请求网关记下的原始日志和模型回复
 说明见 docs/models.md`;
