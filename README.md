@@ -157,7 +157,7 @@ docs/                 部署、合规清单、标定流程、质量门槛、模�
 
 另有两套对抗集(`scenarios/freight-docs/evals/adversarial/`):注入、索要答案、跳出角色(60 轮),和向每个角色追问他不该知道的数字(61 轮)。离线跑是冒烟测试(在 `pnpm test` 里),在线跑(`pnpm evals:adversarial --live`)才判方案 4.3 的「泄露为 0」「编造为 0」。
 
-当前离线结果(总分):EV_good 98 · EV_boss_only 45(封顶前 48.2)· EV_leading 27 · EV_rude 20 · EV_numbers 17 · EV_offtopic 17 · EV_sycophancy 16 · EV_jailbreak 14 · EV_lazy 14 · EV_rush 4。
+当前离线结果(总分):EV_good 98 · EV_boss_only 45(封顶前 48.2)· EV_leading 27 · EV_rude 20 · EV_offtopic 18 · EV_numbers 17 · EV_sycophancy 16 · EV_jailbreak 14 · EV_lazy 14 · EV_rush 4。
 
 玩家文件里的裁判固定输出和闸门标注都按严格模式校验:拼错的键、未知的触发器 id、被拒绝的按钮动作、会话提前结束后没执行的步骤,都会让评测失败,而不是悄悄通过。
 
