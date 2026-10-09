@@ -97,7 +97,7 @@ roles:
   - id: wang
     name: 王会计
     title: 财务
-    discovered: {by_ask: 问谁管钱、费用或损失}
+    discovered: {by_ask: 问钱、费用或损失这些事归谁管、该找谁;只问数额不算}
     persona: 谨慎,按规矩办;没有周总点头不给数
     goals: [不出纰漏]
     agenda: []
@@ -121,7 +121,7 @@ facts:
     key: true
     statement: 峰会上周总有 15 分钟分享,已对同行放话要讲「AI 单证」;他要的是现场能演示
     unlock:
-      - {role: zhou, level: L2, ask: 追问大会想讲什么、给谁看、演示成什么样算成功}
+      - {role: zhou, level: L2, ask: 追问大会想讲什么、给谁看}
       - {role: lin, level: L2, ask: 问周总近期日程或大会安排}
   - id: S2
     cat: success
@@ -161,7 +161,7 @@ facts:
     statement: 操作部有一张手工维护的《异常登记表》,Q3 共 428 条
     canaries: [异常登记表]
     unlock:
-      - {role: liu, level: L1, ask: 问出错有没有记录, say: "有个表在记,记得不全"}
+      - {role: liu, level: L1, ask: "问出错有没有记录、记录在谁那里,或有没有人数过出了多少错", say: "有个表在记,记得不全"}
       - {role: liu, level: L3, ask: 明确要看记录或导出表, requires: {any: [trust.liu>=1, auth_ops]}, gives: A2}
   - id: P2
     cat: problem
@@ -213,7 +213,7 @@ facts:
     statement: 客户发来的发票和装箱单经常自己对不上(数量、箱数、金额)
     unlock:
       - {role: chen, level: L2, ask: 问录的时候最常卡在哪}
-      - {role: liu, level: L2, ask: 追问客户资料乱具体指什么}
+      - {role: liu, level: L2, ask: "在她提到客户资料乱之后,追问乱具体指什么、让她举个例子"}
       - {via: A1, level: L3}                    # 认真看样本包能自己发现
 
   # ---------- C:代价 ----------
@@ -230,7 +230,7 @@ facts:
     key: true
     statement: Q3 直接损失约 49.8 万,分类明细见费用汇总
     unlock:
-      - {role: wang, level: L3, ask: 要上季度异常费用的汇总, requires: [auth_finance], gives: A4}
+      - {role: wang, level: L3, ask: "问上季度出错总共赔进去多少钱,或要异常费用的汇总", requires: [auth_finance], gives: A4}
   - id: C3
     cat: cost
     weight: 3
@@ -287,7 +287,7 @@ facts:
     weight: 2
     statement: 周总想象的演示是「拍一张单子,几秒出结果」
     unlock:
-      - {role: zhou, level: L2, ask: 问他脑子里的演示画面}
+      - {role: zhou, level: L2, ask: 问他想象中的演示是什么场面、现场要做出什么效果才算数}
   - id: K8
     cat: constraint
     weight: 1
@@ -408,7 +408,7 @@ traps:
     bad: 直接给日期或报价
   - id: TR2
     by: zhou
-    when: 用户向周总问操作细节,或问操作上的事该找谁    # 无法写成表达式的条件交给闸门识别
+    when: 用户向周总问一线怎么操作、怎么出错这类操作细节,或问操作上的事该找谁;只问票量、人手、成本不算    # 无法写成表达式的条件交给闸门识别
     beat: 不耐烦,指路去找操作部的刘姐
     stance: impatient
     line: 这些细节别问我,你去找操作部的刘姐。

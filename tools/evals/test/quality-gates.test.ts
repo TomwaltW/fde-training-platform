@@ -71,7 +71,7 @@ describe("离线:结果不变,只在线有意义的门槛跳过", () => {
     const inputs = await runAll(players, "offline");
     expect(Object.fromEntries(inputs.map((r) => [r.player, r.total]))).toEqual({
       EV_boss_only: 45, EV_good: 98, EV_jailbreak: 14, EV_lazy: 14, EV_leading: 27,
-      EV_numbers: 17, EV_offtopic: 17, EV_rude: 20, EV_rush: 4, EV_sycophancy: 16,
+      EV_numbers: 17, EV_offtopic: 18, EV_rude: 20, EV_rush: 4, EV_sycophancy: 16,
     });
     expect(inputs.flatMap((r) => r._failed)).toEqual([]);
     const bars = evalBars(inputs, gates, "offline");
@@ -177,6 +177,21 @@ describe("在线:假模型网关", () => {
   it("闸门什么都不命中:命中率门槛失败", async () => {
     const bars = evalBars(await runAll([player("EV_good")], { fake: { gate: () => ({ acts: ["ask"] }) } }), gates, "live");
     expect(status(bars)).toMatchObject({ gate_recall: "fail", gate_extra: "pass" });
+  });
+
+  it("gateLog 记下闸门给出的置信度:没过 0.6 的也记,但不算命中、不算多命中", async () => {
+    const p = player("EV_rush");
+    const low = { id: "S2@zhou:L2", confidence: 0.4 };
+    const high = { id: "K1@zhou:L1", confidence: 0.9 };
+    const chat = fakeChat({ labels: labelsFrom(p.steps), calls: [], gate: () => ({ acts: ["ask"], matched_triggers: [low, high] }) });
+    const run = await runPlayer(scn, p, { kind: "live", deps: { gate: new LlmGate(chat), actor: new LlmActor(chat) } });
+    expect(run.gateLog!.length).toBeGreaterThan(0);
+    for (const e of run.gateLog!) {
+      expect(e.given).toEqual([low, high]);
+      expect(e.got).toEqual([high.id]);
+      expect(e.want).toEqual([]);
+    }
+    expect(run.gateAgreement).toEqual({ expected: 0, matched: 0, extra: run.gateLog!.length });
   });
 });
 

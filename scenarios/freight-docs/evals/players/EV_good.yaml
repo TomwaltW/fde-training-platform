@@ -46,7 +46,7 @@ steps:
     gate: {t: [P4@chen:L3], acts: [ask, request_artifact], tags: [evidence_ask, follow_up]}
     check: {trap: TR5, obtained: [A6]}
   - say: 不会裁人。我要做的是让你们少返工、少半夜追客户。客户资料一般是什么格式?能帮我数一下你下载文件夹里上周各类文件有多少吗?
-    gate: {t: [P3@chen:L3], tags: [quantifying, evidence_ask], bundled: 2}
+    gate: {t: [P3@chen:L2, P3@chen:L3], tags: [quantifying, evidence_ask], bundled: 2}
     check: {reveals: [P3@L3], obtained: [A5]}
   - say: HS 编码和申报品名平时是怎么定的?
     gate: {t: [P5@chen:L2], tags: [open]}
@@ -71,7 +71,7 @@ steps:
   - say: 现在团队人手够用吗?
     gate: {t: [S3@liu:L2]}
   - say: 如果上新系统,最后是谁在用、谁对结果负责?上次那个工具大家用下来什么感受?
-    gate: {t: [S4@liu:L2], tags: [open], bundled: 2}
+    gate: {t: [S4@liu:L2, K1@liu:L2], tags: [open], bundled: 2}
     check: {reveals: [S4@L2]}
   - open: A2
     check: {reveals: [K5@L2, RH1@L3], minutes_used: 235}

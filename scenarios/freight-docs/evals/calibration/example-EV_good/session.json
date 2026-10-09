@@ -1161,6 +1161,10 @@
         ],
         "matched_triggers": [
           {
+            "id": "P3@chen:L2",
+            "confidence": 0.9
+          },
+          {
             "id": "P3@chen:L3",
             "confidence": 0.9
           }
@@ -1452,6 +1456,10 @@
         "matched_triggers": [
           {
             "id": "S4@liu:L2",
+            "confidence": 0.9
+          },
+          {
+            "id": "K1@liu:L2",
             "confidence": 0.9
           }
         ],
