@@ -278,6 +278,24 @@ describe("命令行", () => {
     expect(pg.out).not.toContain("secret");
   }, 60_000);
 
+  it("自己指定了 FDE_MEMORY_STORE_FILE:导出命令两条都带上 --store-file(路径有空格加引号);用默认库时不带", () => {
+    const keys = { FDE_PLAYTEST_TEST_BAILIAN_KEY: "sk-a", FDE_PLAYTEST_TEST_DEEPSEEK_KEY: "sk-b", ADMIN_EMAILS: "me@example.com" };
+    const own = run(["--dry-run"], keys);
+    expect(own.code).toBe(0);
+    expect(own.out).toContain(`pnpm session:export --list --store-file ${own.store},再 pnpm session:export --id <对局 id> --calibrate <用例 id> --store-file ${own.store}`);
+
+    const spaced = join(tmp(), "my store.json");
+    const sp = run(["--dry-run"], { ...keys, FDE_MEMORY_STORE_FILE: spaced });
+    expect(sp.code).toBe(0);
+    expect(sp.out).toContain(`pnpm session:export --list --store-file "${spaced}",`);
+
+    // 默认库(.data/dev-store.json)就是 session:export 自己会读的那个,提示照旧
+    const dflt = run(["--dry-run"], { ...keys, FDE_MEMORY_STORE_FILE: "" });
+    expect(dflt.code).toBe(0);
+    expect(dflt.out).toContain("pnpm session:export --list,再 pnpm session:export --id <对局 id> --calibrate <用例 id>\n");
+    expect(dflt.out).not.toContain("--store-file");
+  }, 60_000);
+
   it("--dry-run --offline:彩排的库另用一个文件,导出命令带上 --store-file", () => {
     const r = run(["--dry-run", "--offline"], { ADMIN_EMAILS: "me@example.com" });
     expect(r.code).toBe(0);
