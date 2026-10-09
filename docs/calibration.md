@@ -91,6 +91,8 @@ pnpm calibrate --init-player EV_leading --id script-EV_leading
 
 > 仓库里现有的 `example-EV_good`、`example-EV_rush` 就是这样生成的,它们的 human.yaml 是**示例标注,不是作者的真实标注**,只用来演示格式和让 `pnpm calibrate --mock` 有东西可跑。开始正式标定后删掉这两个目录(混在真实用例里时,工具会提醒)。
 
+**标定没过线之前,真实用例放暂存目录** `scenarios/freight-docs/evals/calibration-real/`,上面和第 4 节的命令一律加 `--dir scenarios/freight-docs/evals/calibration-real`(`session:export --calibrate` 同样认 `--dir`)。不直接放进默认目录,是因为:`tools/evals/test/calibrate-run.test.ts` 断言默认目录里正好是那两个示例,多放一份 `pnpm test` 就挂;`pnpm calibrate --mock`(也在 `pnpm ci:local` 里)要求默认目录的每个用例都有至少 3 份 `judge-fixtures`,而且两道门槛都过。两道门槛都过了之后,再把用例挪进默认目录、删掉示例、改那几条测试。
+
 ---
 
 ## 3. 先打分,再看裁判
@@ -103,6 +105,25 @@ pnpm calibrate --init-player EV_leading --id script-EV_leading
 4. 理由里写不出依据的分数,往往就是之后对不上的地方——宁可先空着(`null`)也别猜。
 
 打分时只看这一局本身。D1(事实覆盖)、D3(提问)、D6(承诺)在引擎里是纯规则,D2(证据)也基本是规则;如果你凭感觉给的分和规则算出来的差很多,那正是标定要找的"规则问题"。
+
+### 打分时翻哪些材料
+
+只列位置,不解释规则怎么算分。行号是 `73019e4` 上的,`scenario.yaml` 改过之后要重新核一遍。
+
+标注材料只有用例目录里的 `transcript.md`。同目录的 `session.json` **不是**标注材料(里面有闸门命中的触发器和导演指令),不用打开。
+
+| 要查什么 | 在哪 |
+|---|---|
+| 事件日志里的 S2、K1 这类编号指哪条事实 | `scenarios/freight-docs/scenario.yaml` 第 116–307 行 `facts:`。每条只看 `statement` 和 `unlock`;`weight`、`key` 两行不用看 |
+| 诊断的对照项 | 同一文件第 49–54 行 `truth.diagnosis_items` |
+| 资料 | 第 308–364 行 `artifacts:` |
+| 验证 | 第 374–400 行 `experiments:` |
+| 压力时刻 | 第 401–446 行 `traps:` |
+| 判断表单(J1–J5 各是什么) | 第 456–462 行 `judgment_form:` |
+| 七个维度各看什么、封顶规则、分数段的含义 | `FDE训练平台-产品与开发方案-v1.md` 3.4.1 节:第 479–484 行、第 486–508 行(跳过第 485 行) |
+
+- D1 凭"关键事实问到了多少"自己判断,不按 `weight` 去算。
+- 这页故意没列 `scenario.yaml` 的 `rubric:` 一段。要不要翻它、要不要按 `weight` 算,你自己定;翻过、算过的,在 `human.yaml` 的 `note` 里写一句("看过 rubric""按 weight 算过 D1")。
 
 ---
 
