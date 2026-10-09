@@ -43,7 +43,7 @@
    - 在邮件推送控制台添加发信域名(建议用子域名,如 `mail.example.com`),按提示添加 SPF、MX、DKIM 等解析记录并验证。
    - 创建发信地址(如 `noreply@mail.example.com`),设置 SMTP 密码。
    - 同时用公司主体提交短信签名,为以后切换手机号登录做准备。
-4. **模型平台账号**。开通阿里云百炼和 DeepSeek,创建 API Key;记下所用模型的生成式人工智能服务备案号,上线后要在页脚公示(第 11 节)。
+4. **模型平台账号**。开通 DeepSeek(当前四个环节都用它;换回百炼时再开通阿里云百炼),创建 API Key;记下所用模型的生成式人工智能服务备案号,上线后要在页脚公示(第 11 节)。
 5. **法律文稿**。`apps/web/content/legal/` 下的用户协议、隐私政策、AI 生成内容标识说明是草稿,补全【待填写】并请专业人士审核后再上线。
 
 ## 2. 买 ECS
@@ -161,11 +161,11 @@ vim .env
 | 变量 | 默认 | 生产怎么填 | 说明 |
 |---|---|---|---|
 | `FDE_ROOT` | `path.resolve(process.cwd(), "../..")` | 不填 | 仓库根目录(含 scenarios/ config/ infra/db);镜像里固定为 `/app` |
-| `FDE_ENGINE_MODE` | 有 `DASHSCOPE_API_KEY` 就 live,否则 offline | 不填 | `offline` 不调模型,只用来调试 |
+| `FDE_ENGINE_MODE` | 有 `DEEPSEEK_API_KEY` 或 `DASHSCOPE_API_KEY` 就 live,否则 offline | 不填 | `offline` 不调模型,只用来调试 |
 | `DATABASE_URL` | 无 | 不填 | compose 用 `POSTGRES_*` 拼好并覆盖;本地开发不填就用内存库 |
 | `FDE_MEMORY_STORE_FILE` | `<FDE_ROOT>/.data/dev-store.json` | 不填 | 只在没有 `DATABASE_URL` 时用 |
-| `DASHSCOPE_API_KEY` | 无 | **必填** | 百炼:闸门、演员、复盘 |
-| `DEEPSEEK_API_KEY` | 无 | **必填** | DeepSeek:裁判 |
+| `DASHSCOPE_API_KEY` | 无 | 不填(当前配置不用) | 百炼:换回百炼时用在闸门、演员、复盘 |
+| `DEEPSEEK_API_KEY` | 无 | **必填** | DeepSeek:闸门、演员、裁判、复盘(当前配置) |
 | `FDE_MODELS_CONFIG` | `<FDE_ROOT>/config/models.yaml` | 不填 | 换配置文件时写容器内路径 |
 | `FDE_BANNED_WORDS` | 无 | `/app/config/banned_words.txt` | 违禁词表,见 5.2 |
 | `FDE_AUTH_SECRET` | 开发默认值 | **必填**,`openssl rand -hex 32` | 验证码、登录 token 哈希的 pepper;上线后不要改 |
@@ -432,7 +432,7 @@ git checkout "$(cat .data/previous-commit)"   # 让代码和正在跑的镜像�
 vim .env
 #   SITE_ICP_NUMBER=浙ICP备xxxxxxxx号-1
 #   SITE_PUBLIC_SECURITY_NUMBER="浙公网安备 33xxxxxxxxxxxx号"
-#   SITE_MODEL_DISCLOSURE="通义千问(备案号 xxx);DeepSeek(备案号 xxx)"
+#   SITE_MODEL_DISCLOSURE="DeepSeek(备案号 xxx)"
 ./infra/compose.sh up -d app      # 必须用 up -d:restart 不会重新读取 .env
 curl -s https://<域名>/api/site   # 核对 icpNumber、publicSecurityNumber、modelDisclosure
 ```

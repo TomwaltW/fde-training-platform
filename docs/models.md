@@ -2,11 +2,13 @@
 
 对应方案 2.3(模型选型、「固定模型快照」)。线上四个环节(闸门、演员、裁判、复盘)用哪个模型都写在 `config/models.yaml`;这篇讲从拿到 Key 到能放心跑 `pnpm evals --live` 之间要做的事。
 
+**2026-10-09 起四个环节都用 DeepSeek**(闸门、演员、复盘 `deepseek-flash` 关思考,裁判 `deepseek-v4-pro` 开思考),只需要 `DEEPSEEK_API_KEY`。下文百炼的部分留着,换回百炼时用。
+
 顺序:
 
-1. 拿 Key(百炼、DeepSeek),`cp .env.example .env` 填进去;
+1. 拿 Key(当前只要 DeepSeek;换回百炼时才要百炼的),`cp .env.example .env` 填进去;
 2. `pnpm models:check`:Key 在不在、每个环节真请求一次能不能通、价格登记齐没有、模型名是不是固定的快照;
-3. 把百炼的模型换成带日期的快照名(补价格),再跑 `pnpm evals --live` 和 `pnpm calibrate --live`。
+3. 用百炼时把模型换成带日期的快照名(补价格);DeepSeek 没有快照,上游一变就重跑。然后跑 `pnpm evals --live` 和 `pnpm calibrate --live`。
 
 ---
 
@@ -14,8 +16,8 @@
 
 | 供应商 | 环境变量 | 用在 | 在哪拿 |
 |---|---|---|---|
-| 阿里云百炼 | `DASHSCOPE_API_KEY` | 闸门、演员、复盘 | 用阿里云账号登录百炼控制台,开通模型服务,在 API Key 管理页面创建 |
-| DeepSeek | `DEEPSEEK_API_KEY` | 裁判 | 在 DeepSeek 开放平台(platform.deepseek.com)注册、充值,在 API keys 页面创建 |
+| DeepSeek | `DEEPSEEK_API_KEY` | 闸门、演员、裁判、复盘(当前配置) | 在 DeepSeek 开放平台(platform.deepseek.com)注册、充值,在 API keys 页面创建;没有免费额度,余额为 0 时请求会失败 |
+| 阿里云百炼 | `DASHSCOPE_API_KEY` | 当前配置不用;换回百炼时用在闸门、演员、复盘 | 用阿里云账号登录百炼控制台,开通模型服务,在 API Key 管理页面创建 |
 
 - 完整的 Key 一般只在创建时显示一次,当场复制。
 - 百炼的 Key 分地域。`config/models.yaml` 里的地址是 `dashscope.aliyuncs.com`(中国内地);在别的地域(如国际站)建的 Key 拿到这里会鉴权失败(401)。
@@ -23,7 +25,7 @@
 
 ```bash
 cp .env.example .env
-# 编辑 .env,填 DASHSCOPE_API_KEY 和 DEEPSEEK_API_KEY(等号后面直接写 Key,不要引号和空格)
+# 编辑 .env,填 DEEPSEEK_API_KEY(等号后面直接写 Key,不要引号和空格);换回百炼时再填 DASHSCOPE_API_KEY
 ```
 
 `.env` 在 `.gitignore` 里,不会被提交。命令行工具(`pnpm play`、`pnpm evals --live`、`pnpm calibrate --live`、`pnpm models:check`)都会自动读仓库根目录的 `.env`;已经在环境里设了的变量以环境为准,`.env` 不覆盖。
@@ -49,7 +51,7 @@ pnpm models:check -v                    # 另外打出网关记下的原始日�
 | 检查 | 不过时 | 说明 |
 |---|---|---|
 | Key 在不在 | 该环节**失败**,点名缺哪个环境变量 | 只显示"已配置 / 缺失",不打印 Key 的值;只有空白也算缺失。供应商报错、模型回复里回显的 Key 会被抹成 `***`:先整段抹再截断(回复预览截到 80 字,网关把报错正文截到 300 字),截断处残留的 8 个字符以上的 Key 片段也抹;返回的不是 JSON 时,解析报错里带出的那一小段响应体(可能切在 Key 中间)整段略去,不打印 |
-| 真请求一次 | 该环节**失败** | 走 `@fde/llm` 网关,参数和线上完全一样(温度、`extra` 里的 `enable_thinking: false`、json 模式、`timeout_ms`),只把 `max_tokens` 压小:关了思考的环节 64,没关思考的(裁判)1024。不重试,看的是第一次请求的真实结果 |
+| 真请求一次 | 该环节**失败** | 走 `@fde/llm` 网关,参数和线上完全一样(温度、`extra` 里关思考的参数——百炼 `enable_thinking: false`、DeepSeek `thinking: {type: disabled}`、json 模式、`timeout_ms`),只把 `max_tokens` 压小:关了思考的环节 64,没关思考的(裁判)1024。不重试,看的是第一次请求的真实结果 |
 | JSON 环节的回复 | 该环节**失败** | 闸门和裁判(引擎调用时固定开 json 模式)要求整段回复直接就能解析成 JSON 对象;文本环节(演员、复盘)要求回复不为空。这一条**故意比线上严**:引擎解析时会去掉 ` ```json ` 围栏、截取第一个 `{` 到最后一个 `}` 之间的部分,预检不放过这些,为的是确认 `json_object` 模式真的生效了 |
 | 价格 | **失败** | 每个用到的模型都要在 `prices` 里有同名条目。没登记时网关把花费记成 `null`,`pnpm evals` / `calibrate` 汇总时按 ¥0 算,花费悄悄消失 |
 | 百炼快照 | **警告** | 模型名不带日期后缀(`-YYYY-MM-DD`,更早的快照是 `-MMDD`)时提醒:这类名字会跟着上游升级。`-latest` 也算没固定 |
@@ -58,7 +60,7 @@ pnpm models:check -v                    # 另外打出网关记下的原始日�
 每个发了请求的环节会打一行网关记下的数据:
 
 ```text
-  ✓ gate    bailian/qwen3.7-flash     DASHSCOPE_API_KEY 已配置  JSON 对象回复 ✓
+  ✓ gate    deepseek/deepseek-flash   DEEPSEEK_API_KEY 已配置  JSON 对象回复 ✓
       耗时 … ms · 输入 … / 输出 … / 缓存 … token · ¥… · 尝试 1 次
 ```
 
@@ -74,7 +76,7 @@ pnpm models:check -v                    # 另外打出网关记下的原始日�
 
 `--no-network` 下不发请求,Key 只列出有没有,**不计入结论**:没有 Key 的机器(比如 CI)也能用它检查配置本身。
 
-**`--strict` 在当前配置下不通过**:闸门、演员、复盘的模型名都没带日期(三条快照警告),按第 3 节换成快照名、补上价格就能过。裁判在 DeepSeek 上那条是**提示**,不算警告,`--strict` 不因它失败:DeepSeek 没有快照可钉,配置里没有能改的地方,唯一能消掉它的办法是把裁判换到别家,又和方案"演员和裁判用不同厂商"的建议相悖;真正的对策是上游一变就重跑 `pnpm evals --live` 和 `pnpm calibrate --live`(见第 3 节)。所以 `--strict` 的意思是"能钉死的都钉死了"。
+**`--strict` 在当前配置(四个环节都在 DeepSeek)下能通过**:DeepSeek 那两条是**提示**,不算警告。DeepSeek 没有快照可钉,配置里没有能改的地方,真正的对策是上游一变就重跑 `pnpm evals --live` 和 `pnpm calibrate --live`(见第 3 节)。换回百炼时,模型名没带日期会给警告,`--strict` 不通过,按第 3 节换成快照名、补上价格就能过。所以 `--strict` 的意思是"能钉死的都钉死了"。
 
 ### 常见失败
 
@@ -82,7 +84,7 @@ pnpm models:check -v                    # 另外打出网关记下的原始日�
 |---|---|
 | `缺少环境变量 XXX` | `.env` 没建、变量名拼错,或等号后面是空的 |
 | `401` / `403` | Key 错了、过期了、地域不对,或账号没开通这个模型 |
-| `400` | 模型名不对,或 `extra` 里的参数(如 `enable_thinking`)这个模型不认 |
+| `400` | 模型名不对,或 `extra` 里的参数(如 `enable_thinking`、`thinking`)这个模型不认 |
 | `404` | `base_url` 或模型名不对 |
 | `429` | 限流,或额度、余额用完 |
 | `超时:N ms 内没有返回` | 网络慢或供应商卡住;N 是该环节的 `timeout_ms`(没配是 30000) |
@@ -96,6 +98,8 @@ pnpm models:check -v                    # 另外打出网关记下的原始日�
 ---
 
 ## 3. 固定快照(方案 2.3)
+
+当前四个环节都在 DeepSeek 上,没有快照可钉,只能照本节末「DeepSeek」那段做;下面百炼的部分换回百炼时用。
 
 **为什么**:不带日期的模型名(稳定版名、`-latest`)背后的模型会被上游升级。演员的脾气、闸门的判断一变,回归评测和标定的结论就不再成立,而且没有任何报错。所以上线前要把模型名换成带日期的快照名,之后只在主动换模型时才变,每次变都跑一遍回归。`config/models.yaml` 里演员那行的注释说的就是这件事。
 
@@ -124,8 +128,9 @@ pnpm models:check -v                    # 另外打出网关记下的原始日�
 DeepSeek 没有带日期的快照,旧模型名的请求会被转给新模型(方案 2.3、附录 F 的 [S6]),价格也会调(8 月的峰谷定价,[S7])。所以:
 
 - 关注 DeepSeek API 文档里的模型与价格说明和更新公告;
-- 上游一有模型或价格变动,就重跑 `pnpm evals --live`(裁判在 DeepSeek 上,所以还要 `pnpm calibrate --live`),并核对 `prices`;
-- `pnpm models:check` 对 DeepSeek 的环节始终给一条**提示**(不是警告):不影响结论,`--strict` 也不因它失败。它没法靠改配置消掉——唯一的办法是换厂商,而方案建议演员和裁判用不同厂商——所以只当提醒:能做的就是上一条,上游一变就重跑回归。
+- 上游一有模型或价格变动,就重跑 `pnpm evals --live` 和 `pnpm calibrate --live`(四个环节都在 DeepSeek 上),并核对 `prices`;2026-10-09 核对时 `deepseek-flash` 指向 DeepSeek-V4.1-Flash,`deepseek-v4-pro` 指向 DeepSeek-V4-Pro-0813;
+- `pnpm models:check` 对 DeepSeek 的环节始终给一条**提示**(不是警告):不影响结论,`--strict` 也不因它失败。它没法靠改配置消掉,所以只当提醒:能做的就是上一条,上游一变就重跑回归。
+- 方案建议演员和裁判用不同厂商(减少同向偏差,方案 2.3【待验证】);现在同厂商、不同型号,靠人工标定(`pnpm calibrate --live` 的一致性门槛)兜底,标定不过再把裁判换到别家。
 
 ---
 
@@ -135,10 +140,10 @@ DeepSeek 没有带日期的快照,旧模型名的请求会被转给新模型(方
 
 | 环节 | 模型 | 价格(元/百万 token) | 通常 | 最坏(输出用满上限) |
 |---|---|---|---|---|
-| 闸门 | qwen3.7-flash | 0.2 / 0.8 | 约 ¥0.00002 | 约 ¥0.00006 |
-| 演员 | qwen-plus | 0.8 / 2 | 约 ¥0.00005 | 约 ¥0.0002 |
+| 闸门 | deepseek-flash | 2 / 8(高峰价) | 约 ¥0.0001 | 约 ¥0.0006 |
+| 演员 | deepseek-flash | 2 / 8(高峰价) | 约 ¥0.0001 | 约 ¥0.0006 |
 | 裁判 | deepseek-v4-pro | 9 / 27(高峰价) | 不思考约 ¥0.0006;思考几百 token 约 ¥0.005–0.01 | 约 ¥0.03(1024 个输出 token) |
-| 复盘 | qwen3.7-plus | 2 / 8 | 约 ¥0.0001 | 约 ¥0.0006 |
+| 复盘 | deepseek-flash | 2 / 8(高峰价) | 约 ¥0.0001 | 约 ¥0.0006 |
 
 全量预检一次通常不到 ¥0.01,最坏约 ¥0.03,主要花在裁判上。实际花费以每次输出末尾"本次预检发了 N 次请求,约 ¥…"为准。
 

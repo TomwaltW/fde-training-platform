@@ -3,7 +3,7 @@
 // 命令行只跑 --help、参数错误和 --dry-run,不会真的起网页。子进程不继承 process.env、用 --dotenv 避开仓库根目录的 .env,
 // 本机的 .env、apps/web/.env*、shell 里的变量都不影响结果(最后一个用例拿一份"毒" .env 验证)。
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -16,6 +16,27 @@ const root = resolve(import.meta.dirname, "../../..");
 const cli = join(root, "tools/evals/src/playtest.ts");
 const tsx = join(root, "node_modules/.bin/tsx");
 const KEYS = { DASHSCOPE_API_KEY: "sk-test-bailian", DEEPSEEK_API_KEY: "sk-test-deepseek" };
+
+/**
+ * 两家供应商的固定配置(2026-10-09 之前仓库用的布局:闸门、演员、复盘走百炼,裁判走 DeepSeek)。
+ * "Key 按变量名合并""缺哪家只点名哪家"这几条断言要两家才测得出来,所以不随仓库的 config/models.yaml 变;
+ * 仓库当前配置(四个环节都走 DeepSeek)另有一条用例。
+ */
+const TWO_VENDOR_YAML = `
+providers:
+  bailian: {base_url: https://dashscope.aliyuncs.com/compatible-mode/v1, api_key_env: DASHSCOPE_API_KEY}
+  deepseek: {base_url: https://api.deepseek.com, api_key_env: DEEPSEEK_API_KEY}
+stages:
+  gate: {provider: bailian, model: qwen3.7-flash, temperature: 0, max_tokens: 600, json: true, extra: {enable_thinking: false}}
+  actor: {provider: bailian, model: qwen-plus, temperature: 0.8, max_tokens: 300, extra: {enable_thinking: false}}
+  judge: {provider: deepseek, model: deepseek-v4-pro, temperature: 0, max_tokens: 8000, json: true}
+  debrief: {provider: bailian, model: qwen3.7-plus, temperature: 0.5, max_tokens: 2000, extra: {enable_thinking: false}}
+prices:
+  qwen3.7-flash: [0.2, 0.8]
+  qwen-plus: [0.8, 2]
+  qwen3.7-plus: [2, 8]
+  deepseek-v4-pro: [9, 27]
+`;
 
 const tmps: string[] = [];
 const tmp = () => {
@@ -34,11 +55,17 @@ const check = (env: Record<string, string>, offline = false) => preflight({ env,
  */
 const checkIsolated = (env: Record<string, string>, offline = false) =>
   preflight({ env: { FDE_MODELS_CONFIG: join(root, "config/models.yaml"), ...env }, repoRoot: tmp(), offline });
+/** 把两家供应商的固定配置写进临时目录,返回路径。 */
+const twoVendor = () => {
+  const f = join(tmp(), "models.yaml");
+  writeFileSync(f, TWO_VENDOR_YAML);
+  return f;
+};
 const infoOf = (p: ReturnType<typeof preflight>, label: string) => p.info.find(([k]) => k === label)?.[1];
 
 describe("启动前检查", () => {
   it("Key 和管理员都齐:能启动,引擎写死成 live,内存库路径写成绝对路径,没配发信就打开验证码回显并提醒", () => {
-    const p = check({ ...KEYS, ADMIN_EMAILS: " Me@Example.com , ,b@x.com" });
+    const p = check({ ...KEYS, ADMIN_EMAILS: " Me@Example.com , ,b@x.com", FDE_MODELS_CONFIG: twoVendor() });
     expect(p.errors).toEqual([]);
     expect(p.env).toEqual({
       FDE_ENGINE_MODE: "live",
@@ -54,7 +81,7 @@ describe("启动前检查", () => {
   });
 
   it("没有 Key、没有管理员:两条错误,Key 按变量名合并并写明用在哪个环节", () => {
-    const p = check({});
+    const p = check({ FDE_MODELS_CONFIG: twoVendor() });
     expect(p.errors).toHaveLength(2);
     expect(p.errors[0]).toContain(
       "缺少模型 Key:DASHSCOPE_API_KEY(闸门 bailian/qwen3.7-flash、演员 bailian/qwen-plus、复盘 bailian/qwen3.7-plus);DEEPSEEK_API_KEY(裁判 deepseek/deepseek-v4-pro)",
@@ -63,8 +90,19 @@ describe("启动前检查", () => {
   });
 
   it("只有百炼 Key:网页会进 live 模式、收工时裁判却失败——这里直接拦下,只点名 DeepSeek", () => {
-    const p = check({ DASHSCOPE_API_KEY: "sk", DEEPSEEK_API_KEY: "  ", ADMIN_EMAILS: "a@x.com" });
+    const p = check({ DASHSCOPE_API_KEY: "sk", DEEPSEEK_API_KEY: "  ", ADMIN_EMAILS: "a@x.com", FDE_MODELS_CONFIG: twoVendor() });
     expect(p.errors).toEqual([expect.stringContaining("缺少模型 Key:DEEPSEEK_API_KEY(裁判 deepseek/deepseek-v4-pro)。")]);
+    expect(p.errors[0]).not.toContain("DASHSCOPE_API_KEY");
+  });
+
+  it("仓库当前的 config/models.yaml:四个环节都走 DeepSeek,只要 DEEPSEEK_API_KEY;只有百炼 Key 时点名 DeepSeek 和全部四个环节", () => {
+    expect(check({ DEEPSEEK_API_KEY: "sk", ADMIN_EMAILS: "a@x.com" }).errors).toEqual([]);
+    const p = check({ DASHSCOPE_API_KEY: "sk", ADMIN_EMAILS: "a@x.com" });
+    expect(p.errors).toEqual([
+      expect.stringContaining(
+        "缺少模型 Key:DEEPSEEK_API_KEY(闸门 deepseek/deepseek-flash、演员 deepseek/deepseek-flash、裁判 deepseek/deepseek-v4-pro、复盘 deepseek/deepseek-flash)。",
+      ),
+    ]);
     expect(p.errors[0]).not.toContain("DASHSCOPE_API_KEY");
   });
 
@@ -137,7 +175,7 @@ describe("启动前检查", () => {
     // 设成空的:网页会去读空路径,这里不替它补默认值
     expect(check({ ...KEYS, ADMIN_EMAILS: "a@x.com", FDE_MODELS_CONFIG: "" }).errors).toEqual([expect.stringContaining("FDE_MODELS_CONFIG 是空的")]);
     const dir = tmp();
-    const text = readFileSync(join(root, "config/models.yaml"), "utf8").replace("api_key_env: DEEPSEEK_API_KEY", "api_key_env: FDE_PLAYTEST_TEST_JUDGE_KEY");
+    const text = TWO_VENDOR_YAML.replace("api_key_env: DEEPSEEK_API_KEY", "api_key_env: FDE_PLAYTEST_TEST_JUDGE_KEY");
     writeFileSync(join(dir, "models.yaml"), text);
     const cfg = loadModelsConfig(join(dir, "models.yaml"));
     expect(missingModelKeys(cfg, KEYS)).toEqual(["FDE_PLAYTEST_TEST_JUDGE_KEY(裁判 deepseek/deepseek-v4-pro)"]);
@@ -146,7 +184,7 @@ describe("启动前检查", () => {
   it("没设 FDE_MODELS_CONFIG 时和网页一样读 <FDE_ROOT>/config/models.yaml,不是仓库根目录的", () => {
     const other = tmp();
     mkdirSync(join(other, "config"));
-    const text = readFileSync(join(root, "config/models.yaml"), "utf8").replace("api_key_env: DEEPSEEK_API_KEY", "api_key_env: FDE_PLAYTEST_TEST_JUDGE_KEY");
+    const text = TWO_VENDOR_YAML.replace("api_key_env: DEEPSEEK_API_KEY", "api_key_env: FDE_PLAYTEST_TEST_JUDGE_KEY");
     writeFileSync(join(other, "config/models.yaml"), text);
     const p = check({ ...KEYS, ADMIN_EMAILS: "a@x.com", FDE_ROOT: other });
     expect(p.errors).toEqual([expect.stringContaining("缺少模型 Key:FDE_PLAYTEST_TEST_JUDGE_KEY")]);
@@ -184,7 +222,7 @@ describe("命令行", () => {
   type RunOpts = { envFile?: string; shield?: boolean };
   const run = (args: string[], env: Record<string, string>, { envFile, shield = true }: RunOpts = {}) => {
     const dir = tmp();
-    const text = readFileSync(join(root, "config/models.yaml"), "utf8")
+    const text = TWO_VENDOR_YAML
       .replace("api_key_env: DASHSCOPE_API_KEY", "api_key_env: FDE_PLAYTEST_TEST_BAILIAN_KEY")
       .replace("api_key_env: DEEPSEEK_API_KEY", "api_key_env: FDE_PLAYTEST_TEST_DEEPSEEK_KEY");
     writeFileSync(join(dir, "models.yaml"), text);

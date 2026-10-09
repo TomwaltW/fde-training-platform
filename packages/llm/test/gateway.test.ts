@@ -21,15 +21,18 @@ describe("llm gateway", () => {
     });
     await chat({ stage: "gate", messages: [{ role: "user", content: "hi" }] });
     await chat({ stage: "judge", messages: [{ role: "user", content: "hi" }] });
-    expect(seen[0]!.url).toBe("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
-    expect(seen[0]!.body.model).toBe("qwen3.7-flash");
+    // 2026-10-09 起四个环节都走 DeepSeek:闸门 deepseek-flash 关思考,裁判 deepseek-v4-pro 开思考
+    expect(seen[0]!.url).toBe("https://api.deepseek.com/chat/completions");
+    expect(seen[0]!.body.model).toBe("deepseek-flash");
     expect(seen[0]!.body.response_format).toEqual({ type: "json_object" });
-    expect(seen[0]!.body.enable_thinking).toBe(false);
-    expect(seen[0]!.auth).toBe("Bearer k1");
+    expect(seen[0]!.body.thinking).toEqual({ type: "disabled" });
+    expect(seen[0]!.auth).toBe("Bearer k2");
     expect(seen[1]!.url).toBe("https://api.deepseek.com/chat/completions");
+    expect(seen[1]!.body.model).toBe("deepseek-v4-pro");
+    expect(seen[1]!.body.thinking).toEqual({ type: "enabled" });
     expect(seen[1]!.auth).toBe("Bearer k2");
-    // qwen3.7-flash: 0.2/0.8 元每百万 token
-    expect(logs[0]!.costYuan).toBeCloseTo((1000 * 0.2 + 100 * 0.8) / 1e6);
+    // deepseek-flash: 2/8 元每百万 token(高峰价)
+    expect(logs[0]!.costYuan).toBeCloseTo((1000 * 2 + 100 * 8) / 1e6);
   });
 
   it("429 和 5xx 重试,4xx 不重试", async () => {
@@ -50,6 +53,6 @@ describe("llm gateway", () => {
 
   it("缺少 API Key 时给出明确的错误", async () => {
     const chat = createGateway(cfg, { env: {}, fetch: async () => ok("x") });
-    await expect(chat({ stage: "actor", messages: [] })).rejects.toThrow(/DASHSCOPE_API_KEY/);
+    await expect(chat({ stage: "actor", messages: [] })).rejects.toThrow(/DEEPSEEK_API_KEY/);
   });
 });

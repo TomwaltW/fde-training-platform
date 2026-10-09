@@ -39,10 +39,10 @@ pnpm test:e2e:real     # 真后端 e2e:构建 standalone 产物并启动,从登�
 
 CI(`.github/workflows/ci.yml`)在每个 PR 上跑三组:类型检查与单元测试与回归评测、合成单据自检、网页构建与两套 e2e。本地一键跑第一组:`pnpm ci:local`;各组怎么在本地复现见 [`docs/ci.md`](./docs/ci.md)。
 
-接真模型(需要百炼和 DeepSeek 的 API Key):
+接真模型(四个环节都用 DeepSeek,只需要 `DEEPSEEK_API_KEY`;百炼的配置留在 `config/models.yaml` 里,换回去只改 `stages`):
 
 ```bash
-cp .env.example .env            # 填 DASHSCOPE_API_KEY、DEEPSEEK_API_KEY
+cp .env.example .env            # 填 DEEPSEEK_API_KEY
 pnpm models:check               # 第一个要跑的:每个环节的 Key、真请求、JSON 输出、价格登记、快照固定,见 docs/models.md
 pnpm play                       # 闸门、演员、裁判、复盘都走 config/models.yaml
 pnpm evals --live               # 闸门和演员用真模型跑回归,打印质量门槛表;没过门槛退出码为 1
@@ -183,7 +183,7 @@ docs/                 部署、合规清单、标定流程、质量门槛、模�
 
 工程上能做的都做了,下面这些需要人来做:
 
-- **模型 Key 与标定**:填 `DASHSCOPE_API_KEY`、`DEEPSEEK_API_KEY`,先跑 `pnpm models:check`,再跑 `pnpm evals --live --runs 3` 和 `pnpm evals:adversarial --live` 过质量门槛(第一次真跑后校准三个【待验证】阈值);内测前把演员等百炼模型换成带日期的快照名(`pnpm models:check --strict` 会查),换完重跑回归。按 [`docs/calibration.md`](./docs/calibration.md) 人工标注 20 份对话(试玩和内测的对局用 `pnpm session:export` 导出),跑 `pnpm calibrate --live` 过两道门槛。
+- **模型 Key 与标定**:填 `DEEPSEEK_API_KEY`,先跑 `pnpm models:check`,再跑 `pnpm evals --live --runs 3` 和 `pnpm evals:adversarial --live` 过质量门槛(第一次真跑后校准三个【待验证】阈值);DeepSeek 没有带日期的快照名,上游一换版本或价格就重跑回归(`pnpm models:check` 会提示)。按 [`docs/calibration.md`](./docs/calibration.md) 人工标注 20 份对话(试玩和内测的对局用 `pnpm session:export` 导出),跑 `pnpm calibrate --live` 过两道门槛。
 - **第一关**:按 [`docs/gate1/`](./docs/gate1/) 改写并发首条内容,约 5 人试玩(见 [`docs/playtest.md`](./docs/playtest.md)),对照方案 6.3 第一关下结论。
 - **备案与公示**:ICP 备案号、公安备案号、模型公示文字(`SITE_ICP_NUMBER`、`SITE_PUBLIC_SECURITY_NUMBER`、`SITE_MODEL_DISCLOSURE`),逐项对照 [`docs/compliance-checklist.md`](./docs/compliance-checklist.md)。
 - **协议文本**:`apps/web/content/legal/` 下三份是草稿,不构成法律意见,须法务审阅后替换。

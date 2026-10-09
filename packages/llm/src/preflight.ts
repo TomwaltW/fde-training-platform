@@ -127,8 +127,15 @@ export function staticFindings(cfg: ModelsConfig, stages: readonly Stage[] = STA
 export const PROBE_MAX_TOKENS = 64;
 export const PROBE_MAX_TOKENS_THINKING = 1024;
 
+/** 这个环节关了思考没有:百炼写 enable_thinking: false,DeepSeek 写 thinking: {type: disabled}(DeepSeek 默认开思考)。 */
+export function thinkingOff(sc: StageConfig): boolean {
+  if (sc.extra?.enable_thinking === false) return true;
+  const t = sc.extra?.thinking;
+  return typeof t === "object" && t !== null && (t as { type?: unknown }).type === "disabled";
+}
+
 export function probeMaxTokens(sc: StageConfig): number {
-  return Math.min(sc.max_tokens, sc.extra?.enable_thinking === false ? PROBE_MAX_TOKENS : PROBE_MAX_TOKENS_THINKING);
+  return Math.min(sc.max_tokens, thinkingOff(sc) ? PROBE_MAX_TOKENS : PROBE_MAX_TOKENS_THINKING);
 }
 
 /** 引擎的 LlmGate、LlmJudge 调用时固定带 json: true(packages/engine/src/llm-ports.ts),其余环节看配置。 */
@@ -303,7 +310,7 @@ export async function probeStage(cfg: ModelsConfig, stage: Stage, opts: Prefligh
   }
   const reply = preview(text, redact);
   if (!text.trim()) {
-    const why = sc.extra?.enable_thinking === false ? "" : `;这个环节没关思考,思考过程可能把 max_tokens(${maxTokens})用完了`;
+    const why = thinkingOff(sc) ? "" : `;这个环节没关思考,思考过程可能把 max_tokens(${maxTokens})用完了`;
     return done({ ok: false, reply, error: `回复为空${why}` });
   }
   if (json) {

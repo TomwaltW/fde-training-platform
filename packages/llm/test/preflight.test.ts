@@ -18,11 +18,15 @@ import {
   KEY_FRAGMENT_MIN,
   loadModelsConfig,
   ModelsConfigSchema,
+  PROBE_MAX_TOKENS,
+  PROBE_MAX_TOKENS_THINKING,
   preflightExitCode,
+  probeMaxTokens,
   renderPreflight,
   runPreflight,
   STAGES,
   staticFindings,
+  thinkingOff,
   type ModelsConfig,
   type PreflightReport,
 } from "../src/index.ts";
@@ -377,6 +381,20 @@ describe("在线检查(假服务)", () => {
     const out = text(renderPreflight(r));
     expect(out).toContain("在线检查:跳过(--no-network)");
     expect(out).toContain("结论(只做了静态检查):全部通过");
+  });
+});
+
+describe("关没关思考(两家写法不同)", () => {
+  const sc = (extra?: Record<string, unknown>) => ({ provider: "deepseek", model: "deepseek-v4-pro", temperature: 0, max_tokens: 8000, extra });
+  it.each([
+    ["百炼 enable_thinking: false", { enable_thinking: false }, true],
+    ["DeepSeek thinking.type: disabled", { thinking: { type: "disabled" } }, true],
+    ["DeepSeek thinking.type: enabled", { thinking: { type: "enabled" } }, false],
+    ["DeepSeek 默认(不写)", undefined, false],
+    ["写错的形状", { thinking: "disabled" }, false],
+  ])("%s", (_, extra, off) => {
+    expect(thinkingOff(sc(extra))).toBe(off);
+    expect(probeMaxTokens(sc(extra))).toBe(off ? PROBE_MAX_TOKENS : PROBE_MAX_TOKENS_THINKING);
   });
 });
 
