@@ -28,8 +28,10 @@ stages:
     temperature: 0.8
     max_tokens: 300
     extra: {thinking: {type: disabled}}
-  # 裁判:强模型,思考模式,每局 1 次。方案建议和演员不同厂商;现在同厂商、不同型号,
-  # 同向偏差靠人工标定兜底(docs/calibration.md),标定不过再把裁判换到别家
+  # 裁判:强模型,温度 0,每局 1 次。方案建议开思考模式;2026-10-09 实测思考模式每次输出 6500–9000 token(含思考)、
+  # 85–120 秒,8000 的上限截断过两次 JSON,reasoning_effort: low 也没短多少;关思考 9–17 秒、1000–1600 token,
+  # 两个示例用例 3 次极差同样 ≤ 3。先关思考,人工标定(docs/calibration.md)一致性不达标时再开思考、上限放到 16000 以上。
+  # 方案建议和演员不同厂商;现在同厂商、不同型号,同向偏差同样靠人工标定兜底,标定不过再把裁判换到别家
   judge:
     provider: deepseek
     model: deepseek-v4-pro
@@ -37,7 +39,7 @@ stages:
     max_tokens: 8000
     json: true
     timeout_ms: 120000
-    extra: {thinking: {type: enabled}}
+    extra: {thinking: {type: disabled}}
   # 复盘撰写:中强模型,只润色
   debrief:
     provider: deepseek

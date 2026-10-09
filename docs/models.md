@@ -2,7 +2,7 @@
 
 对应方案 2.3(模型选型、「固定模型快照」)。线上四个环节(闸门、演员、裁判、复盘)用哪个模型都写在 `config/models.yaml`;这篇讲从拿到 Key 到能放心跑 `pnpm evals --live` 之间要做的事。
 
-**2026-10-09 起四个环节都用 DeepSeek**(闸门、演员、复盘 `deepseek-flash` 关思考,裁判 `deepseek-v4-pro` 开思考),只需要 `DEEPSEEK_API_KEY`。下文百炼的部分留着,换回百炼时用。
+**2026-10-09 起四个环节都用 DeepSeek**(闸门、演员、复盘 `deepseek-flash`,裁判 `deepseek-v4-pro`,都关思考;裁判为什么关思考见 `config/models.yaml` 的注释),只需要 `DEEPSEEK_API_KEY`。下文百炼的部分留着,换回百炼时用。
 
 顺序:
 

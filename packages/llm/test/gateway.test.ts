@@ -21,7 +21,7 @@ describe("llm gateway", () => {
     });
     await chat({ stage: "gate", messages: [{ role: "user", content: "hi" }] });
     await chat({ stage: "judge", messages: [{ role: "user", content: "hi" }] });
-    // 2026-10-09 起四个环节都走 DeepSeek:闸门 deepseek-flash 关思考,裁判 deepseek-v4-pro 开思考
+    // 2026-10-09 起四个环节都走 DeepSeek:闸门 deepseek-flash、裁判 deepseek-v4-pro,都关思考
     expect(seen[0]!.url).toBe("https://api.deepseek.com/chat/completions");
     expect(seen[0]!.body.model).toBe("deepseek-flash");
     expect(seen[0]!.body.response_format).toEqual({ type: "json_object" });
@@ -29,7 +29,7 @@ describe("llm gateway", () => {
     expect(seen[0]!.auth).toBe("Bearer k2");
     expect(seen[1]!.url).toBe("https://api.deepseek.com/chat/completions");
     expect(seen[1]!.body.model).toBe("deepseek-v4-pro");
-    expect(seen[1]!.body.thinking).toEqual({ type: "enabled" });
+    expect(seen[1]!.body.thinking).toEqual({ type: "disabled" });
     expect(seen[1]!.auth).toBe("Bearer k2");
     // deepseek-flash: 2/8 元每百万 token(高峰价)
     expect(logs[0]!.costYuan).toBeCloseTo((1000 * 2 + 100 * 8) / 1e6);
