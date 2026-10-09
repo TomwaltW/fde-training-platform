@@ -28,6 +28,8 @@ export interface GateLogEntry {
   say: string;
   want: string[];
   got: string[];
+  /** 闸门原样给出的每一条和置信度(没过 0.6 的也在),用来分清漏命中是「没给」还是「给了但低于 0.6」。只记录,不参与命中判定。 */
+  given: { id: string; confidence: number }[];
   acts: string[];
   commitments: { type: string; value_text: string; firm: boolean }[];
   trustMoves: { dir: string; what: string }[];
@@ -144,6 +146,7 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
             say: step.say,
             want,
             got: [...got],
+            given: (g?.matched_triggers ?? []).map((m) => ({ id: m.id, confidence: m.confidence })),
             acts: g?.acts ?? [],
             commitments: g?.commitments ?? [],
             trustMoves: g?.trust_moves ?? [],
