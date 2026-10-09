@@ -10,11 +10,14 @@ export function fdeRoot(): string {
 
 export type EngineMode = "offline" | "live";
 
-/** offline:关键词闸门 + 模板演员;live:模型。不设时有 DASHSCOPE_API_KEY 就 live。 */
+/**
+ * offline:关键词闸门 + 模板演员;live:模型。不设时有任何一家的模型 Key(DEEPSEEK_API_KEY、DASHSCOPE_API_KEY)就 live。
+ * 只看有没有 Key,不对照 config/models.yaml 每个环节用哪家:缺的那家会在调用时报错点名,pnpm playtest 启动前按配置逐个环节查。
+ */
 export function engineMode(): EngineMode {
   const m = process.env.FDE_ENGINE_MODE;
   if (m === "offline" || m === "live") return m;
-  return process.env.DASHSCOPE_API_KEY ? "live" : "offline";
+  return process.env.DEEPSEEK_API_KEY || process.env.DASHSCOPE_API_KEY ? "live" : "offline";
 }
 
 export function isProduction(): boolean {

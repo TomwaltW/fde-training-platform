@@ -1,6 +1,8 @@
 # 线上模型配置:按环节(闸门、演员、裁判、复盘)选模型。换供应商只改这里。
 # 线上一律用国内已备案的模型(方案 2.3);上线后要在页脚公示模型名称和备案号。
 # 每次改模型都要全量跑回归评测:pnpm evals --live
+# 2026-10-09 起四个环节都用 DeepSeek(作者选定,只要一个 Key)。百炼的 provider 和价格留着,换回去只改 stages。
+# DeepSeek 默认开思考:不要思考的环节写 extra: {thinking: {type: disabled}};思考模式下 temperature 不生效。
 
 providers:
   bailian:                       # 阿里云百炼(OpenAI 兼容模式)
@@ -13,20 +15,21 @@ providers:
 stages:
   # 闸门:小模型,非思考,温度 0,JSON 输出
   gate:
-    provider: bailian
-    model: qwen3.7-flash
+    provider: deepseek
+    model: deepseek-flash
     temperature: 0
     max_tokens: 600
     json: true
-    extra: {enable_thinking: false}
-  # 演员:中档模型,非思考,温度 0.7–0.9。上线前换成带日期的快照名,固定角色脾气
+    extra: {thinking: {type: disabled}}
+  # 演员:中档模型,非思考,温度 0.7–0.9。DeepSeek 没有带日期的快照名,上游一换版本角色脾气就可能变,换了就重跑回归
   actor:
-    provider: bailian
-    model: qwen-plus
+    provider: deepseek
+    model: deepseek-flash
     temperature: 0.8
     max_tokens: 300
-    extra: {enable_thinking: false}
-  # 裁判:强模型,温度 0,每局 1 次;建议和演员不同厂商
+    extra: {thinking: {type: disabled}}
+  # 裁判:强模型,思考模式,每局 1 次。方案建议和演员不同厂商;现在同厂商、不同型号,
+  # 同向偏差靠人工标定兜底(docs/calibration.md),标定不过再把裁判换到别家
   judge:
     provider: deepseek
     model: deepseek-v4-pro
@@ -34,16 +37,18 @@ stages:
     max_tokens: 8000
     json: true
     timeout_ms: 120000
+    extra: {thinking: {type: enabled}}
   # 复盘撰写:中强模型,只润色
   debrief:
-    provider: bailian
-    model: qwen3.7-plus
+    provider: deepseek
+    model: deepseek-flash
     temperature: 0.5
     max_tokens: 2000
-    extra: {enable_thinking: false}
+    extra: {thinking: {type: disabled}}
 
-# 元/百万 token,[输入, 输出]。2026-10-05 标价(方案 2.3),以官网为准。
-# DeepSeek 按高峰价记;空闲时段约半价。
+# 元/百万 token,[输入, 输出]。百炼是 2026-10-05 标价(方案 2.3),以官网为准。
+# DeepSeek 按高峰价(工作日 9:00–12:00、14:00–18:00)、缓存未命中记,空闲时段半价;2026-10-09 核对官网:
+# deepseek-flash 当前指向 DeepSeek-V4.1-Flash,deepseek-v4-pro 指向 DeepSeek-V4-Pro-0813。
 prices:
   qwen3.7-flash: [0.2, 0.8]
   qwen-plus: [0.8, 2]

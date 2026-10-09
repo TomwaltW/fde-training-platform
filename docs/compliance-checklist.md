@@ -57,12 +57,12 @@
 **代码里已做的**
 
 - [ ] 页脚公示模型名称与备案号:`GET /api/site` 的 `modelDisclosure` 来自 `SITE_MODEL_DISCLOSURE`(T1 接口 + T2 页脚)。
-- [x] 线上只调用 `config/models.yaml` 里配置的模型(闸门 qwen3.7-flash、演员 qwen-plus、复盘 qwen3.7-plus 走阿里云百炼;裁判 deepseek-v4-pro 走 DeepSeek),换供应商只改这个文件。
+- [x] 线上只调用 `config/models.yaml` 里配置的模型(2026-10-09 起四个环节都走 DeepSeek:闸门、演员、复盘 deepseek-flash,裁判 deepseek-v4-pro;百炼的配置留着备用),换供应商只改这个文件。
 - [ ] 每次模型调用都写入 `llm_calls` 表(环节、供应商、模型、用量、费用),管理页可查,可作为登记和公示所用模型的依据(T1)。
 
 **上线前要办的**
 
-- [ ] 按 `config/models.yaml` 里实际用到的模型,查齐各自的生成式人工智能服务备案号(网信办公布的已备案清单或服务商官网),写进 `SITE_MODEL_DISCLOSURE`,例如 `通义千问(备案号 xxx);DeepSeek(备案号 xxx)`。
+- [ ] 按 `config/models.yaml` 里实际用到的模型,查齐各自的生成式人工智能服务备案号(网信办公布的已备案清单或服务商官网),写进 `SITE_MODEL_DISCLOSURE`,当前只有 DeepSeek,例如 `DeepSeek(备案号 xxx)`;换回百炼时再加上通义千问。
 - [ ] 向浙江省网信办咨询登记流程和材料,保留咨询记录。
 - [ ] 留存与模型服务商的服务协议(百炼、DeepSeek 的开发者协议或合同)。
 - [ ] 以后每次换模型:改 `config/models.yaml` → 跑 `pnpm evals --live` → 同步更新 `SITE_MODEL_DISCLOSURE`。
