@@ -130,7 +130,7 @@ facts:
     statement: 最大客户拓浪(占营收 18%)Q3 两次因申报问题被查验延误,放话要把三成货量转走
     canaries: [拓浪, 转走]
     unlock:
-      - {role: zhou, level: L2, ask: 问为什么是现在、最近出过什么事、最担心哪个客户}
+      - {role: zhou, level: L2, ask: "问为什么偏偏现在要做这件事、是什么触发的,或最担心哪个客户;问错了多少、损失多少、问题出在哪都不算"}
       - {role: liu, level: L1, ask: 问哪类错误最要命, say: "最要命的是申报出错被查验,大客户会翻脸"}
       - {role: wang, level: L2, ask: 问哪个客户的损失最大, requires: [auth_finance]}
   - id: S3
@@ -408,7 +408,7 @@ traps:
     bad: 直接给日期或报价
   - id: TR2
     by: zhou
-    when: 用户向周总问操作细节    # 无法写成表达式的条件交给闸门识别
+    when: 用户向周总问操作细节,或问操作上的事该找谁    # 无法写成表达式的条件交给闸门识别
     beat: 不耐烦,指路去找操作部的刘姐
     stance: impatient
     line: 这些细节别问我,你去找操作部的刘姐。

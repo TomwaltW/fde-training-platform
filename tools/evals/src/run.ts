@@ -93,6 +93,21 @@ for (const p of players) {
     if (run.gateAgreement) {
       const g = run.gateAgreement;
       console.log(`    闸门命中 ${g.matched}/${g.expected},多命中 ${g.extra}`);
+      // -v:逐句列出和标注对不上的(漏命中、多命中),以及真闸门标出的承诺
+      if (values.verbose) {
+        for (const e of run.gateLog ?? []) {
+          const miss = e.want.filter((id) => !e.got.includes(id));
+          const extra = e.got.filter((id) => !e.want.includes(id));
+          const firm = e.commitments.filter((c) => c.firm);
+          if (!miss.length && !extra.length && !firm.length) continue;
+          const parts = [
+            miss.length && `漏 ${miss.join(" ")}`,
+            extra.length && `多 ${extra.join(" ")}`,
+            firm.length && `承诺 ${firm.map((c) => `${c.type}:${c.value_text}`).join(" ")}`,
+          ].filter(Boolean);
+          console.log(`      闸门 ${e.step}(${e.role})「${e.say.slice(0, 40)}${e.say.length > 40 ? "…" : ""}」${parts.join(";")}`);
+        }
+      }
     }
     for (const a of run.delivered) {
       for (const i of a.issues) console.log(`    ✗ 交付台词 ${a.ref}(${a.roleId}):${describeIssue(i)}  「${a.text}」`);

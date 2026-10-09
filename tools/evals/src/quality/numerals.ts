@@ -277,6 +277,8 @@ export function extractQuantities(input: string, opts: ExtractOptions = {}): Qua
     const hit = JI_FORMS.find(([re]) => re.test(rest));
     if (!hit) continue;
     const [re, lo, hi] = hit;
+    // "这几块""那几个人""哪几类":指示、疑问,不是在说数量("几个新人""好几天"照常算)
+    if (re.source === "^几" && /[这那哪]/.test(text[i - 1] ?? "")) continue;
     const len = rest.match(re)![0].length;
     // "将近百分之二十""近千分之三":百分之、千分之是百分数和分数的写法,不是"近百""近千";
     // 让到下一个字,百分之 N 交给引擎(前面的"将近"照常给单边区间),千分之 N 交给分数

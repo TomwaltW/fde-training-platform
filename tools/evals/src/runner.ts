@@ -22,6 +22,18 @@ export interface CheckResult {
   detail: string;
 }
 
+export interface GateLogEntry {
+  step: string;
+  role: string;
+  say: string;
+  want: string[];
+  got: string[];
+  acts: string[];
+  commitments: { type: string; value_text: string; firm: boolean }[];
+  trustMoves: { dir: string; what: string }[];
+  meta: boolean;
+}
+
 export interface PlayerRun {
   player: string;
   ok: boolean;
@@ -32,6 +44,11 @@ export interface PlayerRun {
   minutesUsed: number;
   turns: number;
   gateAgreement?: { expected: number; matched: number; extra: number };
+  /**
+   * 在线模式:每句进了闸门的话,脚本标注的触发器(want)和真闸门命中的(got,置信度 ≥ 0.6),以及真闸门标出的
+   * 动作、承诺、信任加减分。调闸门提示词和触发器描述时看这里(pnpm evals --live -v 打印对不上的那些)。
+   */
+  gateLog?: GateLogEntry[];
   /** 每句话(进了闸门的)从发出到拿到回复的毫秒数,含闸门、演员和守卫重试(质量门槛:单轮中位耗时)。 */
   turnMs: number[];
   /** 每条实际出给用户的角色台词的审计结果(quality/auditor.ts,独立于守卫)。 */
@@ -81,6 +98,7 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
   const st = engine.start(`eval-${player.id}-${Date.now()}`);
   const checks: CheckResult[] = [];
   const agree = { expected: 0, matched: 0, extra: 0 };
+  const gateLog: GateLogEntry[] = [];
   const turnMs: number[] = [];
   const delivered: LineAudit[] = [];
   const live = mode.kind === "live";
@@ -119,6 +137,18 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
             if (got.has(id)) agree.matched++;
           }
           agree.extra += [...got].filter((id) => !want.includes(id)).length;
+          const g = st.turns.at(-1)?.gate;
+          gateLog.push({
+            step: label,
+            role: st.currentRole,
+            say: step.say,
+            want,
+            got: [...got],
+            acts: g?.acts ?? [],
+            commitments: g?.commitments ?? [],
+            trustMoves: g?.trust_moves ?? [],
+            meta: g?.meta_or_injection ?? false,
+          });
         }
       } else if ("switch" in step) res = await engine.act(st, { type: "switch_role", role: step.switch });
       else if ("open" in step) res = await engine.act(st, { type: "open_artifact", artifact: step.open });
@@ -164,7 +194,7 @@ export async function runPlayer(scn: LoadedScenario, player: Player, mode: Mode)
       dims: Object.fromEntries(report.score.dimensions.map((d) => [d.id, d.score])),
       minutesUsed: st.minutesUsed,
       turns: st.turn,
-      ...(live && { gateAgreement: agree }),
+      ...(live && { gateAgreement: agree, gateLog }),
       turnMs,
       delivered,
       state: st,
@@ -196,7 +226,12 @@ export function checkExpectations(run: PlayerRun, expect: Record<string, number 
     else if (run.crashed || !rep) add(key, false, "运行失败,无法检查");
     else if (key === "total_min") add(key, rep.score.total >= Number(want), `总分 ${rep.score.total}`);
     else if (key === "total_max") add(key, rep.score.total <= Number(want), `总分 ${rep.score.total}`);
-    else if (key === "raw_total_min") add(key, rep.score.rawTotal >= Number(want), `封顶前 ${rep.score.rawTotal}`);
+    else if (key === "raw_total_min") {
+      // 这条断言查的是场景设计("封顶真的在起作用",离线确定地验);在线时 D3 随闸门的提问标签浮动,只作参考
+      const ok = rep.score.rawTotal >= Number(want);
+      const live = run.gateAgreement !== undefined;
+      add(key, ok || live, `${!ok && live ? "[在线只作参考] " : ""}封顶前 ${rep.score.rawTotal}`);
+    }
     else if (key === "cap") add(key, rep.score.caps.some((c) => c.label === want), `触发 ${rep.score.caps.map((c) => c.label).join("、") || "无"}`);
     else if (key === "badge") add(key, rep.score.badges.includes(String(want)), `标记 ${rep.score.badges.join("、") || "无"}`);
     else if ((m = key.match(/^(D\d)(_max|_min)?$/))) {
