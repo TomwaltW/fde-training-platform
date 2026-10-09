@@ -14,7 +14,7 @@ steps:
     gate: {acts: [smalltalk]}
     check: {trap: TR1}
   - say: 好了,说正事。周总,下个月大会您想讲什么?演示成什么样算成功?
-    gate: {t: [S1@zhou:L2], tags: [open]}
+    gate: {t: [S1@zhou:L2, K7@zhou:L2], tags: [open]}
     check: {reveals: [S1@L2], minutes_used: 24}
   - end: true
 
