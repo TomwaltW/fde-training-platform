@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "sessionId": "calib-EV_lazy",
+  "scenarioId": "freight-docs",
+  "variant": "A",
+  "phase": "debrief",
+  "turn": 3,
+  "minutesUsed": 24,
+  "currentRole": "zhou",
+  "discovered": [
+    "zhou",
+    "lin"
+  ],
+  "exchanges": {
+    "zhou": 3
+  },
+  "phaseExchanges": {},
+  "trust": {
+    "liu": 0,
+    "chen": 0
+  },
+  "trustPlusUsed": {},
+  "flags": {
+    "auth_ops": false,
+    "auth_finance": false,
+    "seen_any_artifact": false
+  },
+  "facts": {},
+  "roleTold": {},
+  "artifacts": {},
+  "experiments": {},
+  "actionsDone": {},
+  "traps": {
+    "TR1": {
+      "turn": 2
+    }
+  },
+  "ledger": [],
+  "transcript": [
+    {
+      "ref": "N1",
+      "turn": 0,
+      "speaker": "npc",
+      "text": "我们单据太多了,装箱单、发票、提单、报关资料,全靠人工录入,老出错。听说你们 AI 能搞定,你就给我做个能自动识别单据的系统。下个月行业大会我要拿出来讲。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U1",
+      "turn": 1,
+      "speaker": "user",
+      "text": "您好,说说你们的问题吧。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N2",
+      "turn": 1,
+      "speaker": "npc",
+      "text": "嗯。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U2",
+      "turn": 2,
+      "speaker": "user",
+      "text": "好的,大概了解了。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N3",
+      "turn": 2,
+      "speaker": "npc",
+      "text": "演示到底什么时候能给我?大会可不等人。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U3",
+      "turn": 3,
+      "speaker": "user",
+      "text": "那我回去给你们出个方案。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N4",
+      "turn": 3,
+      "speaker": "npc",
+      "text": "(皱眉)",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "S1",
+      "turn": 3,
+      "speaker": "system",
+      "text": "你收工了。",
+      "phase": "debrief"
+    }
+  ],
+  "turns": [
+    {
+      "turn": 1,
+      "role": "zhou",
+      "userText": "您好,说说你们的问题吧。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": true,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "neutral",
+        "instruction": "正常回应。只说你的看法和印象,不给对方没问到的具体数字。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 8
+    },
+    {
+      "turn": 2,
+      "role": "zhou",
+      "userText": "好的,大概了解了。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "smalltalk"
+        ],
+        "matched_triggers": [],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "beat",
+        "instruction": "按下面要求说出指定的话或做出指定的动作。",
+        "beat": "催问演示什么时候能给",
+        "trapId": "TR1",
+        "fallback": "演示到底什么时候能给我?大会可不等人。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 16
+    },
+    {
+      "turn": 3,
+      "role": "zhou",
+      "userText": "那我回去给你们出个方案。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "propose_solution"
+        ],
+        "matched_triggers": [],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "push_back",
+        "instruction": "质疑对方的方案或要求,压价、压时间,问凭什么。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 24
+    }
+  ],
+  "events": [
+    {
+      "turn": 2,
+      "type": "trap",
+      "payload": {
+        "trap": "TR1",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "premature_solution",
+      "payload": {
+        "summary": ""
+      }
+    },
+    {
+      "turn": 3,
+      "type": "phase_change",
+      "payload": {
+        "from": "kickoff",
+        "to": "debrief"
+      }
+    }
+  ],
+  "ledgerRecalled": false,
+  "endedReason": "user"
+}
