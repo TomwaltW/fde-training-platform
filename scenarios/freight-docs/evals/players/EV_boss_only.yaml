@@ -13,7 +13,7 @@ steps:
     gate: {t: [K1@zhou:L1, TR3@zhou], tags: [open]}
     check: {trap: TR3}
   - say: 上季度大概出了多少次错?损失有多少钱?
-    gate: {t: [C2@wang:L3], tags: [quantifying, evidence_ask], bundled: 2}
+    gate: {t: [P1@liu:L1, C2@wang:L3], tags: [quantifying, evidence_ask], bundled: 2}
     check: {directive: deflect, discovered: [wang]}
   - say: 操作部现在一天能处理多少票?人手够不够?
     gate: {t: [S3@zhou:L2], tags: [quantifying], bundled: 2}
@@ -25,9 +25,9 @@ steps:
     gate: {t: [K8@zhou:L2], tags: [open]}
     check: {reveals: [K8@L2]}
   - say: 您刚才说之前那个工具不好用,具体是哪里不好用?当时的验收记录还在吗?
-    gate: {tags: [follow_up, evidence_ask]}
+    gate: {t: [K1@zhou:L1], tags: [follow_up, evidence_ask]}
   - say: 最后一个问题,你们一年在单证上大概花多少人工成本?
-    gate: {tags: [quantifying]}
+    gate: {t: [S3@zhou:L2], tags: [quantifying]}
     check: {system_includes: 开会}
   - judgment:
       J1: 我判断识别可能不是最主要的问题,之前的工具不好用说明光识别解决不了。
