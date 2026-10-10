@@ -138,7 +138,7 @@ export function renderHumanTemplate(scn: LoadedScenario, st: SessionState, caseI
     .map(([id]) => id);
   const lines = [
     `# 标定用例 ${caseId} 的人工标注(方案 3.4.4 第 2 步)。`,
-    `# 先别看裁判结果:读完同目录的 transcript.md(或 session.json),逐维度打分并写一句理由。`,
+    `# 先别看裁判结果:读完同目录的 transcript.md,逐维度打分并写一句理由。`,
     `# 分数可以带一位小数,不能超过该维度满分。每个维度的满分等分成 ${BAND_COUNT} 档,`,
     `# 与裁判相差不超过 1 档算一致。把 score 的 null 换成分数、reason 写理由、annotator 写你的名字。`,
     `#`,

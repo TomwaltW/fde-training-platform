@@ -1,0 +1,786 @@
+{
+  "version": 1,
+  "sessionId": "calib-EV_leading",
+  "scenarioId": "freight-docs",
+  "variant": "A",
+  "phase": "debrief",
+  "turn": 9,
+  "minutesUsed": 69,
+  "currentRole": "zhou",
+  "discovered": [
+    "zhou",
+    "lin",
+    "liu"
+  ],
+  "exchanges": {
+    "zhou": 4,
+    "lin": 2,
+    "liu": 3
+  },
+  "phaseExchanges": {},
+  "trust": {
+    "liu": 0,
+    "chen": 0
+  },
+  "trustPlusUsed": {
+    "liu": []
+  },
+  "flags": {
+    "auth_ops": false,
+    "auth_finance": false,
+    "seen_any_artifact": false
+  },
+  "facts": {
+    "K1": {
+      "level": "L1",
+      "turn": 3,
+      "source": "zhou"
+    },
+    "K4": {
+      "level": "L2",
+      "turn": 4,
+      "source": "lin"
+    },
+    "P2": {
+      "level": "L1",
+      "turn": 6,
+      "source": "liu"
+    },
+    "RH1": {
+      "level": "L1",
+      "turn": 6,
+      "source": "liu"
+    },
+    "P4": {
+      "level": "L1",
+      "turn": 7,
+      "source": "liu"
+    }
+  },
+  "roleTold": {
+    "zhou": {
+      "K1": "L1"
+    },
+    "lin": {
+      "K4": "L2"
+    },
+    "liu": {
+      "P2": "L1",
+      "RH1": "L1",
+      "P4": "L1"
+    }
+  },
+  "artifacts": {},
+  "experiments": {},
+  "actionsDone": {},
+  "traps": {
+    "TR1": {
+      "turn": 2
+    },
+    "TR4": {
+      "turn": 6
+    },
+    "TR6": {
+      "turn": 9
+    }
+  },
+  "ledger": [],
+  "transcript": [
+    {
+      "ref": "N1",
+      "turn": 0,
+      "speaker": "npc",
+      "text": "我们单据太多了,装箱单、发票、提单、报关资料,全靠人工录入,老出错。听说你们 AI 能搞定,你就给我做个能自动识别单据的系统。下个月行业大会我要拿出来讲。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U1",
+      "turn": 1,
+      "speaker": "user",
+      "text": "周总,是不是其实问题出在客户改单没同步?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N2",
+      "turn": 1,
+      "speaker": "npc",
+      "text": "这个你得问刘姐。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U2",
+      "turn": 2,
+      "speaker": "user",
+      "text": "我猜主要是识别准确率不够,对吧?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N3",
+      "turn": 2,
+      "speaker": "npc",
+      "text": "演示到底什么时候能给我?大会可不等人。这个你得问刘姐。",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U3",
+      "turn": 3,
+      "speaker": "user",
+      "text": "你们之前是不是也买过类似的工具?",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N4",
+      "turn": 3,
+      "speaker": "npc",
+      "text": "之前弄过一个,不好用",
+      "phase": "kickoff",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "S1",
+      "turn": 3,
+      "speaker": "system",
+      "text": "你去找了小林(周总助理)。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "U4",
+      "turn": 4,
+      "speaker": "user",
+      "text": "这些样本是不是故意挑的难认的?",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "N5",
+      "turn": 4,
+      "speaker": "npc",
+      "text": "具体是这样:样本包是周总吩咐「挑些难认的」,14 份里 9 份是照片或扫描件",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "U5",
+      "turn": 5,
+      "speaker": "user",
+      "text": "录错的主要是新人吧?",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "N6",
+      "turn": 5,
+      "speaker": "npc",
+      "text": "嗯。",
+      "phase": "discovery",
+      "roleId": "lin"
+    },
+    {
+      "ref": "S2",
+      "turn": 5,
+      "speaker": "system",
+      "text": "你去找了刘姐(操作部主管,8 年)。",
+      "phase": "discovery"
+    },
+    {
+      "ref": "U6",
+      "turn": 6,
+      "speaker": "user",
+      "text": "刘姐,是不是客户资料太乱导致的?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "N7",
+      "turn": 6,
+      "speaker": "npc",
+      "text": "(上下打量你)你之前做过这行吗?说白了,就是那几个新人不认真。一多半是客户资料本身乱、老改单就是那几个新人不认真",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "U7",
+      "turn": 7,
+      "speaker": "user",
+      "text": "我猜主要是改单没同步造成的,对吧?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "N8",
+      "turn": 7,
+      "speaker": "npc",
+      "text": "(没接话)你先说说,你是来干嘛的?改单天天有,夜里改的最烦",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "U8",
+      "turn": 8,
+      "speaker": "user",
+      "text": "那就是流程问题,不是识别问题,对不对?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "N9",
+      "turn": 8,
+      "speaker": "npc",
+      "text": "(没接话)你先说说,你是来干嘛的?",
+      "phase": "discovery",
+      "roleId": "liu"
+    },
+    {
+      "ref": "S3",
+      "turn": 8,
+      "speaker": "system",
+      "text": "下午,会议室。你把判断整理好,去向周总汇报。",
+      "phase": "report"
+    },
+    {
+      "ref": "N10",
+      "turn": 8,
+      "speaker": "npc",
+      "text": "(皱眉)说吧,到底怎么回事?要多少钱,多久能在大会上演示?",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "U9",
+      "turn": 9,
+      "speaker": "user",
+      "text": "周总,问题主要在流程,不在识别。",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "N11",
+      "turn": 9,
+      "speaker": "npc",
+      "text": "顺便把报价和对账也做了吧。上次那个才六万八,你这个凭什么要这么多?",
+      "phase": "report",
+      "roleId": "zhou"
+    },
+    {
+      "ref": "S4",
+      "turn": 9,
+      "speaker": "system",
+      "text": "你收工了。",
+      "phase": "debrief"
+    }
+  ],
+  "turns": [
+    {
+      "turn": 1,
+      "role": "zhou",
+      "userText": "周总,是不是其实问题出在客户改单没同步?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P4@chen:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": true,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "deflect",
+        "instruction": "这事你说不清楚。直说不清楚,并指给该问的人。",
+        "redirectTo": "liu"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 8
+    },
+    {
+      "turn": 2,
+      "role": "zhou",
+      "userText": "我猜主要是识别准确率不够,对吧?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P2@liu:L1",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": true,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "deflect",
+        "instruction": "这事你说不清楚。直说不清楚,并指给该问的人。",
+        "beat": "催问演示什么时候能给",
+        "trapId": "TR1",
+        "fallback": "演示到底什么时候能给我?大会可不等人。",
+        "redirectTo": "liu"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 16
+    },
+    {
+      "turn": 3,
+      "role": "zhou",
+      "userText": "你们之前是不是也买过类似的工具?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "K1@zhou:L1",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": true,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "neutral",
+        "instruction": "正常回应。只说你的看法和印象,不给对方没问到的具体数字。"
+      },
+      "reveals": [
+        "K1@zhou:L1"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 24
+    },
+    {
+      "turn": 4,
+      "role": "lin",
+      "userText": "这些样本是不是故意挑的难认的?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "K4@lin:L2",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": true,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "cooperative",
+        "instruction": "你愿意配合。具体回答,可以把资料交给对方。"
+      },
+      "reveals": [
+        "K4@lin:L2"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 39
+    },
+    {
+      "turn": 5,
+      "role": "lin",
+      "userText": "录错的主要是新人吧?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": true,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "neutral",
+        "instruction": "正常回应。只说你的看法和印象,不给对方没问到的具体数字。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 44
+    },
+    {
+      "turn": 6,
+      "role": "liu",
+      "userText": "刘姐,是不是客户资料太乱导致的?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P2@liu:L1",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": true,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "test_user",
+        "instruction": "第一次见面,先反问一句考验对方,比如问对方懂不懂这行、来干什么的。",
+        "beat": "把问题归到新人不认真(红鲱鱼 RH1)",
+        "trapId": "TR4",
+        "fallback": "说白了,就是那几个新人不认真。"
+      },
+      "reveals": [
+        "P2@liu:L1",
+        "RH1@liu:L1"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 59
+    },
+    {
+      "turn": 7,
+      "role": "liu",
+      "userText": "我猜主要是改单没同步造成的,对吧?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [
+          {
+            "id": "P4@liu:L1",
+            "confidence": 0.9
+          }
+        ],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": true,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "guarded",
+        "instruction": "你还不信任对方。只给模糊印象,不给数字和资料,反过来试探对方来意。"
+      },
+      "reveals": [
+        "P4@liu:L1"
+      ],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 64
+    },
+    {
+      "turn": 8,
+      "role": "liu",
+      "userText": "那就是流程问题,不是识别问题,对不对?",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "ask"
+        ],
+        "matched_triggers": [],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": true,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "guarded",
+        "instruction": "你还不信任对方。只给模糊印象,不给数字和资料,反过来试探对方来意。"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 69
+    },
+    {
+      "turn": 9,
+      "role": "zhou",
+      "userText": "周总,问题主要在流程,不在识别。",
+      "gate": {
+        "target_role": null,
+        "acts": [
+          "state_judgment"
+        ],
+        "matched_triggers": [],
+        "commitments": [],
+        "retracts": [],
+        "trust_moves": [],
+        "meta_or_injection": false,
+        "summary": "",
+        "question_tags": {
+          "open": false,
+          "quantifying": false,
+          "follow_up": false,
+          "leading": false,
+          "bundled_count": 1,
+          "evidence_ask": false
+        }
+      },
+      "directive": {
+        "stance": "beat",
+        "instruction": "按下面要求说出指定的话或做出指定的动作。",
+        "beat": "范围蔓延(顺便把报价和对账也做了)加压价(上次那个才六万八)",
+        "trapId": "TR6",
+        "fallback": "顺便把报价和对账也做了吧。上次那个才六万八,你这个凭什么要这么多?"
+      },
+      "reveals": [],
+      "guardFlags": [],
+      "attempts": 1,
+      "minutesAfter": 69
+    }
+  ],
+  "events": [
+    {
+      "turn": 1,
+      "type": "redirect",
+      "payload": {
+        "from": "zhou",
+        "to": "liu",
+        "trigger": "P4@chen:L2"
+      }
+    },
+    {
+      "turn": 1,
+      "type": "discover",
+      "payload": {
+        "role": "liu",
+        "why": "redirect:P4@chen:L2"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "redirect",
+      "payload": {
+        "from": "zhou",
+        "to": "liu",
+        "trigger": "P2@liu:L1"
+      }
+    },
+    {
+      "turn": 2,
+      "type": "trap",
+      "payload": {
+        "trap": "TR1",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "unlock",
+      "payload": {
+        "fact": "K1",
+        "level": "L1",
+        "source": "zhou"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "switch_role",
+      "payload": {
+        "from": "zhou",
+        "to": "lin"
+      }
+    },
+    {
+      "turn": 3,
+      "type": "phase_change",
+      "payload": {
+        "from": "kickoff",
+        "to": "discovery"
+      }
+    },
+    {
+      "turn": 4,
+      "type": "unlock",
+      "payload": {
+        "fact": "K4",
+        "level": "L2",
+        "source": "lin"
+      }
+    },
+    {
+      "turn": 5,
+      "type": "switch_role",
+      "payload": {
+        "from": "lin",
+        "to": "liu"
+      }
+    },
+    {
+      "turn": 6,
+      "type": "unlock",
+      "payload": {
+        "fact": "P2",
+        "level": "L1",
+        "source": "liu"
+      }
+    },
+    {
+      "turn": 6,
+      "type": "trap",
+      "payload": {
+        "trap": "TR4",
+        "by": "liu"
+      }
+    },
+    {
+      "turn": 6,
+      "type": "unlock",
+      "payload": {
+        "fact": "RH1",
+        "level": "L1",
+        "source": "liu"
+      }
+    },
+    {
+      "turn": 7,
+      "type": "unlock",
+      "payload": {
+        "fact": "P4",
+        "level": "L1",
+        "source": "liu"
+      }
+    },
+    {
+      "turn": 8,
+      "type": "judgment_submit",
+      "payload": {
+        "filled": [
+          "J1",
+          "J2",
+          "J3",
+          "J4",
+          "J5"
+        ]
+      }
+    },
+    {
+      "turn": 8,
+      "type": "phase_change",
+      "payload": {
+        "from": "discovery",
+        "to": "report"
+      }
+    },
+    {
+      "turn": 9,
+      "type": "trap",
+      "payload": {
+        "trap": "TR6",
+        "by": "zhou"
+      }
+    },
+    {
+      "turn": 9,
+      "type": "phase_change",
+      "payload": {
+        "from": "report",
+        "to": "debrief"
+      }
+    }
+  ],
+  "ledgerRecalled": false,
+  "judgment": {
+    "J1": "主要是改单没同步和客户资料乱,不是识别。",
+    "J2": "刘姐说的;小林说样本是挑过的。",
+    "J3": "大会上能演示。",
+    "J4": "先做改单同步。",
+    "J5": "具体比例不清楚。"
+  },
+  "endedReason": "user"
+}
