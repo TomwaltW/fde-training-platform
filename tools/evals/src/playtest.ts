@@ -16,6 +16,7 @@ import { parseArgs } from "node:util";
 import { displayWidth } from "./calibration/report.ts";
 import { loadDotenv } from "./dotenv.ts";
 import { preflight } from "./playtest/preflight.ts";
+import { defaultStoreFile } from "./sessions/store.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
 // pnpm 会把工作目录切到仓库根目录;--dotenv 的相对路径按用户敲命令的目录解析
@@ -68,13 +69,17 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  // 彩排的库不是 session:export 默认读的那个,导出命令里带上 --store-file(在仓库根目录下敲;路径有空格时加引号)
+  // 库不是 session:export 默认读的那个时(彩排,或者自己指定了 FDE_MEMORY_STORE_FILE),导出命令里带上 --store-file
+  // (在仓库根目录下敲;路径有空格时加引号)。不带的话照提示导出,读的是另一个库
+  const file = pf.env.FDE_MEMORY_STORE_FILE!;
+  const r = relative(root, file);
+  const shown = r.startsWith("..") || isAbsolute(r) ? file : r;
+  const storeFlag = ` --store-file ${/\s/.test(shown) ? `"${shown}"` : shown}`;
   let exportStep = "导出对局做标定:pnpm session:export --list,再 pnpm session:export --id <对局 id> --calibrate <用例 id>";
   if (values.offline) {
-    const file = pf.env.FDE_MEMORY_STORE_FILE!;
-    const r = relative(root, file);
-    const shown = r.startsWith("..") || isAbsolute(r) ? file : r;
-    exportStep = `走一遍导出:pnpm session:export --list --store-file ${/\s/.test(shown) ? `"${shown}"` : shown}(彩排的局不建标定用例)`;
+    exportStep = `走一遍导出:pnpm session:export --list${storeFlag}(彩排的局不建标定用例)`;
+  } else if (file !== defaultStoreFile(process.env, root)) {
+    exportStep = `导出对局做标定:pnpm session:export --list${storeFlag},再 pnpm session:export --id <对局 id> --calibrate <用例 id>${storeFlag}`;
   }
   console.log(
     [
